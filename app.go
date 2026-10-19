@@ -9,8 +9,9 @@ import (
 )
 
 type Ctx struct {
-	W http.ResponseWriter
-	R *http.Request
+	W     http.ResponseWriter
+	R     *http.Request
+	State map[string]any
 }
 
 func (c *Ctx) Param(name string) string { return c.R.PathValue(name) }
@@ -46,7 +47,8 @@ func (a *App) Handle(method, path string, h HandlerFunc) {
 	var wrapped HandlerFunc
 	a.mux.HandleFunc(method+" "+path, func(w http.ResponseWriter, r *http.Request) {
 		once.Do(func() { wrapped = a.wrap(h) })
-		c := &Ctx{W: w, R: r}
+		// INI BAGIAN YANG DIPERBAIKI:
+		c := &Ctx{W: w, R: r, State: make(map[string]any)}
 		if err := wrapped(c); err != nil {
 			he := toHTTPError(err)
 			writeJSON(c.W, he.Code, he)
@@ -57,9 +59,9 @@ func (a *App) Handle(method, path string, h HandlerFunc) {
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, pattern := a.mux.Handler(r)
 	if pattern == "" {
-		// Jika rute tidak ada di mux, tapi method OPTIONS, jalankan middleware CORS
 		if r.Method == http.MethodOptions {
-			c := &Ctx{W: w, R: r}
+			// INI JUGA DIPERBAIKI:
+			c := &Ctx{W: w, R: r, State: make(map[string]any)}
 			h := a.wrap(func(c *Ctx) error { return nil })
 			if err := h(c); err != nil {
 				he := toHTTPError(err)
@@ -77,10 +79,10 @@ func (a *App) Listen(addr string) error {
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           a,
-		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 	return srv.ListenAndServe()
 }

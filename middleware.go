@@ -1,15 +1,16 @@
 package aemeath
 
 import (
+	"bufio"
 	"errors"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"time"
 )
 
-// statusWriter membungkus http.ResponseWriter untuk melacak status code
-// dan mencegah WriteHeader ganda (yang akan panic di stdlib).
 type statusWriter struct {
 	http.ResponseWriter
 	status  int
@@ -18,7 +19,6 @@ type statusWriter struct {
 
 func (w *statusWriter) WriteHeader(code int) {
 	if w.written {
-		// Sudah ditulis sebelumnya — abaikan, jangan panic.
 		return
 	}
 	w.written = true
@@ -26,8 +26,6 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
-// Write memastikan header terkirim dengan status default 200 kalau
-// handler menulis body tanpa eksplisit WriteHeader.
 func (w *statusWriter) Write(b []byte) (int, error) {
 	if !w.written {
 		w.WriteHeader(http.StatusOK)
@@ -35,14 +33,19 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-// Unwrap memungkinkan http.ResponseController (Go 1.20+) mengakses
-// fitur underlying writer seperti Flush/Hijack (WebSocket/SSE).
 func (w *statusWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
+// PERBAIKAN: Tambahkan Hijack() agar WebSocket bisa mengambil alih koneksi
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, fmt.Errorf("aemeath: underlying ResponseWriter does not implement http.Hijacker")
+}
+
 // Logger mencatat method, path, status, dan durasi.
-// Panic juga dicatat (sebagai 500) sebelum di-repanic agar ditangani Recover().
 func Logger() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) (err error) {
@@ -54,7 +57,7 @@ func Logger() Middleware {
 					log.Printf("%s %s %d %v panic: %v",
 						c.R.Method, c.R.URL.Path, http.StatusInternalServerError,
 						time.Since(start), r)
-					panic(r) // teruskan ke Recover() di lapisan luar
+					panic(r)
 				}
 				status := sw.status
 				if err != nil {
