@@ -3,10 +3,11 @@ package main
 import (
 	"log"
 	"os"
-	"time" // Tambahkan import time untuk Rate Limiter
+	"time"
 
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/examples/api"
+	"gorm.io/gorm" // <-- Import GORM untuk database
 )
 
 func main() {
@@ -40,13 +41,17 @@ func main() {
 		return map[string]string{"status": "Welcome to Admin Dashboard"}, nil
 	})
 
-	// 4. Fitur JWT Auth & Rate Limiter
+	// 4. FITUR DATABASE (GORM)
+	// Mendaftarkan plugin database (akan membuat file aemeath.db secara otomatis)
+	dbPlugin := aemeath.NewDBPlugin("aemeath.db")
+	app.RegisterPlugin(dbPlugin)
+
+	// 5. Fitur JWT Auth & Rate Limiter
 	jwtAuth := aemeath.JWTMiddleware(aemeath.JWTConfig{
 		SecretKey: "rahasia-negara-aemeath",
 	})
 
 	secretGroup := app.Group("/api/secret")
-	// Pasang JWT dan Rate Limiter (Maksimal 3 request per menit)
 	secretGroup.Use(jwtAuth, aemeath.RateLimiter(3, 1*time.Minute))
 
 	aemeath.GroupGET(secretGroup, "/profile", func(c *aemeath.Ctx, _ struct{}) (map[string]any, error) {
@@ -57,7 +62,26 @@ func main() {
 		}, nil
 	})
 
-	// 5. Fitur WebSocket (Echo Server)
+	// Rute Database: Simpan User Baru
+	aemeath.GroupPOST(secretGroup, "/users", func(c *aemeath.Ctx, in api.CreateUserIn) (aemeath.User, error) {
+		db := c.State["db"].(*gorm.DB) // Ambil DB dari State middleware
+		user := aemeath.User{Name: in.Name, Email: in.Email}
+
+		if err := db.Create(&user).Error; err != nil {
+			return user, aemeath.NewError(400, "Gagal simpan, email mungkin sudah dipakai")
+		}
+		return user, nil
+	})
+
+	// Rute Database: Ambil Semua User
+	aemeath.GroupGET(secretGroup, "/users", func(c *aemeath.Ctx, _ struct{}) ([]aemeath.User, error) {
+		db := c.State["db"].(*gorm.DB)
+		var users []aemeath.User
+		db.Find(&users) // Ambil semua data
+		return users, nil
+	})
+
+	// 6. Fitur WebSocket (Echo Server)
 	app.Handle("GET", "/ws", func(c *aemeath.Ctx) error {
 		conn, err := c.Upgrade()
 		if err != nil {
@@ -68,9 +92,8 @@ func main() {
 		for {
 			mt, message, err := conn.ReadMessage()
 			if err != nil {
-				break // Client memutus koneksi
+				break
 			}
-			// Kirim balik pesan yang sama ke client (Echo)
 			if err := conn.WriteMessage(mt, message); err != nil {
 				break
 			}
@@ -78,7 +101,7 @@ func main() {
 		return nil
 	})
 
-	// 6. Dokumentasi & Client Generator
+	// 7. Dokumentasi & Client Generator
 	app.EnableDocs(aemeath.Info{Title: "Aemeath Demo", Version: "0.1.0"})
 	app.EnableClient()
 
