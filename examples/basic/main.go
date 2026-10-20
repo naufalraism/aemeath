@@ -7,17 +7,19 @@ import (
 
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/examples/api"
-	"gorm.io/gorm" // <-- Import GORM untuk database
+	"gorm.io/gorm"
 )
 
 func main() {
 	app := aemeath.New()
 
-	// 1. Middleware Global & Static File
+	// 1. Middleware Global
 	app.Use(aemeath.Recover(), aemeath.Logger(), aemeath.CORS())
-	app.Static("/public", "./public")
 
-	// 2. Route Default
+	// 2. Sajikan Landing Page dari folder "website" di URL utama (/)
+	app.Static("/", "./website")
+
+	// 3. Route Default
 	aemeath.Register(app, api.Hello, func(c *aemeath.Ctx, in api.HelloIn) (api.HelloOut, error) {
 		greeting := "Halo"
 		if in.Lang == "en" {
@@ -30,7 +32,7 @@ func main() {
 		return api.User{ID: 1, Name: in.Name, Email: in.Email}, nil
 	}, aemeath.Summary("Buat user"), aemeath.Status(201))
 
-	// 3. Route Group (Admin)
+	// 4. Route Group (Admin)
 	adminGroup := app.Group("/admin", func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
 		return func(c *aemeath.Ctx) error {
 			log.Println("Masuk ke area Admin")
@@ -41,12 +43,11 @@ func main() {
 		return map[string]string{"status": "Welcome to Admin Dashboard"}, nil
 	})
 
-	// 4. FITUR DATABASE (GORM)
-	// Mendaftarkan plugin database (akan membuat file aemeath.db secara otomatis)
+	// 5. FITUR DATABASE (GORM)
 	dbPlugin := aemeath.NewDBPlugin("aemeath.db")
 	app.RegisterPlugin(dbPlugin)
 
-	// 5. Fitur JWT Auth & Rate Limiter
+	// 6. Fitur JWT Auth & Rate Limiter
 	jwtAuth := aemeath.JWTMiddleware(aemeath.JWTConfig{
 		SecretKey: "rahasia-negara-aemeath",
 	})
@@ -62,33 +63,29 @@ func main() {
 		}, nil
 	})
 
-	// Rute Database: Simpan User Baru
 	aemeath.GroupPOST(secretGroup, "/users", func(c *aemeath.Ctx, in api.CreateUserIn) (aemeath.User, error) {
-		db := c.State["db"].(*gorm.DB) // Ambil DB dari State middleware
+		db := c.State["db"].(*gorm.DB)
 		user := aemeath.User{Name: in.Name, Email: in.Email}
-
 		if err := db.Create(&user).Error; err != nil {
 			return user, aemeath.NewError(400, "Gagal simpan, email mungkin sudah dipakai")
 		}
 		return user, nil
 	})
 
-	// Rute Database: Ambil Semua User
 	aemeath.GroupGET(secretGroup, "/users", func(c *aemeath.Ctx, _ struct{}) ([]aemeath.User, error) {
 		db := c.State["db"].(*gorm.DB)
 		var users []aemeath.User
-		db.Find(&users) // Ambil semua data
+		db.Find(&users)
 		return users, nil
 	})
 
-	// 6. Fitur WebSocket (Echo Server)
+	// 7. Fitur WebSocket
 	app.Handle("GET", "/ws", func(c *aemeath.Ctx) error {
 		conn, err := c.Upgrade()
 		if err != nil {
 			return err
 		}
 		defer conn.Close()
-
 		for {
 			mt, message, err := conn.ReadMessage()
 			if err != nil {
@@ -101,7 +98,7 @@ func main() {
 		return nil
 	})
 
-	// 7. Dokumentasi & Client Generator
+	// 8. Dokumentasi & Client
 	app.EnableDocs(aemeath.Info{Title: "Aemeath Demo", Version: "0.1.0"})
 	app.EnableClient()
 
@@ -113,6 +110,6 @@ func main() {
 		return
 	}
 
-	log.Println("jalan di http://localhost:3000 (docs: /docs, client: /client.ts, ws: /ws)")
+	log.Println("jalan di http://localhost:3000 (docs: /docs, client: /client.ts)")
 	log.Fatal(app.Listen(":3000"))
 }

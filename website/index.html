@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aemeath - Modern Go Web Framework</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Fira+Code&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        code, pre { font-family: 'Fira Code', monospace; }
+    </style>
+</head>
+<body class="antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Navbar -->
+    <nav class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🚀</span>
+                <span class="text-xl font-bold tracking-tight">Aemeath</span>
+            </div>
+            <div class="flex gap-6 text-sm font-medium text-slate-300">
+                <a href="#features" class="hover:text-white transition">Features</a>
+                <a href="#code" class="hover:text-white transition">Quick Start</a>
+                <a href="https://github.com/naufalraism/aemeath" target="_blank" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="max-w-6xl mx-auto px-6 py-24 text-center">
+        <div class="inline-block bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm px-3 py-1 rounded-full mb-6">
+            v0.1.0 is now live!
+        </div>
+        <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
+            The Go Framework for <br>
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
+                Human DX.
+            </span>
+        </h1>
+        <p class="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10">
+            Type-safe routing, automated OpenAPI documentation, and seamless TypeScript client generation. All built on top of Go's blazing-fast <code class="text-indigo-300 bg-slate-800 px-1 rounded">net/http</code>.
+        </p>
+        <div class="flex justify-center gap-4">
+            <a href="#code" class="bg-white text-slate-900 font-semibold px-8 py-3 rounded-lg hover:bg-slate-200 transition">Get Started</a>
+            <a href="https://github.com/naufalraism/aemeath" class="border border-slate-700 hover:border-slate-500 font-semibold px-8 py-3 rounded-lg transition">View Source</a>
+        </div>
+    </header>
+
+    <!-- Features Section -->
+    <section id="features" class="max-w-6xl mx-auto px-6 py-20 border-t border-slate-800">
+        <h2 class="text-3xl font-bold text-center mb-16">Everything you need. Nothing you don't.</h2>
+        <div class="grid md:grid-cols-3 gap-8">
+            <!-- Feature 1 -->
+            <div class="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl hover:border-indigo-500/50 transition">
+                <div class="text-3xl mb-4">🛡️</div>
+                <h3 class="text-xl font-bold mb-2">End-to-End Type Safe</h3>
+                <p class="text-slate-400 text-sm">Define your request and response structs once. Aemeath automatically validates and binds them.</p>
+            </div>
+            <!-- Feature 2 -->
+            <div class="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl hover:border-indigo-500/50 transition">
+                <div class="text-3xl mb-4">⚡</div>
+                <h3 class="text-xl font-bold mb-2">Client Generator</h3>
+                <p class="text-slate-400 text-sm">Generate fully-typed TypeScript clients directly from your Go structs. No more manual API typing.</p>
+            </div>
+            <!-- Feature 3 -->
+            <div class="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl hover:border-indigo-500/50 transition">
+                <div class="text-3xl mb-4">📖</div>
+                <h3 class="text-xl font-bold mb-2">Auto OpenAPI</h3>
+                <p class="text-slate-400 text-sm">Beautiful, interactive Scalar API documentation generated automatically from your code.</p>
+            </div>
+            <!-- Feature 4 -->
+            <div class="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl hover:border-indigo-500/50 transition">
+                <div class="text-3xl mb-4">🔌</div>
+                <h3 class="text-xl font-bold mb-2">Plugin Ecosystem</h3>
+                <p class="text-slate-400 text-sm">First-class support for JWT, Rate Limiting, CORS, and Database (GORM) integrations.</p>
+            </div>
+            <!-- Feature 5 -->
+            <div class="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl hover:border-indigo-500/50 transition">
+                <div class="text-3xl mb-4">⚡</div>
+                <h3 class="text-xl font-bold mb-2">WebSocket Ready</h3>
+                <p class="text-slate-400 text-sm">Real-time communication out-of-the-box. Seamlessly integrated with the Context API.</p>
+            </div>
+            <!-- Feature 6 -->
+            <div class="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl hover:border-indigo-500/50 transition">
+                <div class="text-3xl mb-4">📂</div>
+                <h3 class="text-xl font-bold mb-2">Static File Serving</h3>
+                <p class="text-slate-400 text-sm">Serve SPAs, HTML, and assets easily. Perfect for full-stack apps or traditional websites.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Code Example Section -->
+    <section id="code" class="max-w-4xl mx-auto px-6 py-20">
+        <h2 class="text-3xl font-bold text-center mb-10">Your API in 5 lines of code</h2>
+        <div class="bg-[#1e1e1e] rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
+            <div class="flex items-center px-4 py-3 bg-[#2d2d2d] border-b border-slate-700 gap-2">
+                <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                <span class="ml-4 text-xs text-slate-400">main.go</span>
+            </div>
+            <pre class="p-6 text-sm text-slate-300 overflow-x-auto"><code><span class="text-pink-400">package</span> main
+
+<span class="text-pink-400">import</span> (
+    <span class="text-green-400">"log"</span>
+    <span class="text-green-400">"github.com/naufalraism/aemeath"</span>
+)
+
+<span class="text-pink-400">type</span> HelloIn <span class="text-pink-400">struct</span> {
+    Name <span class="text-blue-400">string</span> <span class="text-yellow-300">`path:"name"`</span>
+}
+
+<span class="text-pink-400">func</span> <span class="text-blue-400">main</span>() {
+    app := aemeath.New()
+    
+    aemeath.GET(app, <span class="text-green-400">"/hello/{name}"</span>, <span class="text-pink-400">func</span>(c *aemeath.Ctx, in HelloIn) (<span class="text-blue-400">map</span>[<span class="text-blue-400">string</span>]<span class="text-blue-400">string</span>, <span class="text-blue-400">error</span>) {
+        <span class="text-pink-400">return</span> <span class="text-blue-400">map</span>[<span class="text-blue-400">string</span>]<span class="text-blue-400">string</span>{<span class="text-green-400">"message"</span>: <span class="text-green-400">"Hello, "</span> + in.Name}, <span class="text-orange-400">nil</span>
+    })
+
+    log.Fatal(app.Listen(<span class="text-green-400">":3000"</span>))
+}</code></pre>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 text-center py-10 text-slate-500 text-sm">
+        <p>Built with ❤️ using Go. Licensed under MIT.</p>
+        <p class="mt-2">© 2026 Naufal Raism. All rights reserved.</p>
+    </footer>
+
+</body>
+</html>
