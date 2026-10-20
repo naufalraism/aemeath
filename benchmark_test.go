@@ -16,11 +16,11 @@ func BenchmarkHelloRoute(b *testing.B) {
 	req := httptest.NewRequest("GET", "/hello", nil)
 	rec := httptest.NewRecorder()
 
-	// ReportAllocs melihat seberapa banyak memori yang dialokasikan
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	// Menggunakan fitur modern Go 1.24+: b.Loop()
+	// Ini otomatis menangani b.ResetTimer() dan mencegah kompilator menghapus kodemu.
+	for b.Loop() {
 		app.ServeHTTP(rec, req)
 	}
 }
