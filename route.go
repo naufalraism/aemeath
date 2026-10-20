@@ -10,8 +10,9 @@ import (
 	"strings"
 )
 
-// DefaultMaxBodyBytes adalah batas default ukuran body JSON.
-var DefaultMaxBodyBytes int64 = 1 << 20 // 1 MiB
+// DefaultMaxBodyBytes adalah batas default ukuran body JSON (1 MiB).
+// Bisa diubah sebelum server berjalan.
+var DefaultMaxBodyBytes int64 = 1 << 20
 
 type routeConfig struct {
 	summary string
@@ -20,16 +21,23 @@ type routeConfig struct {
 	opID    string
 }
 
-// RouteOption mengatur metadata/perilaku sebuah route.
+// RouteOption adalah fungsi untuk mengatur metadata/perilaku sebuah route.
 type RouteOption func(*routeConfig)
 
+// OperationID menamai route secara eksplisit (dipakai di OpenAPI dan nama fungsi TS Client).
 func OperationID(id string) RouteOption { return func(c *routeConfig) { c.opID = id } }
 
+// Summary memberikan deskripsi singkat pada route (muncul di dokumentasi OpenAPI).
 func Summary(s string) RouteOption { return func(c *routeConfig) { c.summary = s } }
-func Tags(t ...string) RouteOption { return func(c *routeConfig) { c.tags = t } }
-func Status(code int) RouteOption  { return func(c *routeConfig) { c.status = code } }
 
-// Route mendaftarkan handler bertipe aman.
+// Tags mengelompokkan route ke dalam kategori tertentu di OpenAPI.
+func Tags(t ...string) RouteOption { return func(c *routeConfig) { c.tags = t } }
+
+// Status mengubah HTTP status code default (200 OK) untuk response sukses.
+func Status(code int) RouteOption { return func(c *routeConfig) { c.status = code } }
+
+// Route mendaftarkan handler bertipe aman. Input (In) akan di-bind dan divalidasi
+// secara otomatis, dan output (Out) akan di-serialize menjadi JSON.
 func Route[In, Out any](a *App, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
 	cfg := routeConfig{status: http.StatusOK}
 	for _, o := range opts {
@@ -55,24 +63,35 @@ func Route[In, Out any](a *App, method, path string, fn func(*Ctx, In) (Out, err
 	return Endpoint[In, Out]{Method: method, Path: path}
 }
 
+// GET mendaftarkan route HTTP GET dengan handler bertipe aman.
 func GET[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "GET", path, fn, o...)
 }
+
+// POST mendaftarkan route HTTP POST dengan handler bertipe aman.
 func POST[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "POST", path, fn, o...)
 }
+
+// PUT mendaftarkan route HTTP PUT dengan handler bertipe aman.
 func PUT[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "PUT", path, fn, o...)
 }
+
+// PATCH mendaftarkan route HTTP PATCH dengan handler bertipe aman.
 func PATCH[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "PATCH", path, fn, o...)
 }
+
+// DELETE mendaftarkan route HTTP DELETE dengan handler bertipe aman.
 func DELETE[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "DELETE", path, fn, o...)
 }
 
+// bodyMethod menentukan apakah HTTP method tersebut memiliki body.
 func bodyMethod(m string) bool { return m == "POST" || m == "PUT" || m == "PATCH" }
 
+// paramSource mengembalikan ("path"|"query", nama) jika field memiliki tag tersebut.
 func paramSource(f reflect.StructField) (string, string) {
 	if n := f.Tag.Get("path"); n != "" {
 		return "path", n
@@ -83,6 +102,7 @@ func paramSource(f reflect.StructField) (string, string) {
 	return "", ""
 }
 
+// jsonName mengambil nama field berdasarkan tag json, atau nama asli jika tidak ada.
 func jsonName(f reflect.StructField) string {
 	name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 	if name == "" {
@@ -91,6 +111,7 @@ func jsonName(f reflect.StructField) string {
 	return name
 }
 
+// hasRequired mengecek apakah field memiliki tag `validate:"required"`.
 func hasRequired(f reflect.StructField) bool {
 	for _, p := range strings.Split(f.Tag.Get("validate"), ",") {
 		if p == "required" {
@@ -170,10 +191,6 @@ func bind(c *Ctx, in any) error {
 			return BadRequest(fmt.Sprintf("body melebihi batas %d byte", DefaultMaxBodyBytes))
 		}
 		if len(body) > 0 {
-			// Tolak Content-Type yang jelas bukan JSON. Content-Type kosong
-			// tetap diterima. `application/x-www-form-urlencoded` juga
-			// dikecualikan agar curl default tidak ditolak, karena body-nya
-			// tetap divalidasi sebagai JSON.
 			ct := c.R.Header.Get("Content-Type")
 			if ct != "" {
 				lower := strings.ToLower(ct)
@@ -198,6 +215,7 @@ func bind(c *Ctx, in any) error {
 	return validateRequired(v)
 }
 
+// bindParams melakukan binding data dari Path URL dan Query String ke struct.
 func bindParams(c *Ctx, v reflect.Value) error {
 	t := v.Type()
 	for i := 0; i < t.NumField(); i++ {
@@ -256,7 +274,7 @@ func validateRequired(v reflect.Value) error {
 	return nil
 }
 
-// isAbsent menentukan "tidak dikirim" dengan sadar-tipe.
+// isAbsent menentukan apakah sebuah field dianggap "tidak dikirim" berdasarkan tipenya.
 func isAbsent(v reflect.Value) bool {
 	switch v.Kind() {
 	case reflect.Ptr, reflect.Interface:
@@ -269,6 +287,7 @@ func isAbsent(v reflect.Value) bool {
 	return v.IsZero()
 }
 
+// setField mengonversi nilai string dari Path/Query menjadi tipe data yang sesuai di struct.
 func setField(fv reflect.Value, raw string) error {
 	if fv.Kind() == reflect.Ptr {
 		if fv.IsNil() {
@@ -309,7 +328,8 @@ func setField(fv reflect.Value, raw string) error {
 	return nil
 }
 
-// Register mendaftarkan handler untuk sebuah Endpoint.
+// Register mendaftarkan handler menggunakan definisi Endpoint yang sudah ada.
+// Sangat berguna untuk kontrak bersama antara server dan client.
 func Register[In, Out any](a *App, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
 	return Route(a, e.Method, e.Path, fn, opts...)
 }
