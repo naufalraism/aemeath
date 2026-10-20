@@ -6,20 +6,22 @@ import (
 )
 
 // Static mendaftarkan direktori untuk menyajikan file statis.
-// Contoh: app.Static("/public", "./assets") akan menyajikan folder "./assets" di URL "/public/...".
 func (a *App) Static(prefix string, dir string) {
-	// Pastikan prefix diawali dan diakhiri dengan "/"
 	if !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
 	}
+
+	// FIX: Jika prefix adalah root "/", kita langsung daftarkan tanpa redirect
+	if prefix == "/" {
+		a.mux.Handle("GET /", http.FileServer(http.Dir(dir)))
+		return
+	}
+
 	if !strings.HasSuffix(prefix, "/") {
 		prefix = prefix + "/"
 	}
 
-	// http.FileServer adalah handler bawaan Go untuk serve file
 	fs := http.FileServer(http.Dir(dir))
-
-	// Daftarkan langsung ke mux (melewati middleware JSON kita karena ini file statis)
 	a.mux.Handle("GET "+prefix, http.StripPrefix(prefix, fs))
 
 	// Redirect jika user mengakses tanpa trailing slash
