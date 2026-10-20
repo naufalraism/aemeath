@@ -1,0 +1,3 @@
+*.db
+gen_token/
+node_modules/
