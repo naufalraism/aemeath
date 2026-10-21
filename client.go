@@ -78,7 +78,7 @@ func (e Endpoint[In, Out]) Call(ctx context.Context, c *Client, in In) (Out, err
 	if err != nil {
 		return out, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return out, err
@@ -104,7 +104,7 @@ func encodeRequest(method, pattern string, in any) (string, url.Values, []byte, 
 	path := openAPIPath(pattern)
 	query := url.Values{}
 	v := reflect.ValueOf(in)
-	for v.IsValid() && (v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface) {
+	for v.IsValid() && (v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface) {
 		if v.IsNil() {
 			v = reflect.Value{}
 			break
@@ -139,7 +139,7 @@ func encodeRequest(method, pattern string, in any) (string, url.Values, []byte, 
 		// bukan alamat memori. Nil pointer dianggap kosong.
 		raw := fv
 		isNilPtr := false
-		for raw.Kind() == reflect.Ptr {
+		for raw.Kind() == reflect.Pointer {
 			if raw.IsNil() {
 				isNilPtr = true
 				break

@@ -90,7 +90,7 @@ func (s routeSpec) operation() map[string]any {
 	params := []any{}
 	declared := map[string]bool{}
 	t := s.in
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() == reflect.Struct {
@@ -159,7 +159,7 @@ func schemaOf(t reflect.Type, depth int, input bool) map[string]any {
 	if depth > maxSchemaDepth {
 		return map[string]any{}
 	}
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t == timeType {

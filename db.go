@@ -20,8 +20,9 @@ func NewDBPlugin(filename string) *DBPlugin {
 	}
 
 	// Auto-migrate untuk tabel User
-	db.AutoMigrate(&User{})
-
+	if err := db.AutoMigrate(&User{}); err != nil {
+		log.Printf("Gagal migrasi database: %v", err)
+	}
 	return &DBPlugin{DB: db}
 }
 

@@ -12,11 +12,11 @@ import (
 func TestStaticFile(t *testing.T) {
 	// Buat folder sementara
 	dir, _ := os.MkdirTemp("", "aemeath-static-*")
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	// PERBAIKAN: Gunakan nama file selain index.html agar tidak memicu redirect 301 dari Go
 	filePath := filepath.Join(dir, "hello.html")
-	os.WriteFile(filePath, []byte("<h1>Hello</h1>"), 0644)
+	_ = os.WriteFile(filePath, []byte("<h1>Hello</h1>"), 0644)
 
 	app := aemeath.New()
 	app.Static("/public", dir)

@@ -59,8 +59,9 @@ func main() {
 
 	// 5. FITUR DATABASE (GORM)
 	dbPlugin := aemeath.NewDBPlugin("aemeath.db")
-	app.RegisterPlugin(dbPlugin)
-
+	if err := app.RegisterPlugin(dbPlugin); err != nil {
+		log.Fatal(err)
+	}
 	// 6. Fitur JWT Auth & Rate Limiter
 	// Ambil secret dari .env. Jika kosong, pakai fallback (hanya untuk dev).
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -105,7 +106,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			mt, message, err := conn.ReadMessage()
 			if err != nil {
@@ -122,8 +123,9 @@ func main() {
 	mailer := aemeath.NewMailer(
 		"localhost", 1025, "user", "pass", "Admin <admin@aemeath.dev>",
 	)
-	app.RegisterPlugin(mailer)
-
+	if err := app.RegisterPlugin(mailer); err != nil {
+		log.Fatal(err)
+	}
 	aemeath.GET(app, "/send-email", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 		m := c.State["mailer"].(*aemeath.MailerPlugin)
 		err := m.Send("pelanggan@example.com", "Halo dari Aemeath!", "<h1>Selamat!</h1>")
@@ -136,8 +138,9 @@ func main() {
 
 	// 9. FITUR PLUGIN CACHE (REDIS)
 	cache := aemeath.NewCache("localhost:6379", "", 0)
-	app.RegisterPlugin(cache)
-
+	if err := app.RegisterPlugin(cache); err != nil {
+		log.Fatal(err)
+	}
 	aemeath.GET(app, "/cache-test", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 		redisClient := c.State["cache"].(*redis.Client)
 		ctx := context.Background()
@@ -166,7 +169,7 @@ func main() {
 		if err != nil {
 			return aemeath.BadRequest("File tidak ditemukan di form")
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		storage := c.State["storage"].(aemeath.Storage)
 		savedName, err := storage.Save(header.Filename, file)
@@ -186,7 +189,7 @@ func main() {
 		log.Fatal("Gagal membuat logger:", err)
 	}
 	app.RegisterPlugin(fileLogger)
-	defer fileLogger.Close()
+	defer func() { _ = fileLogger.Close() }()
 
 	// 12. Dokumentasi & Client
 	app.EnableDocs(aemeath.Info{Title: "Aemeath Demo", Version: "0.1.0"})

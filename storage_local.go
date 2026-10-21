@@ -16,7 +16,7 @@ type LocalStorage struct {
 
 func NewLocalStorage(uploadDir string) *LocalStorage {
 	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
-		os.MkdirAll(uploadDir, 0755)
+		_ = os.MkdirAll(uploadDir, 0755)
 	}
 	return &LocalStorage{UploadDir: uploadDir}
 }
@@ -31,7 +31,7 @@ func (s *LocalStorage) Save(filename string, src io.Reader) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("aemeath: gagal membuat file: %w", err)
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	if _, err := io.Copy(destFile, src); err != nil {
 		return "", fmt.Errorf("aemeath: gagal menyimpan file: %w", err)
