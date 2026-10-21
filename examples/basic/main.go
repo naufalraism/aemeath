@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
 
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/examples/api"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -98,7 +100,81 @@ func main() {
 		return nil
 	})
 
-	// 8. Dokumentasi & Client
+	// 8. FITUR PLUGIN MAILER
+	mailer := aemeath.NewMailer(
+		"localhost", 1025, "user", "pass", "Admin <admin@aemeath.dev>",
+	)
+	app.RegisterPlugin(mailer)
+
+	aemeath.GET(app, "/send-email", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+		m := c.State["mailer"].(*aemeath.MailerPlugin)
+		err := m.Send("pelanggan@example.com", "Halo dari Aemeath!", "<h1>Selamat!</h1>")
+		if err != nil {
+			log.Println("Gagal kirim email:", err)
+			return map[string]string{"status": "gagal, cek terminal"}, nil
+		}
+		return map[string]string{"status": "email terkirim!"}, nil
+	})
+
+	// 9. FITUR PLUGIN CACHE (REDIS)
+	cache := aemeath.NewCache("localhost:6379", "", 0)
+	app.RegisterPlugin(cache)
+
+	aemeath.GET(app, "/cache-test", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+		redisClient := c.State["cache"].(*redis.Client)
+		ctx := context.Background()
+		key := "hit_counter"
+
+		val, err := redisClient.Get(ctx, key).Result()
+		if err == redis.Nil {
+			redisClient.Set(ctx, key, "1", 10*time.Minute)
+			return map[string]string{"message": "Cache dibuat!", "value": "1"}, nil
+		} else if err != nil {
+			return nil, aemeath.InternalError("Gagal akses Redis")
+		}
+		return map[string]string{"message": "Data dari cache", "value": val}, nil
+	})
+
+	// 10. FITUR PLUGIN STORAGE (UPLOAD FILE - INTERFACE)
+	// Kita pakai Local Storage untuk testing
+	localStore := aemeath.NewLocalStorage("./uploads")
+	app.RegisterPlugin(&aemeath.StoragePlugin{Storage: localStore})
+
+	// Rute untuk tes upload file
+	app.Handle("POST", "/upload", func(c *aemeath.Ctx) error {
+		if err := c.R.ParseMultipartForm(10 << 20); err != nil {
+			return aemeath.BadRequest("File terlalu besar atau format tidak valid")
+		}
+
+		file, header, err := c.R.FormFile("file")
+		if err != nil {
+			return aemeath.BadRequest("File tidak ditemukan di form")
+		}
+		defer file.Close()
+
+		// PERUBAHAN PENTING: Cast ke Interface aemeath.Storage
+		storage := c.State["storage"].(aemeath.Storage)
+
+		savedName, err := storage.Save(header.Filename, file)
+		if err != nil {
+			return aemeath.InternalError("Gagal menyimpan file")
+		}
+
+		return c.JSON(200, map[string]string{
+			"message":  "File berhasil diunggah!",
+			"filename": savedName,
+		})
+	})
+
+	// 11. FITUR PLUGIN FILE LOGGER
+	fileLogger, err := aemeath.NewFileLogger("access.log")
+	if err != nil {
+		log.Fatal("Gagal membuat logger:", err)
+	}
+	app.RegisterPlugin(fileLogger)
+	defer fileLogger.Close()
+
+	// 12. Dokumentasi & Client
 	app.EnableDocs(aemeath.Info{Title: "Aemeath Demo", Version: "0.1.0"})
 	app.EnableClient()
 

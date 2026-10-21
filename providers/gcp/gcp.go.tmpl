@@ -1,0 +1,41 @@
+//go:build ignore
+
+package gcp
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"time"
+
+	"cloud.google.com/go/storage"
+)
+
+type GCSStorage struct {
+	Client *storage.Client
+	Bucket string
+	Ctx    context.Context
+}
+
+func New(bucket string) (*GCSStorage, error) {
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("gagal load GCP config: %w", err)
+	}
+	return &GCSStorage{Client: client, Bucket: bucket, Ctx: ctx}, nil
+}
+
+func (s *GCSStorage) Save(filename string, src io.Reader) (string, error) {
+	timestamp := time.Now().Unix()
+	key := fmt.Sprintf("%d_%s", timestamp, filename)
+	writer := s.Client.Bucket(s.Bucket).Object(key).NewWriter(s.Ctx)
+	defer writer.Close()
+
+	_, err := io.Copy(writer, src)
+	return key, err
+}
+
+func (s *GCSStorage) Delete(filename string) error {
+	return s.Client.Bucket(s.Bucket).Object(filename).Delete(s.Ctx)
+}

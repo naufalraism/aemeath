@@ -1,3 +1,29 @@
+# Ignore local databases
 *.db
-gen_token/
+*.sqlite
+
+# Ignore user uploads
+uploads/
+
+# Ignore log files
+*.log
+
+# Ignore test files & dummies
+test-upload.txt
+
+# Ignore compiled binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Ignore Node modules (untuk VitePress nanti)
 node_modules/
+docs/.vitepress/dist
+docs/.vitepress/cache
+
+# Ignore OS/IDE files
+.DS_Store
+.vscode/
+.idea/
