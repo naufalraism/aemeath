@@ -1,28 +1,46 @@
 # Aemeath 🚀
 
-**Aemeath** adalah framework web Go modern yang dirancang untuk memberikan *Developer Experience* (DX) tingkat atas dengan **Type-Safety end-to-end**. 
+**The Modern Standard for Go APIs.**
 
-Dibangun di atas `net/http` (Go 1.22+), Aemeath memangkas boilerplate, menyatukan validasi request, menghadirkan dokumentasi OpenAPI otomatis, dan secara cerdas menghasilkan Client TypeScript & Go. Semua itu dibungkus dalam API yang ergonomis tanpa mengorbankan performa khas Go.
+Aemeath is a next-generation Go web framework designed for exceptional Developer Experience (DX). It combines Go's blazing-fast performance with end-to-end type safety, automated OpenAPI docs, and seamless TypeScript client generation. All built on top of Go's standard `net/http` (Go 1.22+).
 
-## ✨ Fitur Utama
+## ✨ Features
 
-- **Type-Safe Routing**: Binding request otomatis (Path, Query, Body) ke dalam struct Go.
-- **Validasi Terintegrasi**: Cukup gunakan tag `validate:"required"`.
-- **OpenAPI & Swagger UI**: Dokumentasi API di-generate otomatis di `/docs`.
-- **Eden-style Client Generator**: Menghasilkan kode TypeScript di `/client.ts` dan Client Go tanpa *codegen* manual.
-- **Route Group**: Kelompokkan rute dengan prefix dan middleware khusus.
-- **Middleware Bawaan**: CORS, Logger, dan Recover (Anti-Panic).
-- **Static File Server**: Sajikan file HTML/CSS/JS dengan mudah.
+- **Type-Safe Routing**: Define request/response structs once. Validation and binding are automatic.
+- **Auto OpenAPI**: Beautiful Scalar API documentation generated automatically from your code.
+- **Client Generators**: Generate fully-typed TypeScript & Go clients directly from your backend.
+- **Route Groups**: Group routes with prefixes and specific middlewares.
+- **Built-in Middleware**: CORS, Logger, and Recover (Anti-Panic).
+- **Static File Server**: Serve HTML/CSS/JS easily.
+- **Blazing Fast**: Built entirely on top of Go's standard `net/http`.
 
 ---
 
-## 📦 Instalasi
+## 📦 Installation
 
-Pastikan kamu menggunakan **Go 1.22** atau versi terbaru.
+Ensure you are using **Go 1.22** or newer.
 
 ```bash
 go get github.com/naufalraism/aemeath
 ```
+
+---
+
+## ⚡ Aemeath CLI
+
+Don't write boilerplate. Use the official CLI to scaffold your project, generate CRUD APIs, and start the dev server with Hot Reload.
+
+```bash
+# Create a new project
+aemeath new my-project
+
+# Generate a CRUD handler (creates handlers/product.go)
+aemeath generate api Product
+
+# Start dev server with Hot Reload
+aemeath dev
+```
+[View Aemeath CLI Repository](https://github.com/naufalraism/aemeath-cli)
 
 ---
 
@@ -47,43 +65,80 @@ type HelloOut struct {
 func main() {
 	app := aemeath.New()
 
-	// 1. Tambahkan Middleware Global
+	// 1. Add Global Middleware
 	app.Use(aemeath.Logger(), aemeath.Recover(), aemeath.CORS())
 
-	// 2. Daftarkan Route
+	// 2. Register Route (Type-Safe)
 	aemeath.GET(app, "/hello/{name}", func(c *aemeath.Ctx, in HelloIn) (HelloOut, error) {
 		greeting := "Halo"
 		if in.Lang == "en" {
 			greeting = "Hello"
 		}
 		return HelloOut{Message: greeting + ", " + in.Name}, nil
-	}, aemeath.Summary("Menyapa Pengguna"))
+	}, aemeath.Summary("Greet User"))
 
-	// 3. Nyalakan Server
-	log.Println("Server berjalan di http://localhost:3000")
+	// 3. Start Server
+	log.Println("Server running at http://localhost:3000")
 	log.Fatal(app.Listen(":3000"))
 }
 ```
 
 ---
 
-## 🗂️ Route Group & Middleware
+## 🛡️ Validation & Pointers (Important!)
 
-Kelompokkan rute dan tambahkan "satpam" (middleware) khusus untuk grup tersebut.
+Aemeath automatically validates input. For **scalar fields** (`int`, `bool`, `float`) marked as `required`, you **must** use pointers (`*int`, `*bool`). This allows Aemeath to differentiate between "not sent" and "sent as zero (0)".
 
 ```go
-// Middleware khusus Admin
+type CreateUserIn struct {
+	// Strings are safe without pointers
+	Name  string `json:"name" validate:"required"`
+	Email string `json:"email" validate:"required"`
+	
+	// Integers MUST use pointers if required
+	Age   *int   `json:"age" validate:"required"`
+}
+```
+*Note: If you use a non-pointer scalar with `required`, Aemeath will **panic at startup** to prevent silent validation bugs in production.*
+
+### Nested Validation
+`validate:"required"` works **recursively** for nested structs:
+```go
+type Address struct {
+    City string `json:"city" validate:"required"`
+}
+type CreateUser struct {
+    Name    string  `json:"name" validate:"required"`
+    Address Address `json:"address"` // City will be validated too
+}
+```
+
+### Body Limits
+JSON body size is limited by `aemeath.DefaultMaxBodyBytes` (default **1 MiB**).
+```go
+aemeath.DefaultMaxBodyBytes = 10 << 20 // 10 MiB
+```
+Requests with a body must send the `Content-Type: application/json` header.
+
+---
+
+## 🗂️ Route Groups & Middleware
+
+Group routes and add specific "guards" (middlewares) for that group.
+
+```go
+// Admin Middleware
 authAdmin := func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
 	return func(c *aemeath.Ctx) error {
-		// Cek token admin di sini
+		// Check admin token here
 		return next(c)
 	}
 }
 
-// Buat Group
+// Create Group
 admin := app.Group("/admin", authAdmin)
 
-// Daftarkan rute ke Group
+// Register route to Group
 aemeath.GroupGET(admin, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 	return map[string]string{"status": "Welcome Admin"}, nil
 })
@@ -91,49 +146,12 @@ aemeath.GroupGET(admin, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[stri
 
 ---
 
-## 🛡️ Validasi & Pointer (Penting!)
+## ⚡ Client Generators (TypeScript & Go)
 
-Aemeath memvalidasi input secara otomatis. Untuk field **scalar** (`int`, `bool`, `float`) yang wajib diisi, kamu **wajib** menggunakan pointer (`*int`, `*bool`) agar Aemeath bisa membedakan antara "tidak dikirim" dan "dikirim bernilai 0".
-
-```go
-type CreateUserIn struct {
-	// String aman tanpa pointer
-	Name  string `json:"name" validate:"required"`
-	Email string `json:"email" validate:"required"`
-	
-	// Integer WAJIB pointer jika required
-	Age   *int   `json:"age" validate:"required"`
-}
-```
-*Catatan: Jika kamu tidak menggunakan pointer pada integer `required`, Aemeath akan melakukan **panic saat startup** untuk mencegah bug validasi di kemudian hari.*
-
-### Validasi Nested
-`validate:"required"` berlaku **rekursif** ke nested struct:
-```go
-type Address struct {
-    City string `json:"city" validate:"required"`
-}
-type CreateUser struct {
-    Name    string  `json:"name" validate:"required"`
-    Address Address `json:"address"` // City ikut divalidasi
-}
-```
-
-### Batasan Body
-Ukuran body JSON dibatasi `aemeath.DefaultMaxBodyBytes` (default **1 MiB**).
-```go
-aemeath.DefaultMaxBodyBytes = 10 << 20 // 10 MiB
-```
-Body wajib mengirim header `Content-Type: application/json` bila berisi JSON.
-
----
-
-## ⚡ Client Generator (TypeScript & Go)
-
-Ini adalah fitur *killer* Aemeath. Kamu tidak perlu menulis ulang tipe data di frontend.
+This is Aemeath's killer feature. You never have to manually rewrite API types on the frontend.
 
 ### 1. TypeScript Client
-Aktifkan generator dengan `app.EnableClient()`. Kemudian akses `http://localhost:3000/client.ts`:
+Enable the generator with `app.EnableClient()`. Then access `http://localhost:3000/client.ts`:
 ```ts
 import { createClient } from "./client";
 const api = createClient({ baseUrl: "http://localhost:3000" });
@@ -142,63 +160,63 @@ const api = createClient({ baseUrl: "http://localhost:3000" });
 const res = await api.hello({ path: { name: "Budi" }, query: { lang: "id" } });
 ```
 
-**Aturan Requiredness TS:**
-- **Input** (path, query, body): field wajib **hanya jika** `validate:"required"`.
-- **Output**: field wajib **kecuali** bertag `json:",omitempty"`.
-- Jika satu struct dipakai sebagai input **dan** output, generator menghasilkan dua interface terpisah — `FooIn` dan `FooOut`.
+**TS Requiredness Rules:**
+- **Input** (path, query, body): Fields are required **only if** they have `validate:"required"`.
+- **Output**: Fields are required **unless** they have the `json:",omitempty"` tag.
+- If a struct is used as both input and output, the generator creates two separate interfaces — `FooIn` and `FooOut`.
 
-### 2. Go Client (Tanpa Codegen)
-Definisikan kontrak sekali, gunakan di server dan client.
+### 2. Go Client (No Codegen)
+Define the contract once, use it on both server and client.
 
 ```go
-// Definisikan kontrak
+// Define contract
 var Hello = aemeath.NewEndpoint[HelloIn, HelloOut]("GET", "/hello/{name}")
 
-// Di Server:
+// On Server:
 aemeath.Register(app, Hello, handler)
 
-// Di Client (dengan timeout default 30 detik):
+// On Client (default 30s timeout):
 client := aemeath.NewClient("http://localhost:3000")
 out, err := Hello.Call(context.Background(), client, HelloIn{Name: "Budi"})
 ```
-Error >= 400 dikembalikan sebagai `*aemeath.HTTPError`.
+Errors >= 400 are returned as `*aemeath.HTTPError`.
 
 ---
 
-## 📖 Dokumentasi Otomatis (OpenAPI)
+## 📖 Auto OpenAPI (Swagger)
 
-Aktifkan dokumentasi dengan:
+Enable documentation with:
 ```go
 app.EnableDocs(aemeath.Info{
 	Title:   "Aemeath API",
 	Version: "1.0.0",
 })
 ```
-Buka `http://localhost:3000/docs` untuk melihat antarmuka Scalar API Reference.
+Open `http://localhost:3000/docs` to see the Scalar API Reference interface.
 
 ---
 
 ## 📂 Static File Server
 
-Menyajikan file statis (HTML/CSS/Gambar).
+Serve static files (HTML/CSS/Images).
 ```go
-// Menyajikan folder "./public" di URL "/public"
+// Serves the "./public" folder at "/public" URL
 app.Static("/public", "./public")
 ```
 
 ---
 
-## 🧪 Menjalankan Test
+## 🧪 Testing
 
-Aemeath dilengkapi dengan unit test.
+Aemeath comes fully tested.
 ```bash
 go test ./...
 ```
 
-## 📝 Catatan Teknis
-- **Route path** menggunakan sintaks Go 1.22: `/hello/{name}`, bukan `/hello/:name`.
-- **Body di `DELETE`** belum didukung (hanya `POST`, `PUT`, `PATCH`).
-- **OpenAPI schema** masih inline (belum `$ref`).
+## 📝 Technical Notes
+- **Route paths** use Go 1.22 syntax: `/hello/{name}`, not `/hello/:name`.
+- **Body in `DELETE`** requests is not yet supported (only `POST`, `PUT`, `PATCH`).
+- **OpenAPI schemas** are currently inline (no `$ref` yet).
 
-## 📝 Lisensi
+## 📝 License
 MIT License.
