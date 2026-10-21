@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/examples/api"
 	"github.com/redis/go-redis/v9"
@@ -13,10 +14,21 @@ import (
 )
 
 func main() {
+	// Muat file .env jika ada
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️  Peringatan: File .env tidak ditemukan. Menggunakan nilai default.")
+	}
+
 	app := aemeath.New()
 
-	// 1. Middleware Global
-	app.Use(aemeath.Recover(), aemeath.Logger(), aemeath.CORS())
+	// 1. Middleware Global & Keamanan
+	app.Use(
+		aemeath.SecurityHeaders(),
+		aemeath.MaxBodySize(2<<20), // Maksimal 2MB
+		aemeath.Recover(),
+		aemeath.Logger(),
+		aemeath.CORS(),
+	)
 
 	// 2. Sajikan Landing Page dari folder "website" di URL utama (/)
 	app.Static("/", "./website")
@@ -50,8 +62,14 @@ func main() {
 	app.RegisterPlugin(dbPlugin)
 
 	// 6. Fitur JWT Auth & Rate Limiter
+	// Ambil secret dari .env. Jika kosong, pakai fallback (hanya untuk dev).
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "fallback-rahasia-dev-jangan-dipakai-di-production"
+	}
+
 	jwtAuth := aemeath.JWTMiddleware(aemeath.JWTConfig{
-		SecretKey: "rahasia-negara-aemeath",
+		SecretKey: jwtSecret, // <-- Diubah di sini
 	})
 
 	secretGroup := app.Group("/api/secret")
@@ -135,12 +153,10 @@ func main() {
 		return map[string]string{"message": "Data dari cache", "value": val}, nil
 	})
 
-	// 10. FITUR PLUGIN STORAGE (UPLOAD FILE - INTERFACE)
-	// Kita pakai Local Storage untuk testing
+	// 10. FITUR PLUGIN STORAGE (UPLOAD FILE)
 	localStore := aemeath.NewLocalStorage("./uploads")
 	app.RegisterPlugin(&aemeath.StoragePlugin{Storage: localStore})
 
-	// Rute untuk tes upload file
 	app.Handle("POST", "/upload", func(c *aemeath.Ctx) error {
 		if err := c.R.ParseMultipartForm(10 << 20); err != nil {
 			return aemeath.BadRequest("File terlalu besar atau format tidak valid")
@@ -152,9 +168,7 @@ func main() {
 		}
 		defer file.Close()
 
-		// PERUBAHAN PENTING: Cast ke Interface aemeath.Storage
 		storage := c.State["storage"].(aemeath.Storage)
-
 		savedName, err := storage.Save(header.Filename, file)
 		if err != nil {
 			return aemeath.InternalError("Gagal menyimpan file")
@@ -186,6 +200,12 @@ func main() {
 		return
 	}
 
-	log.Println("jalan di http://localhost:3000 (docs: /docs, client: /client.ts)")
-	log.Fatal(app.Listen(":3000"))
+	// Ambil PORT dari .env (jika ada), kalau tidak ada pakai 3000
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+
+	log.Printf("jalan di http://localhost:%s (docs: /docs, client: /client.ts)\n", port)
+	log.Fatal(app.Listen(":" + port))
 }

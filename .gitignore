@@ -1,3 +1,6 @@
+# Ignore env
+.env
+
 # Ignore local databases
 *.db
 *.sqlite
@@ -18,7 +21,7 @@ test-upload.txt
 *.so
 *.dylib
 
-# Ignore Node modules (untuk VitePress nanti)
+# Ignore Node modules (VitePress)
 node_modules/
 docs/.vitepress/dist
 docs/.vitepress/cache
