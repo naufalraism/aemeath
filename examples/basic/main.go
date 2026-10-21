@@ -158,7 +158,9 @@ func main() {
 
 	// 10. FITUR PLUGIN STORAGE (UPLOAD FILE)
 	localStore := aemeath.NewLocalStorage("./uploads")
-	app.RegisterPlugin(&aemeath.StoragePlugin{Storage: localStore})
+	if err := app.RegisterPlugin(&aemeath.StoragePlugin{Storage: localStore}); err != nil {
+		log.Fatal(err)
+	}
 
 	app.Handle("POST", "/upload", func(c *aemeath.Ctx) error {
 		if err := c.R.ParseMultipartForm(10 << 20); err != nil {
@@ -188,7 +190,10 @@ func main() {
 	if err != nil {
 		log.Fatal("Gagal membuat logger:", err)
 	}
-	app.RegisterPlugin(fileLogger)
+	if err := app.RegisterPlugin(fileLogger); err != nil {
+		log.Fatal(err)
+	}
+
 	defer func() { _ = fileLogger.Close() }()
 
 	// 12. Dokumentasi & Client

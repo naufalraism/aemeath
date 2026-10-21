@@ -133,7 +133,7 @@ func hasRequired(f reflect.StructField) bool {
 //   - `required` bersama `json:",omitempty"` kontradiktif → panic.
 //   - Nested struct diperiksa rekursif.
 func validateInputType(t reflect.Type) {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
@@ -159,10 +159,10 @@ func validateInputType(t reflect.Type) {
 		}
 		if req {
 			ft := f.Type
-			for ft.Kind() == reflect.Ptr {
+			for t.Kind() == reflect.Pointer {
 				ft = ft.Elem()
 			}
-			if f.Type.Kind() != reflect.Ptr && ft.Kind() != reflect.String {
+			if f.Type.Kind() != reflect.Pointer && ft.Kind() != reflect.String {
 				panic(fmt.Sprintf(
 					"aemeath: field %s.%s bertipe %s dengan `required` tidak bisa membedakan nilai kosong vs tidak dikirim; gunakan pointer (*%s) atau hapus `required`",
 					t.Name(), f.Name, f.Type, f.Type,
