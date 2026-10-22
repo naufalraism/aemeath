@@ -153,7 +153,7 @@ func newTSGen() *tsGen {
 }
 
 func (g *tsGen) scanInput(t reflect.Type, method string) {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
@@ -178,7 +178,7 @@ func (g *tsGen) scanInput(t reflect.Type, method string) {
 func (g *tsGen) scanOutput(t reflect.Type) { g.scanType(t, false) }
 
 func (g *tsGen) scanType(t reflect.Type, input bool) {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t == timeType {
@@ -273,7 +273,7 @@ func (g *tsGen) typeRef(t reflect.Type, depth int, input bool) string {
 	if depth > maxSchemaDepth {
 		return "unknown"
 	}
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t == timeType {
@@ -329,7 +329,7 @@ func (g *tsGen) field(f reflect.StructField, depth int, input bool) (string, boo
 		return "", false
 	}
 	typ := g.typeRef(f.Type, depth, input)
-	if f.Type.Kind() == reflect.Ptr {
+	if f.Type.Kind() == reflect.Pointer {
 		typ += " | null"
 	}
 	opt := hasOmitEmpty(f)
@@ -341,7 +341,7 @@ func (g *tsGen) field(f reflect.StructField, depth int, input bool) (string, boo
 
 func (g *tsGen) operation(s routeSpec, name string) string {
 	t := s.in
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	var pathP, queryP, bodyP []string
