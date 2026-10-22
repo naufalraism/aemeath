@@ -170,7 +170,7 @@ func validateInputType(t reflect.Type) {
 			}
 		}
 		ft := f.Type
-		for ft.Kind() == reflect.Ptr {
+		for ft.Kind() == reflect.Pointer {
 			ft = ft.Elem()
 		}
 		if ft.Kind() == reflect.Struct {
@@ -248,7 +248,7 @@ func bindParams(c *Ctx, v reflect.Value) error {
 // validateRequired memeriksa tag `validate:"required"` secara rekursif
 // ke nested struct dan pointer ke struct.
 func validateRequired(v reflect.Value) error {
-	for v.Kind() == reflect.Ptr {
+	for v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return nil
 		}
@@ -277,7 +277,7 @@ func validateRequired(v reflect.Value) error {
 // isAbsent menentukan apakah sebuah field dianggap "tidak dikirim" berdasarkan tipenya.
 func isAbsent(v reflect.Value) bool {
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		return v.IsNil()
 	case reflect.String:
 		return v.Len() == 0
@@ -289,7 +289,7 @@ func isAbsent(v reflect.Value) bool {
 
 // setField mengonversi nilai string dari Path/Query menjadi tipe data yang sesuai di struct.
 func setField(fv reflect.Value, raw string) error {
-	if fv.Kind() == reflect.Ptr {
+	if fv.Kind() == reflect.Pointer {
 		if fv.IsNil() {
 			fv.Set(reflect.New(fv.Type().Elem()))
 		}
