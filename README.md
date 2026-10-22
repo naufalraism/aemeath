@@ -4,7 +4,6 @@
 [![golangci-lint](https://github.com/naufalraism/aemeath/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/naufalraism/aemeath/actions/workflows/golangci-lint.yml) 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/naufalraism/aemeath.svg)](https://pkg.go.dev/github.com/naufalraism/aemeath) 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/naufalraism/aemeath)](https://github.com/naufalraism/aemeath/releases) 
-[![Release](https://img.shields.io/github/v/release/naufalraism/aemeath)](https://github.com/naufalraism/aemeath/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **The Modern Standard for Go APIs.**
