@@ -10,6 +10,8 @@ import (
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/examples/api"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	"gorm.io/gorm"
 )
 
@@ -195,6 +197,55 @@ func main() {
 	}
 
 	defer func() { _ = fileLogger.Close() }()
+
+	// 13. FITUR PLUGIN OAUTH2 (GOOGLE LOGIN)
+	// CATATAN: Rute ini butuh Client ID & Secret asli dari Google Cloud.
+	// Tanpa itu, akan muncul Error 400. Isi file .env untuk mengetesnya.
+	googleConfig := &oauth2.Config{
+		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("OAUTH_REDIRECT_URL"),
+		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
+		Endpoint:     google.Endpoint, // <--- Perlu import "golang.org/x/oauth2/google"
+	}
+
+	googleOAuth := aemeath.NewOAuth2(
+		"google",
+		googleConfig,
+		"https://www.googleapis.com/oauth2/v2/userinfo",
+	)
+	app.RegisterPlugin(googleOAuth)
+
+	// Rute 1: Redirect ke Google
+	aemeath.GET(app, "/auth/google/login", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+		oauth := c.State["oauth"].(*aemeath.OAuthPlugin)
+		url := oauth.GetAuthURL("state-rahasia-123") // Di production, gunakan random string
+		return map[string]string{"url": url}, nil
+	})
+
+	// Rute 2: Callback dari Google
+	aemeath.GET(app, "/auth/google/callback", func(c *aemeath.Ctx, _ struct{}) (map[string]any, error) {
+		code := c.R.URL.Query().Get("code")
+		if code == "" {
+			return nil, aemeath.BadRequest("Code tidak ditemukan")
+		}
+
+		oauth := c.State["oauth"].(*aemeath.OAuthPlugin)
+		token, err := oauth.Exchange(c.R.Context(), code)
+		if err != nil {
+			return nil, aemeath.NewError(401, "Gagal menukar token")
+		}
+
+		userInfo, err := oauth.GetUserInfo(c.R.Context(), token)
+		if err != nil {
+			return nil, aemeath.InternalError("Gagal mengambil data user")
+		}
+
+		return map[string]any{
+			"message": "Login berhasil!",
+			"user":    userInfo,
+		}, nil
+	})
 
 	// 12. Dokumentasi & Client
 	app.EnableDocs(aemeath.Info{Title: "Aemeath Demo", Version: "0.1.0"})
