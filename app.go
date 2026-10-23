@@ -1,8 +1,15 @@
 package aemeath
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -66,7 +73,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.mux.ServeHTTP(w, r)
 }
 
-// Listen menjalankan server HTTP pada alamat (addr) yang ditentukan.
+// Listen menjalankan server HTTP dengan dukungan Graceful Shutdown.
 func (a *App) Listen(addr string) error {
 	srv := &http.Server{
 		Addr:              addr,
@@ -76,5 +83,44 @@ func (a *App) Listen(addr string) error {
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	return srv.ListenAndServe()
+
+	// Channel untuk menangkap error dari server
+	serverErrors := make(chan error, 1)
+
+	// Jalankan server di goroutine terpisah
+	go func() {
+		log.Printf("aemeath: server berjalan di %s", addr)
+		serverErrors <- srv.ListenAndServe()
+	}()
+
+	// Channel untuk menangkap sinyal Ctrl+C atau SIGTERM (Docker/K8s)
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+
+	// Blokir eksekusi sampai ada error atau sinyal shutdown
+	select {
+	case err := <-serverErrors:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("aemeath: server error: %w", err)
+		}
+		return nil
+
+	case sig := <-shutdown:
+		log.Printf("aemeath: memulai graceful shutdown karena sinyal %v", sig)
+
+		// Beri waktu 10 detik untuk request yang sedang berjalan selesai
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("aemeath: gagal graceful shutdown: %v", err)
+			// Paksa matikan jika melewati batas waktu
+			if err := srv.Close(); err != nil {
+				return fmt.Errorf("aemeath: gagal mematikan server: %w", err)
+			}
+		}
+		log.Println("aemeath: server berhenti dengan rapi")
+	}
+
+	return nil
 }
