@@ -3,7 +3,7 @@
 [![Go](https://github.com/naufalraism/aemeath/actions/workflows/go.yml/badge.svg)](https://github.com/naufalraism/aemeath/actions/workflows/go.yml) 
 [![golangci-lint](https://github.com/naufalraism/aemeath/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/naufalraism/aemeath/actions/workflows/golangci-lint.yml) 
 [![Go Reference](https://pkg.go.dev/badge/github.com/naufalraism/aemeath.svg)](https://pkg.go.dev/github.com/naufalraism/aemeath) 
-[![GitHub release](https://img.shields.io/github/v/release/naufalraism/aemeath?sort=semver&display_name=tag&cacheSeconds=3600)](https://github.com/naufalraism/aemeath/releases) 
+[![GitHub release](https://img.shields.io/github/v/release/naufalraism/aemeath?sort=semver&display_name=tag)](https://github.com/naufalraism/aemeath/releases) 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **The Modern Standard for Go APIs.**
