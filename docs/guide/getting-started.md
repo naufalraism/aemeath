@@ -102,6 +102,4 @@ Restart your server (`Ctrl+C`, then `go run main.go`), and check out:
 
 Now that you have a taste of Aemeath, dive deeper into the core concepts:
 
-- [Routing & Groups](../guide/routing.md)
-- [Data Validation](../guide/validation.md)
 - [Aemeath CLI Overview](../cli/overview.md)
