@@ -214,7 +214,9 @@ func main() {
 		googleConfig,
 		"https://www.googleapis.com/oauth2/v2/userinfo",
 	)
-	app.RegisterPlugin(googleOAuth)
+	if err := app.RegisterPlugin(googleOAuth); err != nil {
+		log.Fatal(err)
+	}
 
 	// Rute 1: Redirect ke Google
 	aemeath.GET(app, "/auth/google/login", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
