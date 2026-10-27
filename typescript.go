@@ -448,7 +448,7 @@ func (g *tsGen) fieldType(f reflect.StructField, depth int, input bool) string {
 	}
 	// A nil pointer, slice, or map is encoded as JSON null in responses. In a
 	// request, null is only accepted where the field is optional.
-	if (f.Type.Kind() == reflect.Pointer && !(input && hasRequired(f))) || (!input && nilable(f.Type)) {
+	if (f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type)) {
 		typ += " | null"
 	}
 	return typ
@@ -466,9 +466,7 @@ func oneofUnion(f reflect.StructField) string {
 		}
 		var parts []string
 		if classOf(f.Type) == kindNumber {
-			for _, s := range r.set {
-				parts = append(parts, s)
-			}
+			parts = append(parts, r.set...)
 		} else {
 			for _, s := range r.set {
 				parts = append(parts, strconv.Quote(s))

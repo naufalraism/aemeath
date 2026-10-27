@@ -126,7 +126,7 @@ func (g *tsGen) zodFieldNamed(f reflect.StructField, name string, input bool) st
 	if input {
 		expr = zodRules(expr, f)
 	}
-	if (f.Type.Kind() == reflect.Pointer && !(input && hasRequired(f))) || (!input && nilable(f.Type)) {
+	if (f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type)) {
 		expr += ".nullable()"
 	}
 	optional := hasOmitEmpty(f)

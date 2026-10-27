@@ -2,6 +2,7 @@ package oauth2_test
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	xoauth2 "golang.org/x/oauth2"
@@ -9,6 +10,8 @@ import (
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/oauth2"
 )
+
+const urlSafe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 
 func TestGenerateStateIsRandomAndURLSafe(t *testing.T) {
 	seen := map[string]bool{}
@@ -21,7 +24,7 @@ func TestGenerateStateIsRandomAndURLSafe(t *testing.T) {
 			t.Fatalf("state %q is too short or repeated", s)
 		}
 		for _, r := range s {
-			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			if !strings.ContainsRune(urlSafe, r) {
 				t.Fatalf("state %q is not URL-safe", s)
 			}
 		}

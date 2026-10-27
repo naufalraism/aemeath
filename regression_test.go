@@ -153,7 +153,7 @@ func TestQuerySlices(t *testing.T) {
 		IDs  []int    `json:"ids"`
 	}
 	app := aemeath.New()
-	aemeath.GET(app, "/s", func(_ *aemeath.Ctx, i in) (out, error) { return out{i.Tags, i.IDs}, nil })
+	aemeath.GET(app, "/s", func(_ *aemeath.Ctx, i in) (out, error) { return out(i), nil })
 
 	rec := get(app, "/s?tag=a&tag=b&id=1&id=2")
 	want := `{"tags":["a","b"],"ids":[1,2]}`

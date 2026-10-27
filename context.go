@@ -45,7 +45,7 @@ func (c *Ctx) JSON(code int, v any) error {
 
 // bodyAllowed reports whether a response with this status may carry a body.
 func bodyAllowed(code int) bool {
-	return !(code >= 100 && code < 200) && code != http.StatusNoContent && code != http.StatusNotModified
+	return (code < 100 || code >= 200) && code != http.StatusNoContent && code != http.StatusNotModified
 }
 
 // writeJSON is an internal helper that writes a JSON response.
