@@ -23,9 +23,8 @@ func BenchmarkNetHTTP(b *testing.B) {
 
 	req := httptest.NewRequest("GET", "/hello", nil)
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 	}
@@ -43,9 +42,8 @@ func BenchmarkGin(b *testing.B) {
 
 	req := httptest.NewRequest("GET", "/hello", nil)
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 	}
@@ -65,9 +63,8 @@ func BenchmarkFiber(b *testing.B) {
 
 	req := httptest.NewRequest("GET", "/hello", nil)
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = app.Test(req)
 	}
 }
@@ -88,9 +85,8 @@ func BenchmarkAemeath(b *testing.B) {
 
 	req := httptest.NewRequest("GET", "/hello", nil)
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
 	}

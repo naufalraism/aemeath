@@ -25,6 +25,9 @@ jobs:
         deps=$(go list -deps . | grep -E '^[a-z0-9.-]+\.[a-z]+/' | grep -v '^github.com/naufalraism/aemeath' || true)
         if [ -n "$deps" ]; then echo "third-party imports in the core package:"; echo "$deps"; exit 1; fi
 
+    - name: go.mod and go.sum are tidy
+      run: go mod tidy -diff
+
     - name: Format
       run: test -z "$(gofmt -l .)"
 
@@ -71,3 +74,21 @@ jobs:
         go run . > /tmp/tscheck-server.log 2>&1 &
         for i in $(seq 1 60); do (exec 3<>/dev/tcp/127.0.0.1/38123) 2>/dev/null && break; sleep 0.5; done
         npm run verify
+
+  benchmarks:
+    name: Benchmarks module
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: go.mod and go.sum are tidy
+      working-directory: benchmarks
+      run: go mod tidy -diff
+
+    - name: Vet
+      working-directory: benchmarks
+      run: go vet ./...
