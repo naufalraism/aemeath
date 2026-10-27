@@ -15,7 +15,6 @@ export default defineConfig({
         text: 'Introduction',
         items: [
           { text: 'Getting Started', link: '/guide/getting-started' },
-          { text: 'Routing', link: '/guide/routing' }
         ]
       },
       {
