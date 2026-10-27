@@ -1,6 +1,4 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
+# Builds and tests the module on every push and pull request.
 name: Go
 
 on:
@@ -9,20 +7,67 @@ on:
   pull_request:
     branches: [ "main" ]
 
-jobs:
+permissions:
+  contents: read
 
-  build:
+jobs:
+  test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
+    - uses: actions/setup-go@v5
       with:
-        go-version: '1.27'
+        go-version-file: go.mod
 
-    - name: Build
-      run: go build -v ./...
+    - name: Core stays dependency-free
+      run: |
+        deps=$(go list -deps . | grep -E '^[a-z0-9.-]+\.[a-z]+/' | grep -v '^github.com/naufalraism/aemeath' || true)
+        if [ -n "$deps" ]; then echo "third-party imports in the core package:"; echo "$deps"; exit 1; fi
 
-    - name: Test
-      run: go test -v ./...
+    - name: Format
+      run: test -z "$(gofmt -l .)"
+
+    - name: Vet
+      run: go vet ./...
+
+    - name: Test (race detector)
+      run: go test -race -cover ./...
+
+    - name: Fuzz the request binder (short)
+      run: go test -run '^$' -fuzz FuzzBind -fuzztime 20s .
+
+    - name: Benchmark smoke test
+      run: go test -run '^$' -bench . -benchtime 1000x .
+
+  typescript:
+    name: TypeScript generators
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Generate client.ts, schemas.ts and hooks.ts
+      run: go run ./examples/tscheck -write examples/tscheck/generated
+
+    - name: Install TypeScript, Zod and React Query
+      working-directory: examples/tscheck
+      run: npm install --no-audit --no-fund
+
+    - name: Type-check the generated code (strict)
+      working-directory: examples/tscheck
+      run: npm run typecheck
+
+    - name: Generated Zod schemas agree with the server
+      working-directory: examples/tscheck
+      run: |
+        go run . > /tmp/tscheck-server.log 2>&1 &
+        for i in $(seq 1 60); do (exec 3<>/dev/tcp/127.0.0.1/38123) 2>/dev/null && break; sleep 0.5; done
+        npm run verify
