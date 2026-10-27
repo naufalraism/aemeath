@@ -36,8 +36,8 @@ func TestClientRoundTrip(t *testing.T) {
 
 	_, err = create.Call(ctx, client, userIn{})
 	var he *aemeath.HTTPError
-	if !errors.As(err, &he) || he.Code != 400 {
-		t.Fatalf("err = %v, want HTTPError 400", err)
+	if !errors.As(err, &he) || he.Code != 422 {
+		t.Fatalf("err = %v, want HTTPError 422", err)
 	}
 }
 
@@ -65,7 +65,7 @@ func TestClientPathWithPointer(t *testing.T) {
 	app := aemeath.New()
 	aemeath.GET(app, "/ptr/{id}", func(c *aemeath.Ctx, in ptrIn) (ptrOut, error) {
 		if in.ID == nil {
-			return ptrOut{}, aemeath.BadRequest("id kosong")
+			return ptrOut{}, aemeath.BadRequest("id is empty")
 		}
 		return ptrOut{ID: *in.ID}, nil
 	})
@@ -91,9 +91,10 @@ func TestClientErrorMessageFromServer(t *testing.T) {
 	_, err := create.Call(context.Background(), client, userIn{})
 	var he *aemeath.HTTPError
 	if !errors.As(err, &he) {
-		t.Fatalf("err bukan HTTPError: %v", err)
+		t.Fatalf("err is not an HTTPError: %v", err)
 	}
-	if !strings.Contains(he.Message, "wajib") {
-		t.Fatalf("pesan error hilang, dapat %q", he.Message)
+	if he.Message != "validation failed" || len(he.Errors) != 1 || he.Errors[0].Field != "name" ||
+		!strings.Contains(he.Errors[0].Message, "required") {
+		t.Fatalf("server error details lost: %+v", he)
 	}
 }

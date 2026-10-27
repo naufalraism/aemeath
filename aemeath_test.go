@@ -30,12 +30,12 @@ func newApp() *aemeath.App {
 	app.Use(aemeath.Recover())
 	aemeath.GET(app, "/hello/{name}", func(c *aemeath.Ctx, in helloIn) (helloOut, error) {
 		return helloOut{Message: in.Lang + ":" + in.Name}, nil
-	}, aemeath.Summary("Sapa"))
+	}, aemeath.Summary("Greet"))
 	aemeath.POST(app, "/users", func(c *aemeath.Ctx, in userIn) (userOut, error) {
 		return userOut{ID: 1, Name: in.Name}, nil
 	}, aemeath.Status(201))
 	aemeath.GET(app, "/boom", func(c *aemeath.Ctx, _ struct{}) (struct{}, error) {
-		panic("duar")
+		panic("boom")
 	})
 	app.EnableDocs(aemeath.Info{Title: "Test"})
 	return app
@@ -69,7 +69,7 @@ func TestPostValidAndStatus(t *testing.T) {
 
 func TestValidationAndBadJSON(t *testing.T) {
 	app := newApp()
-	if rec := do(app, "POST", "/users", `{}`); rec.Code != 400 {
+	if rec := do(app, "POST", "/users", `{}`); rec.Code != 422 {
 		t.Fatalf("required: status = %d", rec.Code)
 	}
 	if rec := do(app, "POST", "/users", `{bad`); rec.Code != 400 {
@@ -95,7 +95,7 @@ func TestUseAfterRoute(t *testing.T) {
 		}
 	})
 	if rec := do(app, "GET", "/ping", ""); rec.Header().Get("X-Test") != "1" {
-		t.Fatal("middleware tidak jalan")
+		t.Fatal("middleware did not run")
 	}
 }
 
@@ -107,13 +107,13 @@ func TestOpenAPI(t *testing.T) {
 	}
 	paths := doc["paths"].(map[string]any)
 	if _, ok := paths["/hello/{name}"].(map[string]any)["get"]; !ok {
-		t.Fatal("GET /hello/{name} tidak ada di spec")
+		t.Fatal("GET /hello/{name} is missing from the spec")
 	}
 	post := paths["/users"].(map[string]any)["post"].(map[string]any)
 	if post["requestBody"] == nil {
-		t.Fatal("requestBody POST /users tidak ada")
+		t.Fatal("requestBody of POST /users is missing")
 	}
 	if do(newApp(), "GET", "/docs", "").Code != 200 {
-		t.Fatal("/docs tidak jalan")
+		t.Fatal("/docs is not served")
 	}
 }

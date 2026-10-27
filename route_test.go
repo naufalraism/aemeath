@@ -11,7 +11,7 @@ func TestPanicsOnInvalidInput(t *testing.T) {
 		name string
 		fn   func()
 	}{
-		{"int required tanpa pointer", func() {
+		{"non-pointer int with required", func() {
 			type badIn struct {
 				Age int `json:"age" validate:"required"`
 			}
@@ -19,17 +19,71 @@ func TestPanicsOnInvalidInput(t *testing.T) {
 				return struct{}{}, nil
 			})
 		}},
-		{"embedded struct", func() {
-			type Base struct{ ID int }
+		{"unknown rule", func() {
 			type badIn struct {
-				Base
-				Name string `json:"name"`
+				Name string `json:"name" validate:"minimum=3"`
 			}
 			aemeath.POST(aemeath.New(), "/x", func(*aemeath.Ctx, badIn) (struct{}, error) {
 				return struct{}{}, nil
 			})
 		}},
-		{"required dan omitempty sekaligus", func() {
+		{"min on a bool", func() {
+			type badIn struct {
+				On *bool `json:"on" validate:"min=1"`
+			}
+			aemeath.POST(aemeath.New(), "/x", func(*aemeath.Ctx, badIn) (struct{}, error) {
+				return struct{}{}, nil
+			})
+		}},
+		{"email on a number", func() {
+			type badIn struct {
+				Age int `json:"age" validate:"email"`
+			}
+			aemeath.POST(aemeath.New(), "/x", func(*aemeath.Ctx, badIn) (struct{}, error) {
+				return struct{}{}, nil
+			})
+		}},
+		{"min without a value", func() {
+			type badIn struct {
+				Name string `json:"name" validate:"min"`
+			}
+			aemeath.POST(aemeath.New(), "/x", func(*aemeath.Ctx, badIn) (struct{}, error) {
+				return struct{}{}, nil
+			})
+		}},
+		{"min that is not a number", func() {
+			type badIn struct {
+				Name string `json:"name" validate:"min=abc"`
+			}
+			aemeath.POST(aemeath.New(), "/x", func(*aemeath.Ctx, badIn) (struct{}, error) {
+				return struct{}{}, nil
+			})
+		}},
+		{"invalid regular expression", func() {
+			type badIn struct {
+				Name string `json:"name" validate:"pattern=(["`
+			}
+			aemeath.POST(aemeath.New(), "/x", func(*aemeath.Ctx, badIn) (struct{}, error) {
+				return struct{}{}, nil
+			})
+		}},
+		{"oneof with a non-numeric value on a number", func() {
+			type badIn struct {
+				N int `json:"n" validate:"oneof=1 two"`
+			}
+			aemeath.POST(aemeath.New(), "/x", func(*aemeath.Ctx, badIn) (struct{}, error) {
+				return struct{}{}, nil
+			})
+		}},
+		{"len on a number", func() {
+			type badIn struct {
+				N int `json:"n" validate:"len=3"`
+			}
+			aemeath.POST(aemeath.New(), "/x", func(*aemeath.Ctx, badIn) (struct{}, error) {
+				return struct{}{}, nil
+			})
+		}},
+		{"required and omitempty together", func() {
 			type badIn struct {
 				Name string `json:"name,omitempty" validate:"required"`
 			}

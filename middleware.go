@@ -33,11 +33,22 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// Unwrap lets http.ResponseController reach the underlying writer.
 func (w *statusWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-// PERBAIKAN: Tambahkan Hijack() agar WebSocket bisa mengambil alih koneksi
+// Flush implements http.Flusher so streaming responses (e.g. SSE) keep working.
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		if !w.written {
+			w.WriteHeader(http.StatusOK)
+		}
+		f.Flush()
+	}
+}
+
+// Hijack implements http.Hijacker so WebSocket upgrades can take over the connection.
 func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if hj, ok := w.ResponseWriter.(http.Hijacker); ok {
 		return hj.Hijack()
@@ -45,7 +56,7 @@ func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, fmt.Errorf("aemeath: underlying ResponseWriter does not implement http.Hijacker")
 }
 
-// Logger mencatat method, path, status, dan durasi.
+// Logger logs the method, path, status, and duration of every request.
 func Logger() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) (err error) {
@@ -53,9 +64,11 @@ func Logger() Middleware {
 			sw := &statusWriter{ResponseWriter: c.W, status: http.StatusOK}
 			c.W = sw
 			defer func() {
+				// EscapedPath keeps control characters (e.g. %0A) from forging log lines.
+				path := c.R.URL.EscapedPath()
 				if r := recover(); r != nil {
 					log.Printf("%s %s %d %v panic: %v",
-						c.R.Method, c.R.URL.Path, http.StatusInternalServerError,
+						c.R.Method, path, http.StatusInternalServerError,
 						time.Since(start), r)
 					panic(r)
 				}
@@ -68,7 +81,11 @@ func Logger() Middleware {
 						status = http.StatusInternalServerError
 					}
 				}
-				log.Printf("%s %s %d %v", c.R.Method, c.R.URL.Path, status, time.Since(start))
+				if id := c.RequestID(); id != "" {
+					log.Printf("%s %s %d %v id=%s", c.R.Method, path, status, time.Since(start), id)
+					return
+				}
+				log.Printf("%s %s %d %v", c.R.Method, path, status, time.Since(start))
 			}()
 			err = next(c)
 			return err
@@ -76,14 +93,14 @@ func Logger() Middleware {
 	}
 }
 
-// Recover mengubah panic menjadi respons 500 dan mencatat stack trace.
+// Recover turns panics into a 500 response and logs the stack trace.
 func Recover() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) (err error) {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("aemeath: panic: %v\n%s", r, debug.Stack())
-					err = NewError(http.StatusInternalServerError, "terjadi kesalahan internal")
+					err = NewError(http.StatusInternalServerError, "internal server error")
 				}
 			}()
 			return next(c)

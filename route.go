@@ -1,108 +1,181 @@
 package aemeath
 
 import (
+	"encoding"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
+	"mime"
 	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 )
 
-// DefaultMaxBodyBytes adalah batas default ukuran body JSON (1 MiB).
-// Bisa diubah sebelum server berjalan.
+// DefaultMaxBodyBytes is the default limit for JSON request bodies (1 MiB).
+// It can be changed before the server starts.
 var DefaultMaxBodyBytes int64 = 1 << 20
 
 type routeConfig struct {
-	summary string
-	tags    []string
-	status  int
-	opID    string
+	summary     string
+	description string
+	tags        []string
+	status      int
+	opID        string
+	deprecated  bool
+	secure      bool
 }
 
-// RouteOption adalah fungsi untuk mengatur metadata/perilaku sebuah route.
+// RouteOption configures route metadata or behavior.
 type RouteOption func(*routeConfig)
 
-// OperationID menamai route secara eksplisit (dipakai di OpenAPI dan nama fungsi TS Client).
+// OperationID names a route explicitly (used in OpenAPI and as the TypeScript client function name).
 func OperationID(id string) RouteOption { return func(c *routeConfig) { c.opID = id } }
 
-// Summary memberikan deskripsi singkat pada route (muncul di dokumentasi OpenAPI).
+// Summary adds a short description to the route (shown in the OpenAPI docs).
 func Summary(s string) RouteOption { return func(c *routeConfig) { c.summary = s } }
 
-// Tags mengelompokkan route ke dalam kategori tertentu di OpenAPI.
+// Description adds a longer description (Markdown) to the route in the OpenAPI docs.
+func Description(s string) RouteOption { return func(c *routeConfig) { c.description = s } }
+
+// Tags groups the route under one or more categories in OpenAPI.
 func Tags(t ...string) RouteOption { return func(c *routeConfig) { c.tags = t } }
 
-// Status mengubah HTTP status code default (200 OK) untuk response sukses.
+// Status changes the default (200 OK) HTTP status code of a successful response.
 func Status(code int) RouteOption { return func(c *routeConfig) { c.status = code } }
 
-// Route mendaftarkan handler bertipe aman. Input (In) akan di-bind dan divalidasi
-// secara otomatis, dan output (Out) akan di-serialize menjadi JSON.
-func Route[In, Out any](a *App, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
+// Deprecated marks the route as deprecated in the OpenAPI docs.
+func Deprecated() RouteOption { return func(c *routeConfig) { c.deprecated = true } }
+
+// RequireAuth documents the route as protected by a Bearer token (JWT) in the
+// OpenAPI docs, and adds a 401 response. It only documents; enforcing it is
+// the job of a middleware such as jwt.Middleware.
+func RequireAuth() RouteOption { return func(c *routeConfig) { c.secure = true } }
+
+func newRouteConfig(opts []RouteOption) routeConfig {
 	cfg := routeConfig{status: http.StatusOK}
 	for _, o := range opts {
 		o(&cfg)
 	}
-	validateInputType(reflect.TypeFor[In]())
-	a.specs = append(a.specs, routeSpec{
-		method: method, path: path,
-		in: reflect.TypeFor[In](), out: reflect.TypeFor[Out](),
-		cfg: cfg,
-	})
-	a.Handle(method, path, func(c *Ctx) error {
+	return cfg
+}
+
+// inputInfo is everything computed once, at registration, about an input type.
+type inputInfo struct {
+	typ    reflect.Type
+	plan   *typePlan
+	params []flatField // fields bound from path, query, header or cookie
+}
+
+// prepareInput analyses the input type of a route. It panics at startup for
+// tag combinations that cannot work, which beats a silent bug at runtime:
+//
+//   - a non-pointer scalar or struct with `required` cannot tell "not sent"
+//     from "sent as zero": use a pointer;
+//   - `required` together with `omitempty` contradict each other;
+//   - unknown or misapplied `validate` rules (see supportedRules).
+//
+// A json-tagged field on a bodyless method (GET/DELETE) is never bound, so a
+// warning is logged.
+func prepareInput(t reflect.Type, method, path string) *inputInfo {
+	info := &inputInfo{typ: t, plan: planFor(t)}
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return info
+	}
+	for _, ff := range flatFields(t) {
+		if src, _ := paramSource(ff.StructField); src != "" {
+			info.params = append(info.params, ff)
+		} else if !bodyMethod(method) && hasJSONName(ff.StructField) {
+			log.Printf("aemeath: warning: %s %s: field %s.%s has a json tag but %s requests have no body, so it is never bound; use `query:\"...\"` or `path:\"...\"`",
+				method, path, t.Name(), ff.Name, method)
+		}
+	}
+	return info
+}
+
+// typedHandler adapts a typed handler to a HandlerFunc: it binds and
+// validates the input, calls fn, and serializes the output as JSON.
+// An output of type Handled means fn wrote the response itself.
+func typedHandler[In, Out any](cfg routeConfig, info *inputInfo, fn func(*Ctx, In) (Out, error)) HandlerFunc {
+	handled := reflect.TypeFor[Out]() == reflect.TypeFor[Handled]()
+	return func(c *Ctx) error {
 		var in In
-		if err := bind(c, &in); err != nil {
+		if err := bind(c, &in, info); err != nil {
 			return err
 		}
 		out, err := fn(c, in)
 		if err != nil {
 			return err
 		}
+		if handled {
+			return nil
+		}
 		return c.JSON(cfg.status, out)
+	}
+}
+
+// Route registers a type-safe handler. The input (In) is bound and validated
+// automatically and the output (Out) is serialized as JSON.
+func Route[In, Out any](a *App, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
+	cfg := newRouteConfig(opts)
+	info := prepareInput(reflect.TypeFor[In](), method, path)
+	a.specs = append(a.specs, routeSpec{
+		method: method, path: path,
+		in: reflect.TypeFor[In](), out: reflect.TypeFor[Out](),
+		cfg: cfg,
 	})
+	a.Handle(method, path, typedHandler(cfg, info, fn))
 	return Endpoint[In, Out]{Method: method, Path: path}
 }
 
-// GET mendaftarkan route HTTP GET dengan handler bertipe aman.
+// GET registers a type-safe HTTP GET route.
 func GET[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "GET", path, fn, o...)
 }
 
-// POST mendaftarkan route HTTP POST dengan handler bertipe aman.
+// POST registers a type-safe HTTP POST route.
 func POST[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "POST", path, fn, o...)
 }
 
-// PUT mendaftarkan route HTTP PUT dengan handler bertipe aman.
+// PUT registers a type-safe HTTP PUT route.
 func PUT[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "PUT", path, fn, o...)
 }
 
-// PATCH mendaftarkan route HTTP PATCH dengan handler bertipe aman.
+// PATCH registers a type-safe HTTP PATCH route.
 func PATCH[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "PATCH", path, fn, o...)
 }
 
-// DELETE mendaftarkan route HTTP DELETE dengan handler bertipe aman.
+// DELETE registers a type-safe HTTP DELETE route.
 func DELETE[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
 	return Route(a, "DELETE", path, fn, o...)
 }
 
-// bodyMethod menentukan apakah HTTP method tersebut memiliki body.
+// bodyMethod reports whether the HTTP method carries a request body.
 func bodyMethod(m string) bool { return m == "POST" || m == "PUT" || m == "PATCH" }
 
-// paramSource mengembalikan ("path"|"query", nama) jika field memiliki tag tersebut.
+// paramSources lists the struct tags that bind a field from the request line
+// or headers instead of the JSON body.
+var paramSources = []string{"path", "query", "header", "cookie"}
+
+// paramSource returns ("path"|"query"|"header"|"cookie", name) if the field has such a tag.
 func paramSource(f reflect.StructField) (string, string) {
-	if n := f.Tag.Get("path"); n != "" {
-		return "path", n
-	}
-	if n := f.Tag.Get("query"); n != "" {
-		return "query", n
+	for _, src := range paramSources {
+		if n := f.Tag.Get(src); n != "" {
+			return src, n
+		}
 	}
 	return "", ""
 }
 
-// jsonName mengambil nama field berdasarkan tag json, atau nama asli jika tidak ada.
+// jsonName returns the field name from the json tag, or the Go field name if absent.
 func jsonName(f reflect.StructField) string {
 	name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 	if name == "" {
@@ -111,189 +184,145 @@ func jsonName(f reflect.StructField) string {
 	return name
 }
 
-// hasRequired mengecek apakah field memiliki tag `validate:"required"`.
+// hasJSONName reports whether the field has an explicit, non-ignored json tag.
+func hasJSONName(f reflect.StructField) bool {
+	tag := f.Tag.Get("json")
+	return tag != "" && tag != "-"
+}
+
+// hasRequired reports whether the field has the `validate:"required"` tag.
 func hasRequired(f reflect.StructField) bool {
 	for _, p := range strings.Split(f.Tag.Get("validate"), ",") {
-		if p == "required" {
+		if strings.TrimSpace(p) == "required" {
 			return true
 		}
 	}
 	return false
 }
 
-// validateInputType memastikan tipe In tidak mengandung kombinasi tag/tipe
-// yang tidak bisa divalidasi dengan benar. Lebih baik panic saat startup
-// daripada bug validasi silent di runtime.
-//
-// Aturan:
-//   - Embedded struct (Anonymous) belum didukung → panic.
-//   - Field scalar non-pointer (int, uint, float, bool) dengan `required`
-//     tidak bisa membedakan "tidak dikirim" vs "dikirim nilai nol" → panic.
-//     Gunakan pointer (mis. *int `validate:"required"`), atau hapus `required`.
-//   - `required` bersama `json:",omitempty"` kontradiktif → panic.
-//   - Nested struct diperiksa rekursif.
-func validateInputType(t reflect.Type) {
-	for t.Kind() == reflect.Pointer {
-		t = t.Elem()
+// fieldDisplayName is the name shown to clients in validation errors:
+// the parameter name for path/query/header/cookie fields, the JSON name otherwise.
+func fieldDisplayName(f reflect.StructField) string {
+	if _, name := paramSource(f); name != "" {
+		return name
 	}
-	if t.Kind() != reflect.Struct {
-		return
-	}
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if f.Anonymous {
-			panic(fmt.Sprintf(
-				"aemeath: embedded field %s.%s belum didukung; gunakan field eksplisit",
-				t.Name(), f.Name,
-			))
-		}
-		if !f.IsExported() {
-			continue
-		}
-		req := hasRequired(f)
-		if req && hasOmitEmpty(f) {
-			panic(fmt.Sprintf(
-				"aemeath: field %s.%s punya `required` dan `omitempty` sekaligus — kontradiktif",
-				t.Name(), f.Name,
-			))
-		}
-		if req {
-			ft := f.Type
-			for t.Kind() == reflect.Pointer {
-				ft = ft.Elem()
-			}
-			if f.Type.Kind() != reflect.Pointer && ft.Kind() != reflect.String {
-				panic(fmt.Sprintf(
-					"aemeath: field %s.%s bertipe %s dengan `required` tidak bisa membedakan nilai kosong vs tidak dikirim; gunakan pointer (*%s) atau hapus `required`",
-					t.Name(), f.Name, f.Type, f.Type,
-				))
-			}
-		}
-		ft := f.Type
-		for ft.Kind() == reflect.Pointer {
-			ft = ft.Elem()
-		}
-		if ft.Kind() == reflect.Struct {
-			validateInputType(ft)
-		}
-	}
+	return jsonName(f)
 }
 
-// bind mengisi struct dari body JSON, tag `path:"x"` dan `query:"x"`,
-// lalu memvalidasi tag `validate:"required"` secara rekursif.
-func bind(c *Ctx, in any) error {
+// isJSONContentType reports whether the Content-Type header denotes JSON.
+func isJSONContentType(ct string) bool {
+	mt, _, err := mime.ParseMediaType(ct)
+	if err != nil {
+		return false
+	}
+	return mt == "application/json" || strings.HasSuffix(mt, "+json")
+}
+
+// bind fills the struct from the JSON body and from the path, query, header
+// and cookie tags, then validates it.
+func bind(c *Ctx, in any, info *inputInfo) error {
 	if bodyMethod(c.R.Method) && c.R.Body != nil {
 		body, err := io.ReadAll(io.LimitReader(c.R.Body, DefaultMaxBodyBytes+1))
 		if err != nil {
-			return BadRequest("gagal membaca body")
+			var mbe *http.MaxBytesError
+			if errors.As(err, &mbe) {
+				return PayloadTooLarge(fmt.Sprintf("request body exceeds the limit of %d bytes", mbe.Limit))
+			}
+			return BadRequest("failed to read request body")
 		}
 		if int64(len(body)) > DefaultMaxBodyBytes {
-			return BadRequest(fmt.Sprintf("body melebihi batas %d byte", DefaultMaxBodyBytes))
+			return PayloadTooLarge(fmt.Sprintf("request body exceeds the limit of %d bytes", DefaultMaxBodyBytes))
 		}
 		if len(body) > 0 {
-			ct := c.R.Header.Get("Content-Type")
-			if ct != "" {
-				lower := strings.ToLower(ct)
-				if !strings.Contains(lower, "json") &&
-					!strings.HasPrefix(lower, "application/x-www-form-urlencoded") {
-					return NewError(http.StatusUnsupportedMediaType, "Content-Type harus application/json")
-				}
+			if ct := c.R.Header.Get("Content-Type"); ct != "" && !isJSONContentType(ct) {
+				return UnsupportedMediaType("Content-Type must be application/json")
 			}
 			if err := json.Unmarshal(body, in); err != nil {
-				return BadRequest("body JSON tidak valid")
+				return BadRequest("invalid JSON body")
 			}
 		}
 	}
 
 	v := reflect.ValueOf(in).Elem()
-	if v.Kind() != reflect.Struct {
-		return nil
-	}
-	if err := bindParams(c, v); err != nil {
-		return err
-	}
-	return validateRequired(v)
-}
-
-// bindParams melakukan binding data dari Path URL dan Query String ke struct.
-func bindParams(c *Ctx, v reflect.Value) error {
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		src, name := paramSource(f)
-		if src == "" {
-			continue
-		}
-		fv := v.Field(i)
-		fv.SetZero()
-		var raw string
-		if src == "path" {
-			raw = c.R.PathValue(name)
-		} else {
-			raw = c.R.URL.Query().Get(name)
-		}
-		if raw == "" {
-			continue
-		}
-		if err := setField(fv, raw); err != nil {
-			return BadRequest(fmt.Sprintf("nilai %s '%s' tidak valid", src, name))
-		}
-	}
-	return nil
-}
-
-// validateRequired memeriksa tag `validate:"required"` secara rekursif
-// ke nested struct dan pointer ke struct.
-func validateRequired(v reflect.Value) error {
 	for v.Kind() == reflect.Pointer {
 		if v.IsNil() {
-			return nil
+			v.Set(reflect.New(v.Type().Elem()))
 		}
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
 		return nil
 	}
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if !f.IsExported() {
+	if err := bindParams(c, v, info); err != nil {
+		return err
+	}
+	var errs []FieldError
+	info.plan.validate(v, "", &errs)
+	if len(errs) > 0 {
+		return ValidationError(errs...)
+	}
+	return nil
+}
+
+// bindParams binds path, query, header and cookie values into the struct.
+// Query parameters may also be slices (repeated keys: ?tag=a&tag=b).
+func bindParams(c *Ctx, v reflect.Value, info *inputInfo) error {
+	for _, pf := range info.params {
+		src, name := paramSource(pf.StructField)
+		fv, _ := fieldByPath(v, pf.Path, true)
+		fv.SetZero() // a client can never set these through the JSON body
+
+		if src == "query" && fv.Kind() == reflect.Slice && fv.Type().Elem().Kind() != reflect.Uint8 && !isTextType(fv.Type()) {
+			vals := c.R.URL.Query()[name]
+			if len(vals) == 0 {
+				continue
+			}
+			sl := reflect.MakeSlice(fv.Type(), len(vals), len(vals))
+			for j, raw := range vals {
+				if err := setField(sl.Index(j), raw); err != nil {
+					return BadRequest(fmt.Sprintf("invalid value for %s parameter '%s'", src, name))
+				}
+			}
+			fv.Set(sl)
 			continue
 		}
-		fv := v.Field(i)
-		if hasRequired(f) && isAbsent(fv) {
-			return BadRequest(jsonName(f) + " wajib diisi")
+
+		var raw string
+		switch src {
+		case "path":
+			raw = c.R.PathValue(name)
+		case "query":
+			raw = c.R.URL.Query().Get(name)
+		case "header":
+			raw = c.R.Header.Get(name)
+		case "cookie":
+			if ck, err := c.R.Cookie(name); err == nil {
+				raw = ck.Value
+			}
 		}
-		if err := validateRequired(fv); err != nil {
-			return err
+		if raw == "" {
+			continue
+		}
+		if err := setField(fv, raw); err != nil {
+			return BadRequest(fmt.Sprintf("invalid value for %s parameter '%s'", src, name))
 		}
 	}
 	return nil
 }
 
-// isAbsent menentukan apakah sebuah field dianggap "tidak dikirim" berdasarkan tipenya.
-func isAbsent(v reflect.Value) bool {
-	switch v.Kind() {
-	case reflect.Pointer, reflect.Interface:
-		return v.IsNil()
-	case reflect.String:
-		return v.Len() == 0
-	case reflect.Slice, reflect.Map:
-		return v.IsNil() || v.Len() == 0
-	}
-	return v.IsZero()
-}
+var textUnmarshalerType = reflect.TypeFor[encoding.TextUnmarshaler]()
 
-// setField mengonversi nilai string dari Path/Query menjadi tipe data yang sesuai di struct.
+// setField converts a string from the request into the field's type.
+// Types implementing encoding.TextUnmarshaler (time.Time, UUID types, ...) are supported.
 func setField(fv reflect.Value, raw string) error {
 	if fv.Kind() == reflect.Pointer {
 		if fv.IsNil() {
 			fv.Set(reflect.New(fv.Type().Elem()))
 		}
 		return setField(fv.Elem(), raw)
+	}
+	if fv.CanAddr() && fv.Addr().Type().Implements(textUnmarshalerType) {
+		return fv.Addr().Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(raw))
 	}
 	switch fv.Kind() {
 	case reflect.String:
@@ -323,13 +352,13 @@ func setField(fv reflect.Value, raw string) error {
 		}
 		fv.SetBool(b)
 	default:
-		return fmt.Errorf("tipe %s tidak didukung", fv.Kind())
+		return fmt.Errorf("type %s is not supported", fv.Kind())
 	}
 	return nil
 }
 
-// Register mendaftarkan handler menggunakan definisi Endpoint yang sudah ada.
-// Sangat berguna untuk kontrak bersama antara server dan client.
+// Register registers a handler for an existing Endpoint definition.
+// Useful for sharing one contract between server and client.
 func Register[In, Out any](a *App, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
 	return Route(a, e.Method, e.Path, fn, opts...)
 }

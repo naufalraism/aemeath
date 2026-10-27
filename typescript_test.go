@@ -20,7 +20,7 @@ func TestTypeScriptClient(t *testing.T) {
 		"getBoom: () =>",
 	} {
 		if !strings.Contains(ts, want) {
-			t.Errorf("tidak ditemukan: %q\n--- output ---\n%s", want, ts)
+			t.Errorf("not found: %q\n--- output ---\n%s", want, ts)
 		}
 	}
 }

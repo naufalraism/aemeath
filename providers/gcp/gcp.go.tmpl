@@ -4,8 +4,11 @@ package gcp
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"path"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -21,19 +24,28 @@ func New(bucket string) (*GCSStorage, error) {
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("gagal load GCP config: %w", err)
+		return nil, fmt.Errorf("failed to load GCP config: %w", err)
 	}
 	return &GCSStorage{Client: client, Bucket: bucket, Ctx: ctx}, nil
 }
 
 func (s *GCSStorage) Save(filename string, src io.Reader) (string, error) {
-	timestamp := time.Now().Unix()
-	key := fmt.Sprintf("%d_%s", timestamp, filename)
-	writer := s.Client.Bucket(s.Bucket).Object(key).NewWriter(s.Ctx)
-	defer writer.Close()
+	var rnd [8]byte
+	if _, err := rand.Read(rnd[:]); err != nil {
+		return "", err
+	}
+	key := fmt.Sprintf("%d_%s_%s", time.Now().Unix(), hex.EncodeToString(rnd[:]), path.Base(filename))
 
-	_, err := io.Copy(writer, src)
-	return key, err
+	writer := s.Client.Bucket(s.Bucket).Object(key).NewWriter(s.Ctx)
+	if _, err := io.Copy(writer, src); err != nil {
+		_ = writer.Close()
+		return "", err
+	}
+	// The upload is only committed when Close succeeds, so its error matters.
+	if err := writer.Close(); err != nil {
+		return "", err
+	}
+	return key, nil
 }
 
 func (s *GCSStorage) Delete(filename string) error {

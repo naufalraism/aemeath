@@ -16,7 +16,7 @@ func TestCORSMiddleware(t *testing.T) {
 		return c.JSON(200, map[string]string{"ok": "yes"})
 	})
 
-	// 1. Tes Preflight (OPTIONS)
+	// 1. Preflight (OPTIONS)
 	req := httptest.NewRequest("OPTIONS", "/test", nil)
 	req.Header.Set("Origin", "http://localhost:5173")
 	req.Header.Set("Access-Control-Request-Method", "GET")
@@ -30,7 +30,7 @@ func TestCORSMiddleware(t *testing.T) {
 		t.Fatalf("preflight allow-origin = %q", rec.Header().Get("Access-Control-Allow-Origin"))
 	}
 
-	// 2. Tes Request Biasa dengan Origin
+	// 2. Regular request with an Origin header
 	req = httptest.NewRequest("GET", "/test", nil)
 	req.Header.Set("Origin", "http://localhost:5173")
 	rec = httptest.NewRecorder()

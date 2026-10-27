@@ -29,6 +29,6 @@ func main() {
 	_, err = api.CreateUser.Call(ctx, c, api.CreateUserIn{})
 	var he *aemeath.HTTPError
 	if errors.As(err, &he) {
-		fmt.Println("ditolak server:", he.Code, he.Message)
+		fmt.Println("rejected by the server:", he.Code, he.Message)
 	}
 }

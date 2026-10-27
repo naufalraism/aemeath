@@ -14,13 +14,14 @@ func BenchmarkHelloRoute(b *testing.B) {
 	})
 
 	req := httptest.NewRequest("GET", "/hello", nil)
-	rec := httptest.NewRecorder()
 
 	b.ReportAllocs()
 
-	// Menggunakan fitur modern Go 1.24+: b.Loop()
-	// Ini otomatis menangani b.ResetTimer() dan mencegah kompilator menghapus kodemu.
+	// b.Loop (Go 1.24+) handles timer resets and keeps the compiler from
+	// optimizing the body away. A fresh recorder per iteration keeps the
+	// response buffer from growing across iterations.
 	for b.Loop() {
+		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
 	}
 }

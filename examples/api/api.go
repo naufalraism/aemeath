@@ -1,4 +1,5 @@
-// Package api adalah kontrak bersama: tipe dan endpoint dipakai oleh server dan client.
+// Package api is the shared contract: the types and endpoints are used by
+// both the server and the Go client.
 package api
 
 import "github.com/naufalraism/aemeath"
@@ -13,8 +14,8 @@ type HelloOut struct {
 }
 
 type CreateUserIn struct {
-	Name  string `json:"name" validate:"required"`
-	Email string `json:"email" validate:"required"`
+	Name  string `json:"name" validate:"required,min=2,max=50" description:"Display name" example:"Aemeath"`
+	Email string `json:"email" validate:"required,email" example:"aemeath@example.com"`
 }
 
 type User struct {

@@ -1,12 +1,12 @@
 package aemeath
 
-// Plugin adalah antarmuka dasar untuk semua plugin Aemeath.
+// Plugin is the base interface for all Aemeath plugins.
 type Plugin interface {
 	Name() string
 	Apply(app *App) error
 }
 
-// RegisterPlugin mendaftarkan plugin ke aplikasi.
+// RegisterPlugin registers a plugin with the application.
 func (a *App) RegisterPlugin(p Plugin) error {
 	return p.Apply(a)
 }

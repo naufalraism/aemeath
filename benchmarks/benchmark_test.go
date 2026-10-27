@@ -52,7 +52,10 @@ func BenchmarkGin(b *testing.B) {
 }
 
 // ------------------------------------------------------
-// 3. Benchmark: Fiber (Menggunakan adaptor net/http)
+// 3. Benchmark: Fiber
+//
+// NOTE: app.Test sends the request through an in-memory connection, so this
+// number is NOT comparable with the others, which call ServeHTTP directly.
 // ------------------------------------------------------
 func BenchmarkFiber(b *testing.B) {
 	app := fiber.New()

@@ -10,7 +10,7 @@ import (
 func TestGroupRouteAndMiddleware(t *testing.T) {
 	app := aemeath.New()
 
-	// Middleware grup yang menambahkan header X-Admin
+	// Group middleware that adds an X-Admin header
 	adminMW := func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
 		return func(c *aemeath.Ctx) error {
 			c.W.Header().Set("X-Admin", "true")
@@ -24,7 +24,7 @@ func TestGroupRouteAndMiddleware(t *testing.T) {
 		return map[string]string{"status": "ok"}, nil
 	})
 
-	// Tes rute
+	// Request the route
 	req := httptest.NewRequest("GET", "/admin/dashboard", nil)
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -33,8 +33,8 @@ func TestGroupRouteAndMiddleware(t *testing.T) {
 		t.Fatalf("status = %d", rec.Code)
 	}
 
-	// Tes middleware grup berjalan
+	// Group middleware must have run
 	if rec.Header().Get("X-Admin") != "true" {
-		t.Fatal("middleware group tidak jalan")
+		t.Fatal("group middleware did not run")
 	}
 }

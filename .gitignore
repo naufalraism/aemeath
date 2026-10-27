@@ -1,5 +1,6 @@
-# Ignore env
+# Ignore env (but keep the template)
 .env
+!.env.example
 
 # Ignore local databases
 *.db
@@ -13,6 +14,11 @@ uploads/
 
 # Ignore test files & dummies
 test-upload.txt
+
+# Ignore generated output
+client.ts
+coverage.out
+*.test
 
 # Ignore compiled binaries
 *.exe
@@ -30,3 +36,6 @@ docs/.vitepress/cache
 .DS_Store
 .vscode/
 .idea/
+# TypeScript check output
+examples/tscheck/generated/
+node_modules/

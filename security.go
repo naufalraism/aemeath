@@ -2,28 +2,37 @@ package aemeath
 
 import "net/http"
 
-// SecurityHeaders menambahkan header HTTP untuk melindungi browser pengguna.
+// SecurityHeaders adds HTTP headers that harden the browser-facing surface.
 func SecurityHeaders() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) error {
-			// Mencegah Clickjacking (website lain membungkus API-mu di iframe)
-			c.W.Header().Set("X-Frame-Options", "DENY")
+			h := c.W.Header()
 
-			// Mencegah MIME-sniffing (browser menebak tipe file)
-			c.W.Header().Set("X-Content-Type-Options", "nosniff")
+			// Prevent clickjacking (other sites embedding the API in an iframe).
+			h.Set("X-Frame-Options", "DENY")
 
-			// Mengaktifkan proteksi XSS bawaan browser
-			c.W.Header().Set("X-XSS-Protection", "1; mode=block")
+			// Prevent MIME sniffing.
+			h.Set("X-Content-Type-Options", "nosniff")
 
-			// Memaksa browser pakai HTTPS (jika di production)
-			// c.W.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			// Disable the legacy XSS auditor: modern guidance is "0"
+			// because the old "1; mode=block" mode can itself introduce leaks.
+			h.Set("X-XSS-Protection", "0")
+
+			// Do not leak URLs to other origins.
+			h.Set("Referrer-Policy", "no-referrer")
+
+			// Only send HSTS over a real TLS connection.
+			if c.R.TLS != nil {
+				h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			}
 
 			return next(c)
 		}
 	}
 }
 
-// MaxBodySize membatasi ukuran body request secara global (misal: 2MB).
+// MaxBodySize limits the size of request bodies globally (e.g. 2 MiB).
+// Requests above the limit are rejected with 413 by typed routes.
 func MaxBodySize(bytes int64) Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) error {

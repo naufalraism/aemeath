@@ -4,8 +4,11 @@ package s3
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"path"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -21,7 +24,7 @@ type S3Storage struct {
 func New(region, bucket string) (*S3Storage, error) {
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	if err != nil {
-		return nil, fmt.Errorf("gagal load AWS config: %w", err)
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 	return &S3Storage{
 		Client: s3.NewFromConfig(cfg),
@@ -31,8 +34,11 @@ func New(region, bucket string) (*S3Storage, error) {
 
 func (s *S3Storage) Save(filename string, src io.Reader) (string, error) {
 	ctx := context.Background()
-	timestamp := time.Now().Unix()
-	key := fmt.Sprintf("%d_%s", timestamp, filename)
+	var rnd [8]byte
+	if _, err := rand.Read(rnd[:]); err != nil {
+		return "", err
+	}
+	key := fmt.Sprintf("%d_%s_%s", time.Now().Unix(), hex.EncodeToString(rnd[:]), path.Base(filename))
 
 	_, err := s.Client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.Bucket),
