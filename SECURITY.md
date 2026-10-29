@@ -26,6 +26,6 @@ Out of scope: vulnerabilities in third-party dependencies (report those upstream
 
 - `jwt.Middleware` rejects an empty secret, non-HMAC algorithms and tokens without `exp`.
 - WebSockets accept same-origin browser connections only.
-- Static files never list directories; `LocalStorage` strips directory parts from file names but does **not** validate file types: do that yourself.
+- Static files never list directories. `LocalStorage` strips directory parts from file names and creates files readable only by the server's user (mode 0600), but it does **not** validate file types: do that yourself.
 - `RateLimiter` keys on the connection address; behind a reverse proxy, limit at the proxy.
 - `CORS` refuses to combine credentials with the `*` origin.

@@ -8,6 +8,8 @@
 
 **Write your API once in Go. Get the docs, the TypeScript client, the Zod schemas and the React hooks for free.**
 
+The fastest way to start a new Aemeath project is by using the official CLI [Aemeath CLI](https://github.com/naufalraism/aemeath-cli).
+
 Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeMux` patterns). You describe each route with a plain input struct and an output struct. From those same structs Aemeath derives request binding, validation, OpenAPI, a typed TypeScript client, Zod schemas and TanStack Query hooks, and they all follow the **same rules the server enforces**.
 
 > **Status:** pre-1.0. The API may still change between minor versions. See the [changelog](CHANGELOG.md).
@@ -294,7 +296,7 @@ Tokens must carry `exp` unless `AllowNoExpiry` is set; an empty secret panics at
 
 Other notes:
 
-- `LocalStorage.Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part; it does **not** check file types. Call `IsAllowedFile` yourself.
+- `LocalStorage.Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part; it does **not** check file types. Call `IsAllowedFile` yourself. Files are private to the server's user (mode `0600`); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
 - For OAuth2, make the `state` with `oauth2.GenerateState()`, keep it in a cookie, and compare it in the callback. See `examples/basic`.
 - WebSockets only accept **same-origin** browser connections by default. To allow others, set `ws.Upgrader.CheckOrigin`.
 

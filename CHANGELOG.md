@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## v0.1.1 - 2026-10-27
+## v0.1.2 - 2026-10-29
 
 ### Breaking changes
 
@@ -53,6 +53,7 @@ All notable changes to this project are documented here.
 
 ### Security
 
+- `LocalStorage` now creates uploaded files with mode `0600` in a `0750` directory (it was `0644`/`0755`, readable by every user on the server). If another program must read them (a reverse proxy serving `/uploads`, for example), set `FileMode` and `DirMode`.
 - `Static` no longer lists directory contents.
 - `JWTMiddleware` panics on an empty `SecretKey`, only accepts HS256/384/512, and requires an `exp` claim unless `JWTConfig.AllowNoExpiry` is set.
 - WebSocket upgrades are same-origin by default (was: any origin). Configure `WebSocketUpgrader.CheckOrigin` to allow others.
