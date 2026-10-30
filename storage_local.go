@@ -12,14 +12,36 @@ import (
 )
 
 // LocalStorage stores files on the local disk.
+//
+// Files are private to the user running the server by default (mode 0600, in a
+// 0750 directory), because uploads often hold personal documents. If another
+// program must read them (a reverse proxy serving /uploads, for example), set
+// FileMode and DirMode, for example 0o644 and 0o755.
 type LocalStorage struct {
 	UploadDir string
+	FileMode  os.FileMode // default 0600
+	DirMode   os.FileMode // default 0750
+}
+
+func (s *LocalStorage) fileMode() os.FileMode {
+	if s.FileMode == 0 {
+		return 0o600
+	}
+	return s.FileMode
+}
+
+func (s *LocalStorage) dirMode() os.FileMode {
+	if s.DirMode == 0 {
+		return 0o750
+	}
+	return s.DirMode
 }
 
 // NewLocalStorage creates a LocalStorage, creating the directory if needed.
 func NewLocalStorage(uploadDir string) *LocalStorage {
-	_ = os.MkdirAll(uploadDir, 0o755) // Save retries and reports any error
-	return &LocalStorage{UploadDir: uploadDir}
+	s := &LocalStorage{UploadDir: uploadDir}
+	_ = os.MkdirAll(uploadDir, s.dirMode()) // Save retries and reports any error
+	return s
 }
 
 // safeBase strips any directory part (both / and \ separators) from a
@@ -39,7 +61,7 @@ func safeBase(filename string) string {
 // is "<unix time>_<random>_<original name>", so uploads with the same original
 // name never overwrite each other.
 func (s *LocalStorage) Save(filename string, src io.Reader) (string, error) {
-	if err := os.MkdirAll(s.UploadDir, 0o755); err != nil {
+	if err := os.MkdirAll(s.UploadDir, s.dirMode()); err != nil {
 		return "", fmt.Errorf("aemeath: failed to create upload directory: %w", err)
 	}
 
@@ -50,7 +72,7 @@ func (s *LocalStorage) Save(filename string, src io.Reader) (string, error) {
 	stored := fmt.Sprintf("%d_%s_%s", time.Now().Unix(), hex.EncodeToString(rnd[:]), safeBase(filename))
 	destPath := filepath.Join(s.UploadDir, stored)
 
-	destFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	destFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, s.fileMode())
 	if err != nil {
 		return "", fmt.Errorf("aemeath: failed to create file: %w", err)
 	}

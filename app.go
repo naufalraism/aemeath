@@ -226,7 +226,7 @@ func (a *App) run(srv *http.Server, start func() error) error {
 		if err := a.WriteTypeScript(dir); err != nil {
 			return fmt.Errorf("aemeath: writing TypeScript to %s: %w", dir, err)
 		}
-		log.Printf("aemeath: %s is set: wrote the TypeScript files to %s and exited without starting the server", EnvTypeScriptOut, dir)
+		log.Printf("aemeath: %s is set: wrote the TypeScript files to %q and exited without starting the server", EnvTypeScriptOut, dir)
 		return nil
 	}
 	// Capture errors from the server goroutine.

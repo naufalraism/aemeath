@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -516,5 +517,33 @@ func TestDocsAndExamplesDoNotWrapListenInLogFatal(t *testing.T) {
 	}
 	if checked < 5 {
 		t.Fatalf("only %d files were checked; the test is not looking at the docs and examples", checked)
+	}
+}
+
+func TestLocalStorageFilesArePrivateByDefault(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX file modes")
+	}
+	dir := filepath.Join(t.TempDir(), "uploads")
+	s := aemeath.NewLocalStorage(dir)
+	name, err := s.Save("a.txt", strings.NewReader("x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(filepath.Join(dir, name)); info.Mode().Perm() != 0o600 {
+		t.Fatalf("file mode = %o, want 600", info.Mode().Perm())
+	}
+	if info, _ := os.Stat(dir); info.Mode().Perm() != 0o750 {
+		t.Fatalf("directory mode = %o, want 750", info.Mode().Perm())
+	}
+
+	// A reverse proxy that must read the files can opt in.
+	open := &aemeath.LocalStorage{UploadDir: filepath.Join(t.TempDir(), "pub"), FileMode: 0o644, DirMode: 0o755}
+	name, err = open.Save("b.txt", strings.NewReader("y"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(filepath.Join(open.UploadDir, name)); info.Mode().Perm() != 0o644 {
+		t.Fatalf("configured file mode = %o, want 644", info.Mode().Perm())
 	}
 }
