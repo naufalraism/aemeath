@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## v0.1.2 - 2026-10-29
+## Unreleased
 
 ### Breaking changes
 
@@ -16,6 +16,13 @@ All notable changes to this project are documented here.
 ### Fixed (late)
 
 - **`log.Fatal(app.Listen(...))` exited with status 1** after every clean shutdown (`log.Fatal(nil)` prints `<nil>` and exits 1), so Docker, Kubernetes and CI saw a crash. The README, docs, example and CLI template now check the error instead, and a test keeps the idiom out of the docs.
+
+### Added (jobs, shutdown, database)
+
+- **`aemeath/jobs`**: background jobs with a bounded queue, a worker pool, retries with exponential backoff, periodic jobs (`Every`, never piling up behind a slow run), panic recovery, `Stats()`, and a clean shutdown. In-memory only: waiting jobs are lost if the process crashes.
+- **`App.OnShutdown`**: hooks that run when the server stops, in reverse order, within 10 seconds; a failing hook does not stop the others. They do not run when the program only writes TypeScript (`AEMEATH_TS_OUT`).
+- The `db` and `cache` plugins now close their connection at shutdown (`db.Plugin.Close`, `cache.Plugin.Close`).
+- Tests for the `db` package against a real SQLite database (they close it, because Windows cannot delete an open database file), and for shutdown hooks.
 
 ### Added
 

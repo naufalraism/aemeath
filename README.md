@@ -8,8 +8,6 @@
 
 **Write your API once in Go. Get the docs, the TypeScript client, the Zod schemas and the React hooks for free.**
 
-The fastest way to start a new Aemeath project is by using the official CLI [Aemeath CLI](https://github.com/naufalraism/aemeath-cli).
-
 Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeMux` patterns). You describe each route with a plain input struct and an output struct. From those same structs Aemeath derives request binding, validation, OpenAPI, a typed TypeScript client, Zod schemas and TanStack Query hooks, and they all follow the **same rules the server enforces**.
 
 > **Status:** pre-1.0. The API may still change between minor versions. See the [changelog](CHANGELOG.md).
@@ -63,10 +61,14 @@ go get github.com/naufalraism/aemeath
 Scaffold a project, generate CRUD handlers and tests, and run a hot-reload dev server.
 
 ```bash
-aemeath new my-project
-aemeath generate api Product    # CRUD handlers
-aemeath generate test Product   # tests for them
-aemeath dev                     # hot reload
+go install github.com/naufalraism/aemeath-cli/cmd/aemeath@latest   # or download a binary from the CLI's Releases page
+
+aemeath new my-app                       # a minimal API
+aemeath new my-app --template db         # + SQLite and a Task resource
+aemeath new my-app --template fullstack  # + a React + TypeScript app that uses the generated client
+aemeath generate api Product --db        # CRUD handlers + tests, registered in main.go for you
+aemeath generate job SendEmail           # a background job on the job runner
+aemeath dev --ts-out web/src/api         # hot reload that also rewrites the TypeScript files
 ```
 
 [View the Aemeath CLI repository](https://github.com/naufalraism/aemeath-cli)
@@ -266,6 +268,7 @@ Import only what you use; each plugin's dependencies are only compiled into your
 | `aemeath/cache` | Redis plugin | `go-redis` |
 | `aemeath/mailer` | SMTP mailer | `gomail` |
 | `aemeath/oauth2` | OAuth2 login (Google, GitHub, ...) | `golang.org/x/oauth2` |
+| `aemeath/jobs` | background jobs: queue, workers, retries, periodic jobs | none |
 
 ### Plugins and typed dependencies
 
@@ -296,9 +299,34 @@ Tokens must carry `exp` unless `AllowNoExpiry` is set; an empty secret panics at
 
 Other notes:
 
+- `db` and `cache` close their connection when the server shuts down; register your own cleanup with `app.OnShutdown(func(ctx context.Context) error { ... })` (hooks run in reverse order, within 10 seconds).
 - `LocalStorage.Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part; it does **not** check file types. Call `IsAllowedFile` yourself. Files are private to the server's user (mode `0600`); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
 - For OAuth2, make the `state` with `oauth2.GenerateState()`, keep it in a cookie, and compare it in the callback. See `examples/basic`.
 - WebSockets only accept **same-origin** browser connections by default. To allow others, set `ws.Upgrader.CheckOrigin`.
+
+---
+
+## ⏱️ Background jobs
+
+`aemeath/jobs` runs work inside the process: a bounded queue, a pool of workers, retries with exponential backoff and periodic jobs. It stops cleanly when the server shuts down.
+
+```go
+type SendWelcomeEmail struct{ To string }
+
+func (j *SendWelcomeEmail) Run(ctx context.Context) error { /* ... */ return nil }
+
+runner := jobs.New(jobs.WithWorkers(4), jobs.WithRetries(2))
+app.RegisterPlugin(runner)                          // starts the workers; stops them on shutdown
+
+// in a handler:
+if err := jobs.From(c).Enqueue(&SendWelcomeEmail{To: user.Email}); err != nil { // never blocks
+	return err // jobs.ErrQueueFull when there is no room
+}
+
+runner.Every(time.Hour, &CleanupExpiredSessions{})  // skipped while the previous run is unfinished
+```
+
+A job that returns an error or panics is retried (3 attempts by default); the final failure is logged with `slog`. **The queue is in memory**: jobs that are waiting when the process crashes are lost, so use a durable queue for work that must never be lost. `aemeath generate job SendEmail` creates the job and registers the runner in `main.go`.
 
 ---
 
@@ -407,7 +435,7 @@ go test -run '^$' -fuzz FuzzBind -fuzztime 30s .   # fuzz the request binder
 - Only JSON bodies are supported (no form or multipart binding yet; read those from `c.R`).
 - OpenAPI is 3.0.3 (no 3.1), without per-operation request size limits or content negotiation.
 - Middlewares attached with `Use` take effect when a route first serves a request; do not call `Use` while the server is running.
-- Not included yet: OpenTelemetry/Prometheus integrations, a job runner, typed SSE in the TypeScript client.
+- Not included yet: OpenTelemetry/Prometheus integrations, a durable (persistent) job queue, typed SSE in the TypeScript client.
 
 ## 🤝 Contributing & security
 

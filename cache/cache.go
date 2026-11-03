@@ -23,11 +23,12 @@ func New(addr, password string, db int) *Plugin {
 // Name implements aemeath.Plugin.
 func (p *Plugin) Name() string { return "cache" }
 
-// Apply provides the *redis.Client to handlers and adds a "cache" readiness
-// check (see App.EnableHealth).
+// Apply provides the *redis.Client to handlers, adds a "cache" readiness check
+// (see App.EnableHealth) and closes the connection when the server shuts down.
 func (p *Plugin) Apply(app *aemeath.App) error {
 	aemeath.Provide(app, p.Client)
 	app.AddReadyCheck("cache", func(ctx context.Context) error { return p.Client.Ping(ctx).Err() })
+	app.OnShutdown(func(context.Context) error { return p.Close() })
 	return nil
 }
 

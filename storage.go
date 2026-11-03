@@ -19,6 +19,6 @@ func (p *StoragePlugin) Name() string { return "storage" }
 // Apply provides the storage as an aemeath.Storage; read it in a handler with
 // aemeath.MustGet[aemeath.Storage](c).
 func (p *StoragePlugin) Apply(app *App) error {
-	Provide(app, p.Storage)
+	Provide(app, p.Storage) // p.Storage is declared as the Storage interface, so T is Storage
 	return nil
 }

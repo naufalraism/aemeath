@@ -32,6 +32,35 @@ type App struct {
 
 	readyMu     sync.Mutex
 	readyChecks []namedCheck
+
+	hooksMu       sync.Mutex
+	shutdownHooks []func(context.Context) error
+}
+
+// OnShutdown registers a function that runs when the server stops (after
+// in-flight requests have finished), for example to flush a queue or close a
+// connection. Hooks run in reverse order of registration, share a 10 second
+// limit, and a failing hook is logged without stopping the others.
+func (a *App) OnShutdown(fn func(context.Context) error) {
+	a.hooksMu.Lock()
+	defer a.hooksMu.Unlock()
+	a.shutdownHooks = append(a.shutdownHooks, fn)
+}
+
+func (a *App) runShutdownHooks() {
+	a.hooksMu.Lock()
+	hooks := append([]func(context.Context) error(nil), a.shutdownHooks...)
+	a.hooksMu.Unlock()
+	if len(hooks) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for i := len(hooks) - 1; i >= 0; i-- {
+		if err := hooks[i](ctx); err != nil {
+			log.Printf("aemeath: shutdown hook failed: %v", err)
+		}
+	}
 }
 
 // New creates a new Aemeath application.
@@ -229,6 +258,7 @@ func (a *App) run(srv *http.Server, start func() error) error {
 		log.Printf("aemeath: %s is set: wrote the TypeScript files to %q and exited without starting the server", EnvTypeScriptOut, dir)
 		return nil
 	}
+	defer a.runShutdownHooks()
 	// Capture errors from the server goroutine.
 	serverErrors := make(chan error, 1)
 	go func() {

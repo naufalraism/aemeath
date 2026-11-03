@@ -15,6 +15,13 @@ export default defineConfig({
         text: 'Introduction',
         items: [
           { text: 'Getting Started', link: '/guide/getting-started' },
+          { text: 'Routing', link: '/guide/routing' },
+          { text: 'Validation', link: '/guide/validation' },
+          { text: 'Plugins', link: '/guide/plugins' },
+          { text: 'Background jobs', link: '/guide/jobs' },
+          { text: 'TypeScript, Zod & hooks', link: '/guide/typescript' },
+          { text: 'Testing', link: '/guide/testing' },
+          { text: 'Comparison', link: '/guide/comparison' }
         ]
       },
       {

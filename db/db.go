@@ -33,8 +33,19 @@ func Open(filename string, models ...any) (*Plugin, error) {
 // Name implements aemeath.Plugin.
 func (p *Plugin) Name() string { return "database" }
 
-// Apply provides the *gorm.DB to handlers and adds a "database" readiness
-// check (see App.EnableHealth).
+// Close closes the database connection. It is safe to call more than once. The
+// plugin calls it when the server shuts down; call it yourself in tests, since
+// Windows cannot delete a database file that is still open.
+func (p *Plugin) Close() error {
+	sqlDB, err := p.DB.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}
+
+// Apply provides the *gorm.DB to handlers, adds a "database" readiness check
+// (see App.EnableHealth) and closes the connection when the server shuts down.
 func (p *Plugin) Apply(app *aemeath.App) error {
 	aemeath.Provide(app, p.DB)
 	app.AddReadyCheck("database", func(ctx context.Context) error {
@@ -44,6 +55,7 @@ func (p *Plugin) Apply(app *aemeath.App) error {
 		}
 		return sqlDB.PingContext(ctx)
 	})
+	app.OnShutdown(func(context.Context) error { return p.Close() })
 	return nil
 }
 

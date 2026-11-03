@@ -1,69 +1,51 @@
+---
+title: Aemeath CLI
+---
 # Aemeath CLI
 
-The official Command Line Interface to speed up your development workflow.
+The official command line interface: it creates projects, generates code and runs a hot-reload development server.
 
 ## Installation
 
-Since the CLI is still in early development, install it directly via `go install`:
-
 ```bash
-go install github.com/naufalraism/aemeath-cli@latest
+go install github.com/naufalraism/aemeath-cli/cmd/aemeath@latest
 ```
+
+This installs a command named `aemeath`. Make sure `$(go env GOPATH)/bin` is in your `PATH`. Without Go installed, download a binary for Windows, macOS or Linux from the [Releases page](https://github.com/naufalraism/aemeath-cli/releases).
 
 ## Commands
 
 ### `aemeath new`
-Scaffolds a new Aemeath project with a ready-to-run `main.go` and `go.mod`.
 
 ```bash
-aemeath new my-app
+aemeath new my-app                       # a minimal API
+aemeath new my-app --template db         # + SQLite and a Task CRUD resource
+aemeath new my-app --template fullstack  # + a React + TypeScript app in web/
+```
+
+The fullstack template generates the typed client, the Zod schemas and the React Query hooks into `web/src/api`, so `npm run dev` works right away.
+
+### `aemeath generate`
+
+```bash
+aemeath generate api Product            # CRUD handlers + tests, registered in main.go
+aemeath generate api Product --db       # backed by GORM and SQLite
+aemeath generate api Product --prefix /api
+aemeath generate job SendEmail          # a background job; registers the job runner
+aemeath generate model|middleware|test|docker
+```
+
+`generate` registers what it creates in `main.go` right after the `// aemeath:plugins` and `// aemeath:handlers` comments. It edits `main.go` only when it parses and only by inserting lines, and otherwise leaves it alone and prints what to add. It never overwrites a file without `--force`, and it writes nothing at all if one of the files already exists.
+
+### `aemeath ts`
+
+```bash
+aemeath ts --out web/src/api
 ```
 
 ### `aemeath dev`
-Starts the development server with built-in Hot Reload.
 
 ```bash
-aemeath dev
-```
-
-### `aemeath generate api`
-Generates a CRUD handler, complete with Structs and routes.
-
-```bash
-aemeath generate api Product
-```
-
-### `aemeath generate model`
-Generates a database struct (GORM) for your entity.
-
-```bash
-aemeath generate model Product
-```
-
-### `aemeath generate middleware`
-Generates a custom middleware template.
-
-```bash
-aemeath generate middleware Auth
-```
-
-### `aemeath generate test`
-Generates a unit test file for your handler.
-
-```bash
-aemeath generate test Product
-```
-
-### `aemeath generate docker`
-Generates a production-ready `Dockerfile` and `docker-compose.yml`.
-
-```bash
-aemeath generate docker
-```
-
-### `aemeath generate job`
-Generates a background job template.
-
-```bash
-aemeath generate job SendEmail
+aemeath dev                              # hot reload
+aemeath dev --ts-out web/src/api         # also rewrites the TypeScript files after every successful build
 ```
