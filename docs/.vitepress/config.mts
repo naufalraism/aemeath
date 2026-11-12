@@ -4,7 +4,7 @@ export default defineConfig({
   base: '/aemeath/', // the site is served from https://naufalraism.github.io/aemeath/
   cleanUrls: true,
   title: "Aemeath",
-  description: "The Modern Standard for Go APIs",
+  description: "Write your API once in Go. Get the docs, the TypeScript client and the Zod schemas.",
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
