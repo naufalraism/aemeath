@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## [0.3.0] - 2026-11-12
 
 ### Added (authentication, databases, forms, observability)
 
@@ -16,6 +16,12 @@ All notable changes to this project are documented here.
 - **`aemeath/tracing`**: W3C `traceparent` propagation, server and child spans, and an OTLP/HTTP (JSON) exporter with a bounded queue that never blocks a request. Not the OpenTelemetry SDK.
 - **CI** now runs the framework tests on Linux, Windows and macOS, runs the database tests against real PostgreSQL and MySQL services, and builds the documentation site (deployed to GitHub Pages from `main`).
 - **Documentation**: guides for authentication, databases, forms, metrics and tracing, and a tutorial whose finished code is `examples/notes` (tested in CI).
+
+### Changed
+
+- The `db` plugin's default GORM logger no longer logs "record not found" as an error, and logs only warnings and above. Pass `db.WithConfig` to restore the old behaviour.
+
+## [0.2.0] - 2026-11-03
 
 ### Breaking changes
 
