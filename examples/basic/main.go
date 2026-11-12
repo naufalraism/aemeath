@@ -274,6 +274,7 @@ func main() {
 			Path:     "/auth/google",
 			MaxAge:   600,
 			HttpOnly: true,
+			Secure:   true,
 			SameSite: http.SameSiteLaxMode,
 		})
 		return map[string]string{"url": oauth.AuthURL(state)}, nil
