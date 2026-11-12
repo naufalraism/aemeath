@@ -64,7 +64,9 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	}
 }
 
-// SetCookie adds a Set-Cookie header to the response.
+// SetCookie adds a Set-Cookie header to the response. It sends the cookie
+// exactly as given: set Secure and HttpOnly yourself for anything sensitive,
+// such as a session or login cookie.
 func (c *Ctx) SetCookie(ck *http.Cookie) { http.SetCookie(c.W, ck) }
 
 // Redirect sends an HTTP redirect. Use it from a route returning Handled.
