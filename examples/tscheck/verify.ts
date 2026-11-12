@@ -26,7 +26,7 @@ const cases: Record<string, any> = {
   "nickname null": { ...valid, nickname: null },
 };
 
-function zodFields(issues: { path: (string | number)[] }[]): string[] {
+function zodFields(issues: { path: PropertyKey[] }[]): string[] {
   return [...new Set(issues.map((i) => i.path.map(String).join(".")))].sort();
 }
 
