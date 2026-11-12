@@ -1,6 +1,9 @@
 // Command basic is a tour of Aemeath's features. Several parts need external
 // services (Redis, an SMTP server, Google OAuth credentials) and simply
 // return errors if those are not available.
+// This example is for learning on your own computer. Do not run it on a
+// public server: it has demo endpoints (such as /send-email) and falls back
+// to a development JWT secret that is visible in this repository.
 package main
 
 import (
@@ -98,6 +101,9 @@ func main() {
 	// Read the secret from the environment; fall back to a dev-only value.
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
+		if os.Getenv("APP_ENV") == "production" {
+			log.Fatal("JWT_SECRET must be set when APP_ENV=production")
+		}
 		log.Println("warning: JWT_SECRET is not set, using an insecure development secret")
 		jwtSecret = devSecret
 	}
