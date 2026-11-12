@@ -1,0 +1,60 @@
+# Builds the documentation site on every change and publishes it to GitHub Pages from main.
+#
+# One-time setup: repository Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+# The site then lives at https://<user>.github.io/aemeath/ (docs/.vitepress/config.mts sets base: '/aemeath/').
+name: Docs
+
+on:
+  push:
+    branches: [ "main" ]
+    paths: [ "docs/**", ".github/workflows/docs.yml" ]
+  pull_request:
+    paths: [ "docs/**", ".github/workflows/docs.yml" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: docs/package-lock.json
+
+    - name: Install
+      working-directory: docs
+      run: npm ci --no-audit --no-fund
+
+    - name: Build (fails on dead internal links)
+      working-directory: docs
+      run: npm run docs:build
+
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: docs/.vitepress/dist
+
+  deploy:
+    name: Deploy
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - id: deployment
+      uses: actions/deploy-pages@v4

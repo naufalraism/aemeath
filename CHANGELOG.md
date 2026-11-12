@@ -2,7 +2,20 @@
 
 All notable changes to this project are documented here.
 
-## [0.2.0] - 2026-11-03
+## Unreleased
+
+### Added (authentication, databases, forms, observability)
+
+- **`aemeath/db/postgres` and `aemeath/db/mysql`**: PostgreSQL and MySQL/MariaDB for the `db` plugin through `db.New(dialector, opts...)`, with `db.WithModels`, `db.WithPool` (default 25 open / 5 idle / 30 minutes) and `db.WithConfig`. Errors are translated across databases (`TranslateError`), `db.Translate` maps them to 404/409, and MySQL always scans times into `time.Time`. The same test suite runs against SQLite, PostgreSQL and MySQL. **Your `go.mod` needs `gorm.io/driver/postgres`, `gorm.io/driver/mysql` and `github.com/go-sql-driver/mysql`: run `go mod tidy`.**
+- **`aemeath/session`**: server-side sessions with random 43-character ids in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. Unknown ids are never adopted, `Renew` deletes the old session (fixation defence), `Destroy` for logout, sliding expiry, `MemoryStore`; **`cache.NewSessionStore`** keeps them in Redis.
+- **`aemeath/csrf`**: token stored in the session, `X-CSRF-Token` header, Origin check with `TrustedOrigins`, optional readable cookie for front-end libraries.
+- **`aemeath/jwt`**: public-key verification (`PublicKey`: RS*/PS*/ES*/EdDSA), `JWKSURL`/`JWKS` with caching, rotation handling and rate-limited refresh (https only; RSA keys under 2048 bits rejected), `Issuer`, `Audience`, `Leeway`, algorithm-confusion defence, `jwt.Issue`, and `jwt.NewVerifier` for use outside middleware.
+- **`aemeath/oidc`**: OpenID Connect login (discovery that must match the issuer exactly, PKCE S256, nonce, single-use state, ID-token verification through JWKS, `azp` check), built on the session.
+- **Forms and uploads** in the core: the `form:` tag (urlencoded and multipart), `*multipart.FileHeader` and `[]*multipart.FileHeader` fields, `accept` (checked against the file's bytes) and `maxsize` tags, `DefaultMaxMultipartBytes` (32 MiB), temporary files removed after the handler, form values never read from the URL. OpenAPI documents them as `multipart/form-data` or urlencoded bodies; the TypeScript client sends `FormData`; Zod schemas use `z.instanceof(Blob)`.
+- **`aemeath/metrics`**: Prometheus text exposition with counters, gauges and histograms, an HTTP middleware labelled by route pattern (never the raw path; unmatched requests share one series), a cap on label combinations.
+- **`aemeath/tracing`**: W3C `traceparent` propagation, server and child spans, and an OTLP/HTTP (JSON) exporter with a bounded queue that never blocks a request. Not the OpenTelemetry SDK.
+- **CI** now runs the framework tests on Linux, Windows and macOS, runs the database tests against real PostgreSQL and MySQL services, and builds the documentation site (deployed to GitHub Pages from `main`).
+- **Documentation**: guides for authentication, databases, forms, metrics and tracing, and a tutorial whose finished code is `examples/notes` (tested in CI).
 
 ### Breaking changes
 

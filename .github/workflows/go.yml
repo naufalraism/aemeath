@@ -12,7 +12,15 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+    defaults:
+      run:
+        shell: bash # the same commands on every OS
     steps:
     - uses: actions/checkout@v4
 
@@ -21,14 +29,17 @@ jobs:
         go-version-file: go.mod
 
     - name: Core stays dependency-free
+      if: runner.os == 'Linux'
       run: |
         deps=$(go list -deps . | grep -E '^[a-z0-9.-]+\.[a-z]+/' | grep -v '^github.com/naufalraism/aemeath' || true)
         if [ -n "$deps" ]; then echo "third-party imports in the core package:"; echo "$deps"; exit 1; fi
 
     - name: go.mod and go.sum are tidy
+      if: runner.os == 'Linux'
       run: go mod tidy -diff
 
     - name: Format
+      if: runner.os == 'Linux'
       run: test -z "$(gofmt -l .)"
 
     - name: Vet
@@ -38,10 +49,48 @@ jobs:
       run: go test -race -cover ./...
 
     - name: Fuzz the request binder (short)
+      if: runner.os == 'Linux'
       run: go test -run '^$' -fuzz FuzzBind -fuzztime 20s .
 
     - name: Benchmark smoke test
+      if: runner.os == 'Linux'
       run: go test -run '^$' -bench . -benchtime 1000x .
+
+  integration:
+    name: Integration (PostgreSQL, MySQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aemeath_test
+        ports: [ "5432:5432" ]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: aemeath_test
+        ports: [ "3306:3306" ]
+        options: >-
+          --health-cmd "mysqladmin ping -proot" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      AEMEATH_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/aemeath_test?sslmode=disable
+      AEMEATH_TEST_MYSQL_DSN: root:root@tcp(localhost:3306)/aemeath_test
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Run the database tests against the real servers
+      # -v shows SKIP lines, so a silently skipped suite is visible; the grep below makes it a failure.
+      run: |
+        go test -race -count=1 -v ./db/... | tee /tmp/db.log
+        if grep -E -- '--- SKIP' /tmp/db.log; then echo "a database test was skipped: the DSN variables did not reach it"; exit 1; fi
 
   typescript:
     name: TypeScript generators

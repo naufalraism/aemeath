@@ -20,6 +20,7 @@ This installs a command named `aemeath`. Make sure `$(go env GOPATH)/bin` is in 
 ```bash
 aemeath new my-app                       # a minimal API
 aemeath new my-app --template db         # + SQLite and a Task CRUD resource
+aemeath new my-app -t db --database postgres   # or mysql; docker compose starts the server
 aemeath new my-app --template fullstack  # + a React + TypeScript app in web/
 ```
 
@@ -29,7 +30,7 @@ The fullstack template generates the typed client, the Zod schemas and the React
 
 ```bash
 aemeath generate api Product            # CRUD handlers + tests, registered in main.go
-aemeath generate api Product --db       # backed by GORM and SQLite
+aemeath generate api Product --db       # backed by GORM (the database main.go already uses)
 aemeath generate api Product --prefix /api
 aemeath generate job SendEmail          # a background job; registers the job runner
 aemeath generate model|middleware|test|docker

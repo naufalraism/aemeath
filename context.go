@@ -17,7 +17,8 @@ type Ctx struct {
 	R     *http.Request
 	State map[string]any
 
-	app *App
+	app      *App
+	cleanups []func()
 }
 
 // Handled is the output type of a typed route that writes the response itself

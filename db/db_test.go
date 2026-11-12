@@ -2,14 +2,19 @@ package db_test
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"gorm.io/gorm"
+
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/db"
+	"github.com/naufalraism/aemeath/db/internal/dbtest"
 )
 
 type Task struct {
@@ -149,5 +154,61 @@ func TestCloseIsIdempotentAndRunsAtShutdown(t *testing.T) {
 	}
 	if err := p.DB.Exec("select 1").Error; err == nil {
 		t.Fatal("the database is still usable after Close")
+	}
+}
+
+func TestSQLiteSharedSuite(t *testing.T) {
+	dbtest.Run(t, func(t *testing.T) *db.Plugin {
+		p, err := db.Open(filepath.Join(t.TempDir(), "suite.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}, dbtest.Options{Concurrent: false})
+}
+
+func TestTranslate(t *testing.T) {
+	if db.Translate(nil, "X") != nil {
+		t.Error("nil must stay nil")
+	}
+	other := errors.New("boom")
+	if db.Translate(other, "X") != other {
+		t.Error("an unknown error must be returned unchanged")
+	}
+	if he := aemeath.AsHTTPError(db.Translate(gorm.ErrRecordNotFound, "Task")); he.Code != 404 || he.Message != "Task not found" {
+		t.Errorf("not found -> %+v", he)
+	}
+	if he := aemeath.AsHTTPError(db.Translate(gorm.ErrDuplicatedKey, "Task")); he.Code != 409 || he.Message != "Task already exists" {
+		t.Errorf("duplicate -> %+v", he)
+	}
+}
+
+// A missing row is an ordinary 404 and must not fill the log with red GORM errors.
+func TestMissingRowsAreNotLoggedByGORM(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "stderr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stderr
+	os.Stderr = f // the default logger writes where stderr pointed when the plugin was created
+	p, err := db.Open(filepath.Join(t.TempDir(), "log.db"), &Task{})
+	os.Stderr = old
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.Close(); _ = f.Close() })
+
+	var task Task
+	if err := p.DB.First(&task, 12345).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("want ErrRecordNotFound, got %v", err)
+	}
+	// A real SQL error must still be logged: the logger is quiet, not disabled.
+	_ = p.DB.Exec("SELECT * FROM no_such_table").Error
+	logged, _ := os.ReadFile(f.Name())
+	if strings.Contains(string(logged), "record not found") {
+		t.Fatalf("a missing row was logged:\n%s", logged)
+	}
+	if !strings.Contains(string(logged), "no_such_table") {
+		t.Fatalf("real errors must still be logged, got:\n%s", logged)
 	}
 }

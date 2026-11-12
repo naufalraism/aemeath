@@ -200,6 +200,7 @@ interface RequestInput {
   query?: Record<string, unknown>;
   headers?: Record<string, unknown>;
   body?: unknown;
+  form?: Record<string, unknown>;
 }
 
 async function request<T>(opts: ClientOptions, method: string, path: string, input: RequestInput): Promise<T> {
@@ -220,10 +221,24 @@ async function request<T>(opts: ClientOptions, method: string, path: string, inp
     if (v !== undefined && v !== null) own[k] = String(v);
   }
   const f = opts.fetch ?? fetch;
+  let payload: BodyInit | undefined;
+  let contentType: Record<string, string> = {};
+  if (input.form !== undefined) {
+    // multipart/form-data: the browser sets the Content-Type with its boundary.
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(input.form)) {
+      if (v === undefined || v === null) continue;
+      for (const item of Array.isArray(v) ? v : [v]) fd.append(k, item instanceof Blob ? item : String(item));
+    }
+    payload = fd;
+  } else if (input.body !== undefined) {
+    payload = JSON.stringify(input.body);
+    contentType = { "Content-Type": "application/json" };
+  }
   const res = await f(opts.baseUrl.replace(/\/$/, "") + url + (q ? "?" + q : ""), {
     method,
-    headers: { ...(input.body !== undefined ? { "Content-Type": "application/json" } : {}), ...extra, ...own },
-    body: input.body !== undefined ? JSON.stringify(input.body) : undefined,
+    headers: { ...contentType, ...extra, ...own },
+    body: payload,
   });
   const text = await res.text();
   let data: any;
@@ -266,6 +281,9 @@ func (g *tsGen) scanInput(t reflect.Type, method string) {
 		return
 	}
 	for _, f := range flatFields(t) {
+		if isFileType(f.Type) {
+			continue
+		}
 		if src, _ := paramSource(f.StructField); src != "" || bodyMethod(method) {
 			g.scanType(f.Type, true)
 		}
@@ -512,8 +530,8 @@ func (g *tsGen) operation(s routeSpec, name string) tsOp {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	var pathP, queryP, headerP, bodyP []string
-	queryReq, headerReq, bodyReq := false, false, false
+	var pathP, queryP, headerP, bodyP, formP []string
+	queryReq, headerReq, bodyReq, formReq := false, false, false, false
 	declared := map[string]bool{}
 	if t.Kind() == reflect.Struct {
 		for _, ff := range flatFields(t) {
@@ -537,6 +555,21 @@ func (g *tsGen) operation(s routeSpec, name string) tsOp {
 				}
 			case src == "cookie":
 				// Cookies are managed by the browser; they cannot be set from fetch.
+			case formName(f) != "":
+				ty := ""
+				switch f.Type {
+				case fileHeaderPtrType:
+					ty = "File | Blob"
+				case fileHeaderSliceType:
+					ty = "(File | Blob)[]"
+				default:
+					ty = g.fieldType(f, 1, true)
+				}
+				opt := !hasRequired(f)
+				formP = append(formP, tsDoc(f, true)+tsField(formName(f), ty, opt))
+				if !opt {
+					formReq = true
+				}
 			case bodyMethod(s.method):
 				if line, ok := g.field(f, 1, true); ok {
 					bodyP = append(bodyP, line)
@@ -567,6 +600,10 @@ func (g *tsGen) operation(s routeSpec, name string) tsOp {
 	if len(headerP) > 0 {
 		segs = append(segs, "headers"+optMark(!headerReq)+": { "+strings.Join(headerP, "; ")+" }")
 		needInput = needInput || headerReq
+	}
+	if len(formP) > 0 {
+		segs = append(segs, "form"+optMark(!formReq)+": { "+strings.Join(formP, "; ")+" }")
+		needInput = needInput || formReq
 	}
 	if len(bodyP) > 0 {
 		segs = append(segs, "body"+optMark(!bodyReq)+": { "+strings.Join(bodyP, "; ")+" }")

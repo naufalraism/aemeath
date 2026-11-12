@@ -163,7 +163,17 @@ func (s routeSpec) operation(sb *schemaBuilder) map[string]any {
 			})
 			declared[src+":"+name] = true
 		}
-		if bodyMethod(s.method) {
+		if form := sb.formBody(t); form != nil && bodyMethod(s.method) {
+			hasBody = true
+			ct := "application/x-www-form-urlencoded"
+			if formHasFile(t) {
+				ct = "multipart/form-data"
+			}
+			op["requestBody"] = map[string]any{
+				"required": form["required"] != nil,
+				"content":  map[string]any{ct: map[string]any{"schema": form}},
+			}
+		} else if bodyMethod(s.method) {
 			body := sb.structSchema(t, true, true)
 			if len(body["properties"].(map[string]any)) > 0 {
 				hasBody = true
@@ -327,7 +337,7 @@ func (sb *schemaBuilder) structSchema(t reflect.Type, input bool, skipParams boo
 	var required []string
 	for _, f := range jsonFields(t) {
 		if skipParams {
-			if src, _ := paramSource(f); src != "" {
+			if src, _ := paramSource(f); src != "" || formName(f) != "" {
 				continue
 			}
 		}
@@ -476,4 +486,63 @@ func withNull(schema map[string]any, nullable bool) map[string]any {
 	}
 	schema["nullable"] = true
 	return schema
+}
+
+// formFields returns the form-tagged fields of t.
+func formFields(t reflect.Type) []flatField {
+	var out []flatField
+	for _, f := range flatFields(t) {
+		if formName(f.StructField) != "" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func formHasFile(t reflect.Type) bool {
+	for _, f := range formFields(t) {
+		if isFileType(f.Type) {
+			return true
+		}
+	}
+	return false
+}
+
+// formBody builds the request-body schema of a form input, or nil if t has no form fields.
+func (sb *schemaBuilder) formBody(t reflect.Type) map[string]any {
+	ff := formFields(t)
+	if len(ff) == 0 {
+		return nil
+	}
+	props := map[string]any{}
+	var required []string
+	for _, f := range ff {
+		name := formName(f.StructField)
+		var schema map[string]any
+		switch f.Type {
+		case fileHeaderPtrType:
+			schema = map[string]any{"type": "string", "format": "binary"}
+		case fileHeaderSliceType:
+			schema = map[string]any{"type": "array", "items": map[string]any{"type": "string", "format": "binary"}}
+		default:
+			schema = sb.annotate(sb.schemaOf(f.Type, true), f.StructField, true)
+		}
+		if isFileType(f.Type) {
+			if ms := f.Tag.Get("maxsize"); ms != "" {
+				schema["description"] = "Maximum file size: " + ms
+			}
+			if ac := f.Tag.Get("accept"); ac != "" {
+				schema["x-accept"] = strings.Split(ac, ",")
+			}
+		}
+		props[name] = schema
+		if inputRequired(f.StructField) {
+			required = append(required, name)
+		}
+	}
+	s := map[string]any{"type": "object", "properties": props}
+	if len(required) > 0 {
+		s["required"] = required
+	}
+	return s
 }

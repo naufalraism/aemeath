@@ -3,6 +3,7 @@ package aemeath
 import (
 	"fmt"
 	"math"
+	"mime/multipart"
 	"net/mail"
 	"net/url"
 	"reflect"
@@ -122,7 +123,7 @@ func nestedStruct(t reflect.Type) reflect.Type {
 			t = t.Elem()
 			continue
 		case reflect.Struct:
-			if isTextType(t) {
+			if isTextType(t) || t == reflect.TypeFor[multipart.FileHeader]() {
 				return nil
 			}
 			return t

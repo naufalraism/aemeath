@@ -8,8 +8,6 @@
 
 **Write your API once in Go. Get the docs, the TypeScript client, the Zod schemas and the React hooks for free.**
 
-The fastest way to start a new Aemeath project is by using the official CLI [Aemeath CLI](https://github.com/naufalraism/aemeath-cli).
-
 Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeMux` patterns). You describe each route with a plain input struct and an output struct. From those same structs Aemeath derives request binding, validation, OpenAPI, a typed TypeScript client, Zod schemas and TanStack Query hooks, and they all follow the **same rules the server enforces**.
 
 > **Status:** pre-1.0. The API may still change between minor versions. See the [changelog](CHANGELOG.md).
@@ -20,9 +18,12 @@ Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeM
 - **Type-safe routes**: define request/response structs once; binding and validation are automatic.
 - **Rich validation**: `required`, `min`, `max`, `len`, `gt/gte/lt/lte`, `oneof`, `email`, `url`, `uuid`, `pattern`. Every failure is reported at once as a `422` with per-field errors.
 - **One source of truth**: the same tags drive the server, the OpenAPI document (`$ref` components, constraints, security, error schemas), the TypeScript client, the Zod schemas and the React Query hooks.
-- **Binding** from path, query (including repeated keys), headers, cookies and JSON; embedded structs; `time.Time`, UUIDs and any `encoding.TextUnmarshaler`.
+- **Binding** from path, query (including repeated keys), headers, cookies, JSON, and **forms and file uploads** (`form:` tag, type detected from the file's bytes, size limits); embedded structs; `time.Time`, UUIDs and any `encoding.TextUnmarshaler`.
 - **Typed dependencies**: `aemeath.Get[*gorm.DB](c)` instead of `c.State["db"].(*gorm.DB)`.
 - **Operations**: request IDs, structured logging (`slog`), gzip, timeouts, `/healthz` and `/readyz`, graceful shutdown.
+- **Authentication**: sessions (memory or Redis), CSRF protection, JWT with shared secret, public key or JWKS (RS256, ES256, EdDSA), and OpenID Connect login with PKCE.
+- **Databases**: SQLite, PostgreSQL and MySQL/MariaDB through one plugin API.
+- **Observability**: Prometheus metrics and W3C tracing exported over OTLP, with no third-party dependency.
 - **Realtime**: Server-Sent Events and WebSockets.
 - **Testing**: `aetest` calls your app in-process through the same typed endpoints.
 - **Security by default**: strict JWT, same-origin WebSockets, no directory listings, no CORS wildcard with credentials.
@@ -264,10 +265,16 @@ Import only what you use; each plugin's dependencies are only compiled into your
 | :--- | :--- | :--- |
 | `aemeath` (core) | routing, validation, OpenAPI, TypeScript/Zod/hooks generators, middleware (Logger, Recover, CORS, Gzip, RateLimiter, ...), static files, local file storage | **none** |
 | `aemeath/aetest` | in-process typed test client | none |
-| `aemeath/jwt` | HS256/384/512 Bearer auth | `golang-jwt/jwt` |
+| `aemeath/jwt` | Bearer auth: secret (HS*), public key (RS*/PS*/ES*/EdDSA) or JWKS URL; `jwt.Issue` | `golang-jwt/jwt` |
+| `aemeath/session` | server-side sessions (`MemoryStore`; Redis store in `aemeath/cache`) | none |
+| `aemeath/csrf` | CSRF token + Origin checks for cookie auth | none |
+| `aemeath/oidc` | OpenID Connect login: discovery, PKCE, nonce, ID-token verification | `golang-jwt/jwt`, `golang.org/x/oauth2` |
+| `aemeath/metrics` | Prometheus metrics and an HTTP middleware | none |
+| `aemeath/tracing` | W3C Trace Context and an OTLP/HTTP span exporter | none |
 | `aemeath/ws` | WebSocket upgrade (same-origin by default) | `gorilla/websocket` |
-| `aemeath/db` | GORM + SQLite plugin | `gorm`, `glebarez/sqlite` |
-| `aemeath/cache` | Redis plugin | `go-redis` |
+| `aemeath/db` | GORM plugin; SQLite built in | `gorm`, `glebarez/sqlite` |
+| `aemeath/db/postgres`, `aemeath/db/mysql` | PostgreSQL and MySQL/MariaDB drivers for the same plugin | `gorm.io/driver/postgres` / `mysql` |
+| `aemeath/cache` | Redis plugin and Redis session store | `go-redis` |
 | `aemeath/mailer` | SMTP mailer | `gomail` |
 | `aemeath/oauth2` | OAuth2 login (Google, GitHub, ...) | `golang.org/x/oauth2` |
 | `aemeath/jobs` | background jobs: queue, workers, retries, periodic jobs | none |
@@ -298,6 +305,22 @@ group.Options(aemeath.RequireAuth()) // documents the Bearer scheme and a 401 in
 ```
 
 Tokens must carry `exp` unless `AllowNoExpiry` is set; an empty secret panics at startup.
+
+Sessions, CSRF, OpenID Connect, PostgreSQL/MySQL, forms, metrics and tracing have their own pages in the [documentation](https://naufalraism.github.io/aemeath/): [Authentication](docs/guide/auth.md), [Databases](docs/guide/database.md), [Forms and uploads](docs/guide/forms.md), [Metrics and tracing](docs/guide/observability.md), and a [step-by-step tutorial](docs/guide/tutorial.md) whose finished code is [`examples/notes`](examples/notes).
+
+```go
+// A form with a validated image upload
+type AvatarIn struct {
+	Name   string                `form:"name" validate:"required"`
+	Avatar *multipart.FileHeader `form:"avatar" accept:"image/png,image/jpeg" maxsize:"2MB" validate:"required"`
+}
+
+// Postgres instead of SQLite
+plugin, err := postgres.Open(os.Getenv("DATABASE_URL"), db.WithModels(&User{}))
+
+// Sessions + CSRF for a browser app
+app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore()}), csrf.Middleware(csrf.Config{}))
+```
 
 Other notes:
 

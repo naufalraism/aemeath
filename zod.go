@@ -56,7 +56,7 @@ func (a *App) ZodSchemas() string {
 		}
 		used[name] = true
 		inputs := g.zodInputParts(s)
-		for _, part := range []string{"Path", "Query", "Headers", "Body"} { // a fixed order keeps the output stable
+		for _, part := range []string{"Path", "Query", "Headers", "Form", "Body"} { // a fixed order keeps the output stable
 			lines := inputs[part]
 			if len(lines) == 0 {
 				continue
@@ -74,7 +74,7 @@ func (a *App) ZodSchemas() string {
 // zodInputParts returns the Zod fields of an operation's path, query, header
 // and body inputs, keyed by the suffix of the generated schema name.
 func (g *tsGen) zodInputParts(s routeSpec) map[string][]string {
-	parts := map[string][]string{"Path": nil, "Query": nil, "Headers": nil, "Body": nil}
+	parts := map[string][]string{"Path": nil, "Query": nil, "Headers": nil, "Form": nil, "Body": nil}
 	t := s.in
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -96,6 +96,8 @@ func (g *tsGen) zodInputParts(s routeSpec) map[string][]string {
 			key, name = "Headers", pname
 		case src == "cookie":
 			continue
+		case formName(f) != "":
+			key, name = "Form", formName(f)
 		case bodyMethod(s.method):
 			key = "Body"
 		default:
@@ -122,8 +124,16 @@ func (g *tsGen) zodFields(t reflect.Type, input bool) []string {
 }
 
 func (g *tsGen) zodFieldNamed(f reflect.StructField, name string, input bool) string {
-	expr := g.zodType(f.Type, input)
-	if input {
+	var expr string
+	switch f.Type {
+	case fileHeaderPtrType:
+		expr = "z.instanceof(Blob)"
+	case fileHeaderSliceType:
+		expr = "z.array(z.instanceof(Blob))"
+	default:
+		expr = g.zodType(f.Type, input)
+	}
+	if input && !isFileType(f.Type) {
 		expr = zodRules(expr, f)
 	}
 	if (f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type)) {

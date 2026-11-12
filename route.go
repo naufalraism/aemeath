@@ -67,6 +67,7 @@ type inputInfo struct {
 	typ    reflect.Type
 	plan   *typePlan
 	params []flatField // fields bound from path, query, header or cookie
+	forms  []flatField // fields bound from an urlencoded or multipart form body
 }
 
 // prepareInput analyses the input type of a route. It panics at startup for
@@ -88,8 +89,14 @@ func prepareInput(t reflect.Type, method, path string) *inputInfo {
 		return info
 	}
 	for _, ff := range flatFields(t) {
+		checkFormTags(t, ff.StructField)
 		if src, _ := paramSource(ff.StructField); src != "" {
 			info.params = append(info.params, ff)
+		} else if formName(ff.StructField) != "" {
+			if !bodyMethod(method) {
+				panic(fmt.Sprintf("aemeath: %s %s: field %s.%s has a `form` tag but %s requests have no body", method, path, t.Name(), ff.Name, method))
+			}
+			info.forms = append(info.forms, ff)
 		} else if !bodyMethod(method) && hasJSONName(ff.StructField) {
 			log.Printf("aemeath: warning: %s %s: field %s.%s has a json tag but %s requests have no body, so it is never bound; use `query:\"...\"` or `path:\"...\"`",
 				method, path, t.Name(), ff.Name, method)
@@ -105,6 +112,7 @@ func typedHandler[In, Out any](cfg routeConfig, info *inputInfo, fn func(*Ctx, I
 	handled := reflect.TypeFor[Out]() == reflect.TypeFor[Handled]()
 	return func(c *Ctx) error {
 		var in In
+		defer c.runCleanups()
 		if err := bind(c, &in, info); err != nil {
 			return err
 		}
@@ -206,6 +214,9 @@ func fieldDisplayName(f reflect.StructField) string {
 	if _, name := paramSource(f); name != "" {
 		return name
 	}
+	if name := formName(f); name != "" {
+		return name
+	}
 	return jsonName(f)
 }
 
@@ -220,7 +231,10 @@ func isJSONContentType(ct string) bool {
 
 // bind fills the struct from the JSON body and from the path, query, header
 // and cookie tags, then validates it.
-func bind(c *Ctx, in any, info *inputInfo) error {
+func bind(c *Ctx, in any, info *inputInfo) (err error) {
+	if info.hasForm() {
+		return bindWithForm(c, in, info)
+	}
 	if bodyMethod(c.R.Method) && c.R.Body != nil {
 		body, err := io.ReadAll(io.LimitReader(c.R.Body, DefaultMaxBodyBytes+1))
 		if err != nil {
