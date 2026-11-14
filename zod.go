@@ -133,7 +133,13 @@ func (g *tsGen) zodFieldNamed(f reflect.StructField, name string, input bool) st
 	default:
 		expr = g.zodType(f.Type, input)
 	}
-	if input && !isFileType(f.Type) {
+	quoted := jsonQuoted(f)
+	if quoted {
+		// `json:",string"`: the value travels as a JSON string. Numeric rules
+		// are enforced by the server; here only the format is checked.
+		expr = "z.string().regex(/" + quotedPattern(f.Type) + "/)"
+	}
+	if input && !isFileType(f.Type) && !quoted {
 		expr = zodRules(expr, f)
 	}
 	if (f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type)) {

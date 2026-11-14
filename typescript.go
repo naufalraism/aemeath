@@ -463,6 +463,9 @@ func (g *tsGen) fieldType(f reflect.StructField, depth int, input bool) string {
 	}
 	if typ == "" {
 		typ = g.typeRef(f.Type, depth, input)
+		if jsonQuoted(f) {
+			typ = "string" // `json:",string"`: the number travels as a JSON string
+		}
 	}
 	// A nil pointer, slice, or map is encoded as JSON null in responses. In a
 	// request, null is only accepted where the field is optional.
@@ -483,7 +486,7 @@ func oneofUnion(f reflect.StructField) string {
 			continue
 		}
 		var parts []string
-		if classOf(f.Type) == kindNumber {
+		if classOf(f.Type) == kindNumber && !jsonQuoted(f) {
 			parts = append(parts, r.set...)
 		} else {
 			for _, s := range r.set {
@@ -666,6 +669,49 @@ func tsKey(name string) string {
 }
 
 // hasOmitEmpty reports whether the json tag contains omitempty or omitzero.
+// jsonQuoted reports whether encoding/json sends the field as a JSON string
+// because of the `,string` option, which applies to numbers and booleans
+// (directly or through one unnamed pointer).
+func jsonQuoted(f reflect.StructField) bool {
+	_, opts, _ := strings.Cut(f.Tag.Get("json"), ",")
+	found := false
+	for _, o := range strings.Split(opts, ",") {
+		if o == "string" {
+			found = true
+		}
+	}
+	if !found {
+		return false
+	}
+	t := f.Type
+	if t.Kind() == reflect.Pointer && t.Name() == "" {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return true
+	}
+	return false
+}
+
+// quotedPattern is the format of a `,string` number or boolean on the wire.
+func quotedPattern(t reflect.Type) string {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.Bool:
+		return `^(true|false)$`
+	case reflect.Float32, reflect.Float64:
+		return `^-?\d+(\.\d+)?([eE][-+]?\d+)?$`
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return `^\d+$`
+	}
+	return `^-?\d+$`
+}
+
 func hasOmitEmpty(f reflect.StructField) bool {
 	_, opts, _ := strings.Cut(f.Tag.Get("json"), ",")
 	for _, o := range strings.Split(opts, ",") {

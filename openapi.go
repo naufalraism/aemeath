@@ -347,7 +347,13 @@ func (sb *schemaBuilder) structSchema(t reflect.Type, input bool, skipParams boo
 		if name == "-" {
 			continue
 		}
-		props[name] = sb.annotate(sb.schemaOf(f.Type, input), f, input)
+		if jsonQuoted(f) {
+			// `json:",string"`: a number or boolean sent as a JSON string.
+			schema := withNull(map[string]any{"type": "string", "pattern": quotedPattern(f.Type)}, f.Type.Kind() == reflect.Pointer)
+			props[name] = sb.annotate(schema, f, false)
+		} else {
+			props[name] = sb.annotate(sb.schemaOf(f.Type, input), f, input)
+		}
 
 		// Requiredness depends on direction: input uses `validate:"required"`,
 		// output uses the absence of `omitempty`.
