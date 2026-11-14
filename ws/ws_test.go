@@ -87,3 +87,53 @@ func TestCheckOriginCanBeRelaxed(t *testing.T) {
 	}
 	_ = conn.Close()
 }
+
+// onlyUnwrap is a middleware wrapper like the ones in session, metrics and
+// tracing: it implements Unwrap but not Hijack.
+type onlyUnwrap struct{ http.ResponseWriter }
+
+func (w onlyUnwrap) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// A wrapper without Hijack anywhere in the chain used to make Upgrade fail
+// with 500 ("response does not implement http.Hijacker").
+func TestUpgradeThroughWrappersWithoutHijack(t *testing.T) {
+	wrap := func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
+		return func(c *aemeath.Ctx) error {
+			c.W = onlyUnwrap{c.W}
+			return next(c)
+		}
+	}
+	for name, mws := range map[string][]aemeath.Middleware{
+		"wrapper only":          {wrap},
+		"Logger outside":        {aemeath.Logger(), wrap},
+		"Logger inside":         {wrap, aemeath.Logger()},
+		"two wrappers + Logger": {wrap, aemeath.Logger(), wrap},
+	} {
+		t.Run(name, func(t *testing.T) {
+			app := aemeath.New()
+			app.Use(mws...)
+			app.Handle("GET", "/ws", func(c *aemeath.Ctx) error {
+				conn, err := ws.Upgrade(c)
+				if err != nil {
+					return nil
+				}
+				defer func() { _ = conn.Close() }()
+				return conn.WriteMessage(websocket.TextMessage, []byte("hi"))
+			})
+			srv := httptest.NewServer(app)
+			defer srv.Close()
+			conn, resp, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+			if err != nil {
+				code := 0
+				if resp != nil {
+					code = resp.StatusCode
+				}
+				t.Fatalf("dial failed (status %d): %v", code, err)
+			}
+			defer func() { _ = conn.Close() }()
+			if _, msg, err := conn.ReadMessage(); err != nil || string(msg) != "hi" {
+				t.Fatalf("got %q, %v", msg, err)
+			}
+		})
+	}
+}

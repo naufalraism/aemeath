@@ -3,7 +3,6 @@ package aemeath
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -50,10 +49,9 @@ func (w *statusWriter) Flush() {
 
 // Hijack implements http.Hijacker so WebSocket upgrades can take over the connection.
 func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	if hj, ok := w.ResponseWriter.(http.Hijacker); ok {
-		return hj.Hijack()
-	}
-	return nil, nil, fmt.Errorf("aemeath: underlying ResponseWriter does not implement http.Hijacker")
+	// ResponseController follows Unwrap, so a wrapper below this one that
+	// does not implement Hijack itself does not break WebSocket upgrades.
+	return http.NewResponseController(w.ResponseWriter).Hijack()
 }
 
 // Logger logs the method, path, status, and duration of every request.
