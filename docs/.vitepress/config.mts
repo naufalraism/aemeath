@@ -2,10 +2,12 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   base: '/aemeath/', // the site is served from https://naufalraism.github.io/aemeath/
+  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/aemeath/logo.svg' }]],
   cleanUrls: true,
   title: "Aemeath",
   description: "Write your API once in Go. Get the docs, the TypeScript client and the Zod schemas.",
   themeConfig: {
+    logo: '/logo.svg',
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/getting-started' },

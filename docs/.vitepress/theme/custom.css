@@ -1,0 +1,32 @@
+/* Aemeath brand colours: pink in light mode, blue in dark mode. */
+
+:root {
+  --vp-c-brand-1: #be185d; /* links, active items (pink-700) */
+  --vp-c-brand-2: #db2777; /* hover (pink-600) */
+  --vp-c-brand-3: #ec4899; /* accents (pink-500) */
+  --vp-c-brand-soft: rgba(236, 72, 153, 0.14);
+
+  --vp-button-brand-bg: #db2777;
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-hover-bg: #be185d;
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-hover-text: #ffffff;
+  --vp-button-brand-active-bg: #9d174d;
+  --vp-button-brand-active-border: transparent;
+  --vp-button-brand-active-text: #ffffff;
+}
+
+.dark {
+  --vp-c-brand-1: #22d3ee; /* cyan-400 */
+  --vp-c-brand-2: #06b6d4; /* cyan-500 */
+  --vp-c-brand-3: #0891b2; /* cyan-600 */
+  --vp-c-brand-soft: rgba(34, 211, 238, 0.16);
+
+  --vp-button-brand-bg: #22d3ee;
+  --vp-button-brand-text: #0b1220;
+  --vp-button-brand-hover-bg: #67e8f9;
+  --vp-button-brand-hover-text: #0b1220;
+  --vp-button-brand-active-bg: #06b6d4;
+  --vp-button-brand-active-text: #0b1220;
+}
