@@ -52,8 +52,8 @@ func (rl *rateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 // (fixed window, anchored at the client's first request in the window).
 //
 // The client IP is taken from the connection (RemoteAddr). Behind a reverse
-// proxy every request shares the proxy's address, so terminate the limit at
-// the proxy or restore the real client address before this middleware runs.
+// proxy every request shares the proxy's address: install RealIP before this
+// middleware so the limit applies to each client.
 func RateLimiter(limit int, window time.Duration) Middleware {
 	if limit <= 0 || window <= 0 {
 		panic("aemeath: RateLimiter requires limit > 0 and window > 0")

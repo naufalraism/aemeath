@@ -252,8 +252,9 @@ app.Use(
 | `Timeout(d)` | deadline on `c.Context()`; `504` when a handler that honors the context runs out |
 | `MaxBodySize(n)` | caps request bodies; typed routes answer `413` |
 | `RateLimiter(n, window)` | per-IP fixed window; sends `Retry-After` on `429` |
+| `RealIP(trusted...)` | behind trusted proxies, takes the client address from `X-Forwarded-For` / `X-Real-IP` |
 
-> **Behind a reverse proxy**, `RateLimiter` sees the proxy's address for every request (it uses `RemoteAddr`). Limit at the proxy or restore the real client IP first.
+> **Behind a reverse proxy** (Railway, Fly.io, Render, a Kubernetes ingress), every request comes from the proxy's address. Put `aemeath.RealIP(aemeath.PrivateNetworks...)` before `RateLimiter` and the loggers so they see the real client. Headers from any other address are ignored, so clients cannot spoof them; only use `PrivateNetworks` when the app is not reachable directly from the internet.
 
 ### Health checks
 
