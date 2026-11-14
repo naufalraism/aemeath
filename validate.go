@@ -90,6 +90,14 @@ func buildPlan(t reflect.Type) *typePlan {
 	}
 	p := &typePlan{}
 	plans[t] = p // registered before the fields so recursive types terminate
+	defer func() {
+		// An invalid tag panics below. Forget the half-built plan, so a
+		// recovered panic cannot leave a type that is silently not validated.
+		if r := recover(); r != nil {
+			delete(plans, t)
+			panic(r)
+		}
+	}()
 	if t == timeType {
 		return p
 	}
