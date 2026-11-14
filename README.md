@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/public/logo.svg" width="96" alt="Aemeath logo">
+</p>
+
 # Aemeath 🚀
 
 [![Go](https://github.com/naufalraism/aemeath/actions/workflows/go.yml/badge.svg)](https://github.com/naufalraism/aemeath/actions/workflows/go.yml)
@@ -38,15 +42,15 @@ Aemeath adds typed binding and validation on top of `net/http` for a small fixed
 
 | Framework | Time (ns/op) | Memory (B/op) | Allocations |
 | :--- | :--- | :--- | :--- |
-| `net/http` (baseline) | 1,246 | 1,040 B | 10 |
-| **Aemeath** | **2,238** | **1,120 B** | **13** |
-| Gin | 2,521 | 1,434 B | 16 |
+| `net/http` (baseline) | 1,126 | 1,040 B | 10 |
+| **Aemeath** | **2,120** | **1,152 B** | **13** |
+| Gin | 2,280 | 1,433 B | 16 |
 
-This is a microbenchmark, not a load test: numbers vary by machine and say nothing about real-world throughput, where your handlers and database dominate. The table above was measured before the validation engine was added; re-measured afterwards on another machine, a plain `GET` still costs 13 allocations (about 1.1 KB), and a JSON `POST` with two validated fields costs about 31 allocations (7.3 KB), including the cost of building the test request. Measure your own routes:
+This is a microbenchmark, not a load test: numbers vary by machine and say nothing about real-world throughput, where your handlers and database dominate. The table shows the median of five runs (`go test -bench . -benchmem -count 5 -benchtime 2s`) on Windows. A plain `GET` costs 13 allocations (about 1.1 KB), and a JSON `POST` with two validated fields costs about 31 allocations (7.3 KB), including the cost of building the test request. Measure your own routes:
 
 ```bash
 go test -run '^$' -bench . -benchmem .      # Aemeath alone
-cd benchmarks && go test -bench . -benchmem # comparison with Gin and Fiber
+cd benchmarks && go test -bench . -benchmem -count 5 -benchtime 2s   # comparison with Gin and Fiber
 ```
 
 Fiber is intentionally not listed because its `app.Test` helper goes through an in-memory connection and is not comparable to calling `ServeHTTP` directly.
@@ -457,10 +461,10 @@ go test -run '^$' -fuzz FuzzBind -fuzztime 30s .   # fuzz the request binder
 
 - Route paths use Go 1.22 syntax: `/hello/{name}`, not `/hello/:name`.
 - A request body is only read for `POST`, `PUT` and `PATCH`; `DELETE` bodies are not supported.
-- Only JSON bodies are supported (no form or multipart binding yet; read those from `c.R`).
+- JSON, form (`application/x-www-form-urlencoded`) and multipart bodies are supported. Other content types are not bound; read them from `c.R`.
 - OpenAPI is 3.0.3 (no 3.1), without per-operation request size limits or content negotiation.
 - Middlewares attached with `Use` take effect when a route first serves a request; do not call `Use` while the server is running.
-- Not included yet: OpenTelemetry/Prometheus integrations, a durable (persistent) job queue, typed SSE in the TypeScript client.
+- Not included yet: the OpenTelemetry SDK (tracing exports OTLP/HTTP itself), a durable job queue (the queue lives in memory), and typed SSE in the TypeScript client.
 
 ## 🤝 Contributing & security
 
