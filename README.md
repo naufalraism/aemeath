@@ -464,6 +464,8 @@ go test -run '^$' -fuzz FuzzBind -fuzztime 30s .   # fuzz the request binder
 
 ## 🤝 Contributing & security
 
+> **Security status:** Aemeath has not been independently audited. It is tested (including race, fuzz and static analysis in CI) and built to be secure by default, but you remain responsible for how you configure and deploy your app. Report problems privately, see [SECURITY.md](SECURITY.md).
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). For an honest comparison with Huma, Fuego, Gin and others, see [docs/guide/comparison.md](docs/guide/comparison.md).
 
 ## 📝 License

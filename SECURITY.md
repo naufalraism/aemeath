@@ -1,5 +1,9 @@
 # Security Policy
 
+## Security status
+
+Aemeath has **not been independently audited**. It is tested (race detector, fuzzing and static analysis run in CI) and aims to be secure by default, but it comes with no warranty (see the MIT licence), and secure configuration and deployment remain the responsibility of the application developer.
+
 ## Supported versions
 
 Aemeath is pre-1.0. Security fixes are made on the latest release only.
