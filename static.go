@@ -1,16 +1,32 @@
 package aemeath
 
 import (
+	"io/fs"
 	"net/http"
 	"path"
 	"strings"
 )
 
 // noListingFS hides directory listings: a directory is only served when it
-// contains an index.html, otherwise it is reported as not found.
+// contains an index.html, otherwise it is reported as not found. It also
+// hides dotfiles and dot-directories (.env, .git, .htpasswd, ...), except
+// .well-known, which exists to be public.
 type noListingFS struct{ fs http.FileSystem }
 
+// hidden reports whether a path contains a segment that starts with a dot.
+func hidden(name string) bool {
+	for _, seg := range strings.Split(name, "/") {
+		if seg != "" && seg != "." && seg != ".well-known" && strings.HasPrefix(seg, ".") {
+			return true
+		}
+	}
+	return false
+}
+
 func (n noListingFS) Open(name string) (http.File, error) {
+	if hidden(name) {
+		return nil, fs.ErrNotExist
+	}
 	f, err := n.fs.Open(name)
 	if err != nil {
 		return nil, err
@@ -39,7 +55,7 @@ func httpHandler(h http.Handler) HandlerFunc {
 }
 
 // Static serves the files in dir under the URL prefix. Directory listings are
-// disabled, and global middlewares (Logger, CORS, SecurityHeaders, ...) apply.
+// disabled, dotfiles (.env, .git/...) are never served, and global middlewares (Logger, CORS, SecurityHeaders, ...) apply.
 func (a *App) Static(prefix string, dir string) {
 	if !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
