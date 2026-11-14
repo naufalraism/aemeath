@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -113,7 +114,12 @@ func TestOpenAPI(t *testing.T) {
 	if post["requestBody"] == nil {
 		t.Fatal("requestBody of POST /users is missing")
 	}
-	if do(newApp(), "GET", "/docs", "").Code != 200 {
+	docs := do(newApp(), "GET", "/docs", "")
+	if docs.Code != 200 {
 		t.Fatal("/docs is not served")
+	}
+	// The viewer script must come from a pinned version, never "latest".
+	if !regexp.MustCompile(`@scalar/api-reference@\d+\.\d+\.\d+/`).MatchString(docs.Body.String()) {
+		t.Fatal("/docs does not load a pinned Scalar version")
 	}
 }

@@ -100,12 +100,14 @@ func (a *App) EnableDocs(info Info) {
 	})
 }
 
+// docsHTML loads Scalar from a CDN at a pinned version, so a new upstream release
+// cannot change what runs in your visitors' browsers. Bump it deliberately.
 const docsHTML = `<!doctype html>
 <html><head><meta charset="utf-8"><title>%s</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body>
 <script id="api-reference" data-url="/openapi.json"></script>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4/dist/browser/standalone.js"></script>
 </body></html>`
 
 var pathParamRe = regexp.MustCompile(`\{([^}.$]+)(?:\.\.\.)?\}`)
