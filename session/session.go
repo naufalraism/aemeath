@@ -8,7 +8,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -90,37 +92,77 @@ func Middleware(cfg Config) aemeath.Middleware {
 			}
 			// An id we did not issue is never adopted: s.id stays empty.
 			c.State[stateKey] = s
-			c.W = &commitWriter{ResponseWriter: c.W, commit: func() { s.commit(c) }}
+			cw := &commitWriter{ResponseWriter: c.W, commit: func() error { return s.commit(c) }}
+			c.W = cw
 			err := next(c)
-			if cw, ok := c.W.(*commitWriter); ok {
-				cw.finish()
+			if serr := cw.finish(); serr != nil && err == nil && !cw.started {
+				// Nothing was sent yet: report the failure instead of answering
+				// as if the session had been saved.
+				return aemeath.NewError(http.StatusInternalServerError, "internal server error")
 			}
 			return err
 		}
 	}
 }
 
-// commitWriter persists the session just before headers are sent, so the cookie can be set.
+// commitWriter persists the session just before headers are sent, so the
+// cookie can be set. When saving fails, the response the handler meant to
+// send (for example "logged in") is replaced by a 500, because the session it
+// relies on does not exist.
 type commitWriter struct {
 	http.ResponseWriter
-	commit func()
-	done   bool
+	commit  func() error
+	done    bool
+	err     error
+	started bool // the response headers have been sent
+	failed  bool // the 500 replaced the handler's response; drop its writes
 }
 
-func (w *commitWriter) finish() {
+func (w *commitWriter) finish() error {
 	if !w.done {
 		w.done = true
-		w.commit()
+		w.err = w.commit()
 	}
+	return w.err
 }
-func (w *commitWriter) WriteHeader(code int) { w.finish(); w.ResponseWriter.WriteHeader(code) }
+
+func (w *commitWriter) WriteHeader(code int) {
+	if w.started {
+		return
+	}
+	w.started = true
+	if err := w.finish(); err != nil {
+		w.failed = true
+		h := w.Header()
+		h.Del("Content-Length")
+		h.Del("Content-Encoding")
+		h.Set("Content-Type", "application/json")
+		w.ResponseWriter.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w.ResponseWriter).Encode(map[string]string{"error": "internal server error"})
+		return
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
 func (w *commitWriter) Write(b []byte) (int, error) {
-	w.finish()
+	if !w.started {
+		w.WriteHeader(http.StatusOK)
+	}
+	if w.failed {
+		return len(b), nil
+	}
 	return w.ResponseWriter.Write(b)
 }
+
 func (w *commitWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func (w *commitWriter) Flush() {
-	w.finish()
+	if !w.started {
+		w.WriteHeader(http.StatusOK)
+	}
+	if w.failed {
+		return
+	}
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
@@ -134,27 +176,32 @@ func (s *Session) cookie(value string, maxAge int) *http.Cookie {
 	}
 }
 
-func (s *Session) commit(c *aemeath.Ctx) {
+func (s *Session) commit(c *aemeath.Ctx) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ctx := context.WithoutCancel(c.Context())
 	if s.destroy {
 		if s.id != "" {
-			_ = s.cfg.Store.Delete(ctx, s.id)
+			if err := s.cfg.Store.Delete(ctx, s.id); err != nil {
+				log.Printf("aemeath/session: deleting the session failed: %v", err)
+				return err
+			}
 		}
 		http.SetCookie(c.W, s.cookie("", -1))
-		return
+		return nil
 	}
 	if !s.dirty && (!s.loaded || !s.cfg.Sliding) {
-		return
+		return nil
 	}
 	if s.id == "" {
 		s.id = newID()
 	}
 	if err := s.cfg.Store.Save(ctx, s.id, s.data, s.cfg.TTL); err != nil {
-		return
+		log.Printf("aemeath/session: saving the session failed: %v", err)
+		return err
 	}
 	http.SetCookie(c.W, s.cookie(s.id, int(s.cfg.TTL.Seconds())))
+	return nil
 }
 
 // From returns the request's session; it panics if Middleware is not installed.

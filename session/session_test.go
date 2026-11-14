@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -178,5 +179,53 @@ func TestUnknownIDNotAdoptedWithoutRenew(t *testing.T) {
 	}
 	if got := do(app, "GET", "/me", attacker).Body.String(); strings.Contains(got, "ann") {
 		t.Fatal("attacker id gained data")
+	}
+}
+
+// failingStore loads nothing and fails every write, like a Redis outage.
+type failingStore struct{}
+
+func (failingStore) Load(context.Context, string) (map[string]any, bool, error) {
+	return nil, false, nil
+}
+func (failingStore) Save(context.Context, string, map[string]any, time.Duration) error {
+	return errors.New("redis: connection refused")
+}
+func (failingStore) Delete(context.Context, string) error {
+	return errors.New("redis: connection refused")
+}
+
+// A failed save used to be ignored: the handler's "logged in" response went
+// out with 200 and no cookie, so the user silently stayed logged out.
+func TestSaveFailureIsReported(t *testing.T) {
+	app := newApp(failingStore{}, false)
+	aemeath.POST(app, "/plain", func(c *aemeath.Ctx, _ none) (out, error) {
+		session.From(c).Set("user", "ann")
+		return out{User: "ann"}, nil
+	})
+	app.Handle("POST", "/nowrite", func(c *aemeath.Ctx) error {
+		session.From(c).Set("user", "ann")
+		c.W.Header().Set("X-Test", "1")
+		return nil
+	})
+	for _, path := range []string{"/login", "/plain", "/nowrite"} {
+		w := do(app, "POST", path, "")
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("%s: status %d, want 500 (body %s)", path, w.Code, w.Body)
+		}
+		if strings.Contains(w.Body.String(), "ann") {
+			t.Fatalf("%s: the handler's response leaked through: %s", path, w.Body)
+		}
+		if sid(w) != "" {
+			t.Fatalf("%s: a cookie was set for a session that was not saved", path)
+		}
+	}
+}
+
+// Requests that do not touch the session are not affected by a broken store.
+func TestUntouchedSessionIgnoresStore(t *testing.T) {
+	app := newApp(failingStore{}, false)
+	if w := do(app, "GET", "/me", ""); w.Code != 200 {
+		t.Fatalf("status %d", w.Code)
 	}
 }
