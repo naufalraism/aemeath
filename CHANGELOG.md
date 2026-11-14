@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Fixed
 
 - **`session.MemoryStore`** no longer grows without bound: expired sessions are swept automatically and live sessions are capped at 100,000 (`WithMaxSessions` changes it). When full, new visitors get no session until older ones expire; existing sessions are unaffected.
+- **`/docs`** now loads the Scalar viewer from a pinned version instead of the latest release.
 
 ## [0.3.0] - 2026-11-12
 
