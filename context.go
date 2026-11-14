@@ -1,12 +1,17 @@
 package aemeath
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,7 +24,56 @@ type Ctx struct {
 
 	app      *App
 	cleanups []func()
+	rw       responseTracker // c.W starts as &rw; lives inside Ctx, so it costs no allocation
 }
+
+// newCtx creates the Ctx of a request. Its writer records whether the
+// response has started, so an error returned afterwards is not appended to it.
+func newCtx(w http.ResponseWriter, r *http.Request, a *App) *Ctx {
+	c := &Ctx{R: r, State: make(map[string]any), app: a}
+	c.rw.ResponseWriter = w
+	c.W = &c.rw
+	return c
+}
+
+// responseTracker records whether the status line has been sent.
+type responseTracker struct {
+	http.ResponseWriter
+	started bool
+}
+
+func (t *responseTracker) WriteHeader(code int) {
+	if code >= 200 || code == http.StatusSwitchingProtocols {
+		t.started = true
+	}
+	t.ResponseWriter.WriteHeader(code)
+}
+
+func (t *responseTracker) Write(b []byte) (int, error) {
+	t.started = true
+	return t.ResponseWriter.Write(b)
+}
+
+// ReadFrom keeps the sendfile fast path of http.ServeFile and c.File.
+func (t *responseTracker) ReadFrom(r io.Reader) (int64, error) {
+	t.started = true
+	if rf, ok := t.ResponseWriter.(io.ReaderFrom); ok {
+		return rf.ReadFrom(r)
+	}
+	return io.Copy(t.ResponseWriter, r)
+}
+
+func (t *responseTracker) Flush() {
+	t.started = true
+	_ = http.NewResponseController(t.ResponseWriter).Flush()
+}
+
+func (t *responseTracker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	t.started = true
+	return http.NewResponseController(t.ResponseWriter).Hijack()
+}
+
+func (t *responseTracker) Unwrap() http.ResponseWriter { return t.ResponseWriter }
 
 // Handled is the output type of a typed route that writes the response itself
 // (a redirect, a file, a stream). Aemeath then sends nothing after the handler returns.
@@ -49,20 +103,39 @@ func bodyAllowed(code int) bool {
 	return (code < 100 || code >= 200) && code != http.StatusNoContent && code != http.StatusNotModified
 }
 
-// writeJSON is an internal helper that writes a JSON response.
+// writeJSON is an internal helper that writes a JSON response. The value is
+// encoded before anything is sent, so a value that cannot be encoded (NaN, a
+// channel, a cycle) becomes a 500 instead of a 200 with an empty body.
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	if !bodyAllowed(code) {
 		w.WriteHeader(code)
 		return
 	}
+	if v == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		return
+	}
+	buf := jsonBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer func() {
+		if buf.Cap() <= 64<<10 { // do not keep huge buffers alive
+			jsonBufPool.Put(buf)
+		}
+	}()
+	if err := json.NewEncoder(buf).Encode(v); err != nil {
+		log.Printf("aemeath: failed to encode JSON: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `{"error":"internal server error"}`+"\n")
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	if v != nil {
-		if err := json.NewEncoder(w).Encode(v); err != nil {
-			log.Printf("aemeath: failed to encode JSON: %v", err)
-		}
-	}
+	_, _ = w.Write(buf.Bytes())
 }
+
+var jsonBufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
 
 // SetCookie adds a Set-Cookie header to the response. It sends the cookie
 // exactly as given: set Secure and HttpOnly yourself for anything sensitive,

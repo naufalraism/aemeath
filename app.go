@@ -73,6 +73,12 @@ func (a *App) OnError(fn func(*Ctx, error)) { a.errHandler = fn }
 
 // writeError sends err to the client through the configured error handler.
 func (a *App) writeError(c *Ctx, err error) {
+	if c.rw.started {
+		// The handler already sent (part of) a response; anything written now
+		// would be glued onto it. Log the error instead.
+		log.Printf("aemeath: %s %s: error after the response was sent: %v", c.R.Method, c.R.URL.EscapedPath(), err)
+		return
+	}
 	if a.errHandler != nil {
 		a.errHandler(c, err)
 		return
@@ -154,7 +160,7 @@ func (a *App) Handle(method, path string, h HandlerFunc) {
 	var wrapped HandlerFunc
 	a.mux.HandleFunc(method+" "+path, func(w http.ResponseWriter, r *http.Request) {
 		once.Do(func() { wrapped = a.wrap(h) })
-		c := &Ctx{W: w, R: r, State: make(map[string]any), app: a}
+		c := newCtx(w, r, a)
 		if err := wrapped(c); err != nil {
 			a.writeError(c, err)
 		}
@@ -189,7 +195,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Unmatched requests still pass through the global middlewares, so they
 	// are logged, rate limited, and carry CORS and security headers.
-	c := &Ctx{W: w, R: r, State: make(map[string]any), app: a}
+	c := newCtx(w, r, a)
 	if allow != "" {
 		w.Header().Set("Allow", allow)
 	}
