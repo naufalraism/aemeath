@@ -275,12 +275,20 @@ func (a *App) Serve(srv *http.Server) error {
 // application for its TypeScript files (see App.Listen).
 const EnvTypeScriptOut = "AEMEATH_TS_OUT"
 
+// GeneratingTypeScript reports whether the program was started only to write
+// its TypeScript files ("aemeath ts", "aemeath dev --ts-out"). Listen then
+// writes the files and exits without serving. Startup code that talks to the
+// outside world (connecting to a queue, calling an API, seeding data) can skip
+// that work; the database plugin already does (see package db).
+func GeneratingTypeScript() bool { return os.Getenv(EnvTypeScriptOut) != "" }
+
 func (a *App) run(srv *http.Server, start func() error) error {
 	// "aemeath ts" and "aemeath dev --ts-out" run the program with this
 	// variable set: write client.ts, schemas.ts and hooks.ts, then exit without
 	// serving. All routes are registered before Listen is called, so they are
 	// known by now.
-	if dir := os.Getenv(EnvTypeScriptOut); dir != "" {
+	if GeneratingTypeScript() {
+		dir := os.Getenv(EnvTypeScriptOut)
 		if err := a.WriteTypeScript(dir); err != nil {
 			return fmt.Errorf("aemeath: writing TypeScript to %s: %w", dir, err)
 		}

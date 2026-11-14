@@ -1,6 +1,12 @@
 // Package db is the GORM plugin. Open uses SQLite; the postgres and mysql
 // sub-packages connect to those servers. All of them return a *Plugin, so the
 // rest of your code does not depend on the database you picked.
+//
+// When the program only runs to write its TypeScript files ("aemeath ts",
+// "aemeath dev --ts-out", see aemeath.GeneratingTypeScript), every Open and
+// New uses an in-memory SQLite database in GORM's dry-run mode instead: no
+// server is needed, nothing is written to your database file, and migrations
+// do not run. The types come from your Go structs, not from the database.
 package db
 
 import (
@@ -9,6 +15,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -77,6 +84,9 @@ func New(d gorm.Dialector, opts ...Option) (*Plugin, error) {
 			}),
 		}
 	}
+	if aemeath.GeneratingTypeScript() {
+		d, cfg, o.pool = typeScriptMode(cfg)
+	}
 	g, err := gorm.Open(d, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("aemeath/db: failed to connect to database: %w", err)
@@ -98,6 +108,23 @@ func New(d gorm.Dialector, opts ...Option) (*Plugin, error) {
 		}
 	}
 	return p, nil
+}
+
+var tsModeNotice sync.Once
+
+// typeScriptMode replaces the real database with an in-memory SQLite one in
+// dry-run mode: GORM builds statements but never executes them, so
+// AutoMigrate and queries made at startup succeed without touching anything,
+// whatever SQL dialect the models' tags assume.
+func typeScriptMode(cfg *gorm.Config) (gorm.Dialector, *gorm.Config, *poolConfig) {
+	tsModeNotice.Do(func() {
+		log.Printf("aemeath/db: %s is set: using an in-memory SQLite database in dry-run mode instead of connecting", aemeath.EnvTypeScriptOut)
+	})
+	c := *cfg
+	c.DryRun = true
+	c.DisableAutomaticPing = true
+	c.Logger = logger.Discard
+	return sqlite.Open(":memory:"), &c, &poolConfig{maxOpen: 1, maxIdle: 1}
 }
 
 // Open opens a SQLite database file and auto-migrates the given models.
