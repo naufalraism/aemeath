@@ -260,6 +260,8 @@ app.Use(
 
 `app.EnableHealth()` adds `GET /healthz` (liveness) and `GET /readyz` (readiness: `200`, or `503` when a check added with `app.AddReadyCheck(name, fn)` fails). The database and cache plugins register their own checks.
 
+On Kubernetes or behind another load balancer, add `app.SetShutdownDelay(10 * time.Second)`: after SIGTERM, `/readyz` answers `503` at once while the server keeps serving for that long, so traffic is moved away before connections are refused. The default is `0`.
+
 ---
 
 ## 📦 Packages

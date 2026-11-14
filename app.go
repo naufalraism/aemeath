@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -35,7 +36,29 @@ type App struct {
 
 	hooksMu       sync.Mutex
 	shutdownHooks []func(context.Context) error
+
+	shutdownDelay time.Duration
+	shuttingDown  atomic.Bool
 }
+
+// SetShutdownDelay makes the server keep serving for d after SIGINT/SIGTERM
+// while GET /readyz already answers 503, before it stops accepting
+// connections. Kubernetes and other load balancers then have time to stop
+// sending traffic, so no request is refused during a rolling update. A second
+// signal skips the wait. The default is 0 (stop at once).
+//
+// Keep d below the platform's grace period (30 seconds on Kubernetes), minus
+// the 10 seconds given to in-flight requests.
+func (a *App) SetShutdownDelay(d time.Duration) {
+	if d < 0 {
+		d = 0
+	}
+	a.shutdownDelay = d
+}
+
+// ShuttingDown reports whether the server has received a stop signal. Long
+// handlers (streams, polling loops) can use it to finish early.
+func (a *App) ShuttingDown() bool { return a.shuttingDown.Load() }
 
 // OnShutdown registers a function that runs when the server stops (after
 // in-flight requests have finished), for example to flush a queue or close a
@@ -285,6 +308,22 @@ func (a *App) run(srv *http.Server, start func() error) error {
 		return nil
 
 	case sig := <-shutdown:
+		a.shuttingDown.Store(true) // /readyz answers 503 from now on
+		if a.shutdownDelay > 0 {
+			log.Printf("aemeath: %v received: not ready any more, still serving for %v so load balancers can drain (send it again to stop now)", sig, a.shutdownDelay)
+			t := time.NewTimer(a.shutdownDelay)
+			select {
+			case <-t.C:
+			case <-shutdown:
+				t.Stop()
+			case err := <-serverErrors:
+				t.Stop()
+				if err != nil && !errors.Is(err, http.ErrServerClosed) {
+					return fmt.Errorf("aemeath: server error: %w", err)
+				}
+				return nil
+			}
+		}
 		log.Printf("aemeath: shutting down gracefully (signal: %v)", sig)
 
 		// Give in-flight requests 10 seconds to finish.
