@@ -33,6 +33,13 @@ type Job interface {
 	Run(ctx context.Context) error
 }
 
+// Timeouter is implemented by a job that needs its own time limit per
+// attempt, overriding WithJobTimeout. Return 0 for no limit, or a negative
+// value to use the runner's limit.
+type Timeouter interface {
+	Timeout() time.Duration
+}
+
 // Func adapts a function to a Job.
 type Func func(ctx context.Context) error
 
@@ -72,6 +79,14 @@ func WithBackoff(fn func(attempt int) time.Duration) Option {
 	return func(r *Runner) { r.backoff = fn }
 }
 
+// WithJobTimeout limits each attempt of a job to d (default: no limit). When
+// the time is up the job's context is cancelled and the attempt counts as
+// failed, so it is retried like any other error. Go cannot stop a goroutine
+// from outside: a job must watch ctx (pass it to database and HTTP calls) for
+// the limit to free its worker. A job can set its own limit by implementing
+// Timeouter.
+func WithJobTimeout(d time.Duration) Option { return func(r *Runner) { r.jobTimeout = d } }
+
 // WithLogger sets the logger (default slog.Default()).
 func WithLogger(l *slog.Logger) Option { return func(r *Runner) { r.logger = l } }
 
@@ -96,11 +111,12 @@ type task struct{ job Job }
 
 // Runner is a queue with a pool of workers. Use New.
 type Runner struct {
-	workers   int
-	queueSize int
-	retries   int
-	backoff   func(attempt int) time.Duration
-	logger    *slog.Logger
+	workers    int
+	queueSize  int
+	retries    int
+	jobTimeout time.Duration
+	backoff    func(attempt int) time.Duration
+	logger     *slog.Logger
 
 	queue   chan *task
 	baseCtx context.Context
@@ -123,8 +139,8 @@ func New(opts ...Option) *Runner {
 	for _, o := range opts {
 		o(r)
 	}
-	if r.workers < 1 || r.queueSize < 1 || r.retries < 0 || r.backoff == nil {
-		panic("aemeath/jobs: WithWorkers and WithQueueSize need a value of at least 1, WithRetries cannot be negative, and WithBackoff cannot be nil")
+	if r.workers < 1 || r.queueSize < 1 || r.retries < 0 || r.backoff == nil || r.jobTimeout < 0 {
+		panic("aemeath/jobs: WithWorkers and WithQueueSize need a value of at least 1, WithRetries and WithJobTimeout cannot be negative, and WithBackoff cannot be nil")
 	}
 	if r.logger == nil {
 		r.logger = slog.Default()
@@ -174,6 +190,14 @@ type scheduled struct {
 func (s *scheduled) Run(ctx context.Context) error {
 	defer s.busy.Store(false)
 	return s.job.Run(ctx)
+}
+
+// Timeout forwards the periodic job's own limit, if it has one.
+func (s *scheduled) Timeout() time.Duration {
+	if t, ok := s.job.(Timeouter); ok {
+		return t.Timeout()
+	}
+	return -1 // no opinion: use the runner's limit
 }
 
 // Every enqueues j once per interval, starting one interval from now. If the
@@ -255,14 +279,38 @@ func (r *Runner) execute(t *task) {
 	}
 }
 
-// runSafely turns a panic into an error so one bad job cannot kill a worker.
+// timeoutFor returns the time limit of one attempt of j (0: none).
+func (r *Runner) timeoutFor(j Job) time.Duration {
+	if t, ok := j.(Timeouter); ok {
+		if d := t.Timeout(); d >= 0 {
+			return d
+		}
+	}
+	return r.jobTimeout
+}
+
+// runSafely turns a panic into an error so one bad job cannot kill a worker,
+// and applies the attempt's time limit.
 func (r *Runner) runSafely(j Job) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("panic: %v", p)
 		}
 	}()
-	return j.Run(r.baseCtx)
+	ctx := r.baseCtx
+	if d := r.timeoutFor(j); d > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, d)
+		defer cancel()
+		defer func() {
+			// A job that still finished counts as a success; one that gave up
+			// because of the limit gets an error that says so.
+			if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) && r.baseCtx.Err() == nil {
+				err = fmt.Errorf("timed out after %v: %w", d, err)
+			}
+		}()
+	}
+	return j.Run(ctx)
 }
 
 // Shutdown stops accepting jobs and periodic ticks, lets the running and

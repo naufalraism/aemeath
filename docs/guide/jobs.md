@@ -43,8 +43,19 @@ jobs.New(
 	jobs.WithRetries(5),
 	jobs.WithBackoff(jobs.Exponential(500*time.Millisecond)),
 	jobs.WithLogger(myLogger),
+	jobs.WithJobTimeout(2*time.Minute), // per attempt; no limit by default
 )
 ```
+
+## Time limits
+
+`WithJobTimeout(d)` cancels the job's `ctx` when an attempt takes longer than `d`. The attempt then counts as failed (`timed out after ...` in the log) and is retried like any other error. A job can set its own limit by implementing `Timeout() time.Duration`:
+
+```go
+func (j *ResizeImage) Timeout() time.Duration { return 30 * time.Second }
+```
+
+Go cannot stop a function from outside, so the limit only frees the worker when the job watches its context: pass `ctx` to database queries (`db.WithContext(ctx)`) and HTTP requests (`http.NewRequestWithContext`).
 
 ## Periodic jobs
 

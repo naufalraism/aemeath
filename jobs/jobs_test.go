@@ -347,3 +347,73 @@ func TestRunnerAsAPlugin(t *testing.T) {
 	}
 	shutdown(t, r)
 }
+
+// A job stuck on a slow call used to hold its worker until shutdown.
+func TestJobTimeoutCancelsTheAttemptAndRetries(t *testing.T) {
+	logger, logs := quietLogger()
+	r := jobs.New(jobs.WithWorkers(1), jobs.WithRetries(1), jobs.WithJobTimeout(50*time.Millisecond),
+		jobs.WithBackoff(func(int) time.Duration { return time.Millisecond }), jobs.WithLogger(logger))
+	r.Start()
+	defer func() { _ = r.Shutdown(context.Background()) }()
+
+	var attempts atomic.Int32
+	stuck := jobs.Func(func(ctx context.Context) error {
+		attempts.Add(1)
+		<-ctx.Done() // a slow call that honors its context
+		return ctx.Err()
+	})
+	quick := make(chan struct{})
+	if err := r.Enqueue(stuck); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Enqueue(jobs.Func(func(context.Context) error { close(quick); return nil })); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-quick: // the single worker was freed after the stuck job's two attempts
+	case <-time.After(3 * time.Second):
+		t.Fatal("the worker stayed blocked by the stuck job")
+	}
+	if n := attempts.Load(); n != 2 {
+		t.Fatalf("attempts = %d, want 2 (first try + 1 retry)", n)
+	}
+	waitUntil(t, "the job to be counted as failed", func() bool { return r.Stats().Failed == 1 })
+	if !strings.Contains(logs.String(), "timed out after 50ms") {
+		t.Fatalf("the log does not say the job timed out:\n%s", logs.String())
+	}
+}
+
+type ownLimit struct{ got chan time.Duration }
+
+func (j ownLimit) Timeout() time.Duration { return 30 * time.Millisecond }
+func (j ownLimit) Run(ctx context.Context) error {
+	dl, _ := ctx.Deadline()
+	j.got <- time.Until(dl)
+	return nil
+}
+
+func TestJobCanSetItsOwnTimeout(t *testing.T) {
+	r := jobs.New(jobs.WithWorkers(1), jobs.WithJobTimeout(time.Hour))
+	r.Start()
+	defer func() { _ = r.Shutdown(context.Background()) }()
+	j := ownLimit{got: make(chan time.Duration, 1)}
+	_ = r.Enqueue(j)
+	if left := <-j.got; left <= 0 || left > 30*time.Millisecond {
+		t.Fatalf("time left = %v, want at most the job's own 30ms", left)
+	}
+}
+
+func TestNoTimeoutByDefault(t *testing.T) {
+	r := jobs.New(jobs.WithWorkers(1))
+	r.Start()
+	defer func() { _ = r.Shutdown(context.Background()) }()
+	got := make(chan bool, 1)
+	_ = r.Enqueue(jobs.Func(func(ctx context.Context) error {
+		_, has := ctx.Deadline()
+		got <- has
+		return nil
+	}))
+	if <-got {
+		t.Fatal("a job got a deadline although no timeout was configured")
+	}
+}
