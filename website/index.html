@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aemeath - Next-Gen Go Web Framework</title>
+    <title>Aemeath - Write your API once in Go</title>
+    <meta name="description" content="Aemeath is a Go web framework built on net/http. Write your API once and get validation, OpenAPI documentation, a TypeScript client, Zod schemas and React Query hooks.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Aemeath - Write your API once in Go">
+    <meta property="og:description" content="Typed routes, OpenAPI docs, a TypeScript client and Zod schemas, all generated from your Go structs.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cpath d=%22M15 53 L32 13 L49 53%22 stroke=%22%23ec4899%22 stroke-width=%226.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 fill=%22none%22/%3E%3Cpath d=%22M26.5 44 L32 36 L37.5 44%22 stroke=%22%2322d3ee%22 stroke-width=%224.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 fill=%22none%22/%3E%3C/svg%3E">
     
     <!-- Tailwind CSS with Dark Mode Config -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -40,10 +45,10 @@
         .reveal.active { opacity: 1; transform: translateY(0); }
         
         /* Orbit Animation */
-        .orbit-container { position: relative; width: 400px; height: 400px; display: flex; align-items: center; justify-content: center; }
-        .orbit { position: absolute; border-radius: 50%; border: 1px dashed rgba(168, 85, 247, 0.3); animation: spin 20s linear infinite; }
-        .orbit-1 { width: 240px; height: 240px; }
-        .orbit-2 { width: 380px; height: 380px; animation-duration: 30s; }
+        .orbit-container { position: relative; width: min(400px, calc(100vw - 48px)); aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .orbit { position: absolute; border-radius: 50%; border: 1px dashed rgba(244, 114, 182, 0.3); animation: spin 20s linear infinite; }
+        .orbit-1 { width: 60%; height: 60%; }
+        .orbit-2 { width: 95%; height: 95%; animation-duration: 30s; }
         
         /* Orbit Badges */
         .orbit-badge { position: absolute; background: white; color: #1e293b; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; }
@@ -52,11 +57,113 @@
         @keyframes spin { 100% { transform: rotate(360deg); } }
         
         /* Timeline Line */
-        .timeline-line { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, transparent, #a855f7, transparent); transform: translateX(-50%); z-index: 0; }
+        .timeline-line { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, transparent, #f472b6, transparent); transform: translateX(-50%); z-index: 0; }
         @media (max-width: 768px) { .timeline-line { left: 24px; transform: none; } }
+
+        /* Hero aurora: soft drifting colour, CSS only (no JavaScript, no canvas) */
+        .aurora-blob { position: absolute; border-radius: 50%; pointer-events: none; will-change: transform; }
+        .aurora-1 { width: 620px; height: 620px; top: -180px; left: 8%; background: radial-gradient(closest-side, rgba(244, 114, 182, 0.30), transparent); animation: aurora-a 26s ease-in-out infinite alternate; }
+        .aurora-2 { width: 560px; height: 560px; top: 10%; right: 4%; background: radial-gradient(closest-side, rgba(45, 190, 180, 0.24), transparent); animation: aurora-b 32s ease-in-out infinite alternate; }
+        .aurora-3 { width: 520px; height: 520px; bottom: -160px; left: 36%; background: radial-gradient(closest-side, rgba(34, 211, 238, 0.20), transparent); animation: aurora-c 38s ease-in-out infinite alternate; }
+        .dark .aurora-1 { background: radial-gradient(closest-side, rgba(244, 114, 182, 0.38), transparent); }
+        .dark .aurora-2 { background: radial-gradient(closest-side, rgba(45, 190, 180, 0.30), transparent); }
+        .dark .aurora-3 { background: radial-gradient(closest-side, rgba(34, 211, 238, 0.22), transparent); }
+        @keyframes aurora-a { to { transform: translate(120px, 80px) scale(1.15); } }
+        @keyframes aurora-b { to { transform: translate(-140px, 60px) scale(0.9); } }
+        @keyframes aurora-c { to { transform: translate(100px, -70px) scale(1.2); } }
+        @media (prefers-reduced-motion: reduce) { .aurora-blob { animation: none; } }
     </style>
+
+<style id="aem-ported">
+.aem{--bg:#fff;--text:#0f172a;--muted:#475569;--faint:#64748b;--line:rgba(15,23,42,.12);--surface:#fff;--surface2:#f1f5f9;
+ --ice:#0f766e;--amber:#be185d;--code-bg:#f8fafc;--added:rgba(15,118,110,.12);
+ --kw:#be185d;--str:#0f766e;--num:#92400e;--com:#64748b;--ty:#0e7490;--fn:#9a5a00;--shadow:0 20px 50px -30px rgba(15,118,110,.35);
+ --mono:"Fira Code",ui-monospace,monospace}
+.dark .aem{--bg:#070d17;--text:#e2e8f0;--muted:#94a3b8;--faint:#7b8da0;--line:rgba(255,255,255,.11);--surface:rgba(255,255,255,.035);--surface2:rgba(255,255,255,.06);
+ --ice:#5fd8cd;--amber:#f472b6;--code-bg:#0d1117;--added:rgba(95,216,205,.16);
+ --kw:#f9a8d4;--str:#5eead4;--num:#fcd34d;--com:#7b8da0;--ty:#7dd3fc;--fn:#fde68a;--shadow:0 30px 80px -40px rgba(45,190,180,.35)}
+.aem .eyebrow{font-weight:700;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.aem .eyebrow::before{content:"";width:26px;height:1px;background:linear-gradient(90deg,transparent,var(--amber))}
+.aem h2{font-size:clamp(30px,4vw,44px);line-height:1.1;letter-spacing:-.03em;font-weight:800;margin-bottom:16px;color:var(--text)}
+.aem .sub{color:var(--muted);font-size:17px;max-width:620px}
+.aem .sec-head{margin-bottom:52px}
+.aem code{font-family:var(--mono);font-size:.85em}
+.aem .demo{border:1px solid var(--line);border-radius:20px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden;color:var(--text)}
+.aem .demo-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--faint)}
+.aem .demo-bar .t{font-family:var(--mono)} .aem .demo-bar .hint{font-size:12px}
+.aem .fields{display:flex;gap:8px;flex-wrap:wrap;padding:14px 16px 0;align-items:center}
+.aem .fields .lab{font-size:12px;color:var(--faint);margin-right:2px}
+.aem .chip{font-weight:600;font-size:12.5px;padding:6px 12px;border-radius:999px;border:1px dashed var(--line);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s}
+.aem .chip:hover{color:var(--text);border-color:var(--ice)}
+.aem .chip[aria-pressed="true"]{border-style:solid;border-color:color-mix(in srgb,var(--ice) 70%,transparent);background:color-mix(in srgb,var(--ice) 16%,transparent);color:var(--text)}
+.aem .chip::before{content:"+ "} .aem .chip[aria-pressed="true"]::before{content:"− "}
+.aem .goblock{padding-bottom:4px}
+.aem .constel{display:grid;grid-template-columns:104px minmax(0,1fr) 148px;align-items:center;padding:6px 16px 12px;height:150px}
+.aem .star-src{display:flex;flex-direction:column;align-items:center;gap:6px;font:600 11.5px var(--mono);color:var(--muted)}
+.aem .star-src svg{width:34px;height:34px;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--amber) 70%,transparent))}
+.aem .lines{width:100%;height:124px;display:block;overflow:visible}
+.aem .lines path{fill:none;stroke:var(--line);stroke-width:1.4;vector-effect:non-scaling-stroke;transition:stroke .3s}
+.aem .lines path.on{stroke:var(--ice)}
+.aem .lines path.flow{stroke:var(--amber);stroke-dasharray:5 7;animation:aemflow .9s linear 1}
+@keyframes aemflow{from{stroke-dashoffset:48}to{stroke-dashoffset:0}}
+.aem .tabs{display:flex;flex-direction:column;gap:8px}
+.aem .tab{display:flex;align-items:center;gap:9px;height:36px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer;text-align:left;transition:all .2s}
+.aem .tab::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--faint);transition:all .2s;flex:none}
+.aem .tab:hover{color:var(--text);border-color:color-mix(in srgb,var(--ice) 50%,var(--line))}
+.aem .tab[aria-selected="true"]{color:var(--text);border-color:color-mix(in srgb,var(--ice) 70%,transparent);background:color-mix(in srgb,var(--ice) 13%,transparent)}
+.aem .tab[aria-selected="true"]::before{background:var(--ice);box-shadow:0 0 0 4px color-mix(in srgb,var(--ice) 25%,transparent),0 0 12px var(--ice)}
+.aem .out{border-top:1px solid var(--line);background:var(--code-bg)}
+.aem .out-bar{display:flex;justify-content:space-between;align-items:center;padding:9px 16px;font-size:12px;color:var(--faint);border-bottom:1px solid var(--line)}
+.aem .copy{font-weight:600;font-size:11.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);padding:4px 10px;border-radius:7px;cursor:pointer;transition:all .2s}
+.aem .copy:hover{color:var(--text);border-color:var(--ice)}
+.aem pre.code{margin:0;padding:14px 18px;font-family:var(--mono);font-size:12.6px;line-height:1.75;overflow:auto;color:var(--text);tab-size:2;white-space:pre}
+.aem .out pre.code{height:250px}
+.aem .ln{display:block;padding:0 6px;margin:0 -6px;border-radius:4px}
+.aem .ln.added{background:var(--added);animation:aemfade 2.4s ease-out forwards}
+@keyframes aemfade{0%{background:var(--added)}70%{background:var(--added)}100%{background:transparent}}
+.aem .k{color:var(--kw)}.aem .s{color:var(--str)}.aem .n{color:var(--num)}.aem .c{color:var(--com);font-style:italic}.aem .t{color:var(--ty)}.aem .f{color:var(--fn)}
+.aem .demo-foot{padding:10px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--faint)}
+@media(max-width:520px){.aem .constel{grid-template-columns:70px minmax(0,1fr) 128px;padding:6px 10px 12px}.aem .tab{padding:0 9px;font-size:12px}.aem pre.code{font-size:11.5px}}
+.aem .charts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+@media(max-width:1020px){.aem .charts{grid-template-columns:repeat(2,minmax(0,1fr))}} @media(max-width:560px){.aem .charts{grid-template-columns:1fr}}
+.aem .chart{border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:24px 22px;position:relative;transition:border-color .25s,transform .25s}
+.aem .chart:hover{border-color:color-mix(in srgb,var(--ice) 45%,var(--line));transform:translateY(-3px)}
+.aem .chart h3{font-size:17px;font-weight:700;margin-bottom:4px;letter-spacing:-.01em;color:var(--text)}
+.aem .chart .d{font-size:13px;color:var(--faint);margin-bottom:18px}
+.aem .chart ul{list-style:none;position:relative;padding-left:20px;margin:0}
+.aem .chart ul::before{content:"";position:absolute;left:4px;top:9px;bottom:9px;width:1px;background:linear-gradient(var(--line),var(--ice),var(--line))}
+.aem .chart li{position:relative;font-size:14px;color:var(--muted);padding:5px 0}
+.aem .chart li::before{content:"";position:absolute;left:-19px;top:14px;width:7px;height:7px;border-radius:50%;background:var(--bg);border:1.5px solid var(--ice);transition:all .2s}
+.aem .chart li:hover::before{background:var(--amber);border-color:var(--amber);box-shadow:0 0 10px var(--amber)}
+.aem .chart li b{color:var(--text);font-weight:600;font-family:var(--mono);font-size:12.5px;margin-right:4px}
+.aem .note{margin-top:26px;font-size:14px;color:var(--faint);max-width:760px}
+.aem .sec-grid{display:grid;grid-template-columns:minmax(0,6fr) minmax(0,5fr);gap:22px}
+@media(max-width:900px){.aem .sec-grid{grid-template-columns:1fr}}
+.aem .panel{border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:28px}
+.aem .panel h3{font-size:18px;font-weight:700;margin-bottom:16px;color:var(--text)}
+.aem .checks{list-style:none;display:grid;gap:11px;margin:0;padding:0}
+.aem .checks li{position:relative;padding-left:28px;color:var(--muted);font-size:15px}
+.aem .checks li::before{content:"";position:absolute;left:0;top:5px;width:16px;height:16px;border-radius:50%;background:color-mix(in srgb,var(--ice) 18%,transparent);border:1px solid var(--ice)}
+.aem .checks li::after{content:"";position:absolute;left:5px;top:9px;width:6px;height:3px;border-left:1.5px solid var(--ice);border-bottom:1.5px solid var(--ice);transform:rotate(-45deg)}
+.aem .status{border-color:color-mix(in srgb,var(--amber) 45%,var(--line));background:color-mix(in srgb,var(--amber) 7%,var(--surface))}
+.aem .status h3{color:var(--amber)} .aem .status p{color:var(--muted);font-size:15px;margin-bottom:14px}
+.aem .status a{color:var(--text);font-weight:600;border-bottom:1px solid var(--amber)}
+.aem .status code,.aem .checks code,.aem .sub code{font-family:var(--mono);background:var(--surface2);padding:1px 6px;border-radius:6px;color:var(--text)}
+</style>
+<style id="aem-nav">nav .aem-glass{background:rgba(255,255,255,.66);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(15,23,42,.07);border-radius:9999px}.dark nav .aem-glass{background:rgba(7,13,23,.58);border-color:rgba(255,255,255,.08)}</style>
+<style id="aem-eb">.eb{font-weight:700;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#be185d;margin-bottom:14px;display:flex;align-items:center;gap:10px}.dark .eb{color:#f472b6}.eb::before{content:"";width:26px;height:1px;background:linear-gradient(90deg,transparent,currentColor)}.eb-c{justify-content:center}.eb-c::after{content:"";width:26px;height:1px;background:linear-gradient(270deg,transparent,currentColor)}</style>
+<style id="aem-sh">h2.sh,.aem h2.sh{font-size:clamp(30px,4vw,46px);line-height:1.1;letter-spacing:-.03em;font-weight:800;margin:0 0 16px;color:#0f172a}
+.dark h2.sh,.dark .aem h2.sh{color:#fff}
+h2.sh .ac-pink{color:#f472b6}.dark h2.sh .ac-pink{color:#f472b6}
+h2.sh .ac-teal{color:#2dd4bf}.dark h2.sh .ac-teal{color:#2dd4bf}
+h2.sh .ac-gold{color:#fbbf24}.dark h2.sh .ac-gold{color:#fbbf24}
+h2.sh .ac-blue{color:#22d3ee}.dark h2.sh .ac-blue{color:#22d3ee}
+h2.sh .ac-aqua{color:#0e7490}.dark h2.sh .ac-aqua{color:#8fd3dc}
+h2.sh .ac-grad{background-image:linear-gradient(95deg,#db2777,#22d3ee);-webkit-background-clip:text;background-clip:text;color:transparent}
+.dark h2.sh .ac-grad{background-image:linear-gradient(95deg,#f472b6,#22d3ee)}</style>
 </head>
-<body class="antialiased bg-white text-slate-800 transition-colors duration-300 dark:bg-[#05050f] dark:text-slate-200 relative overflow-x-hidden">
+<body class="antialiased bg-white text-slate-800 transition-colors duration-300 dark:bg-[#070d17] dark:text-slate-200 relative overflow-x-hidden">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="aem-logo" viewBox="0 0 64 64"><path d="M15 53 L32 13 L49 53" stroke="#ec4899" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M26.5 44 L32 36 L37.5 44" stroke="#22d3ee" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol></svg>
 
     <!-- 1. Navbar (Borderless & Transparent + Hover Animations) -->
     <nav class="fixed w-full top-0 z-50 transition-colors duration-300">
@@ -64,27 +171,28 @@
             
             <!-- Left: Logo -->
             <div class="flex items-center gap-3 cursor-pointer group">
-                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold text-white shadow-lg shadow-purple-500/30 group-hover:scale-105 transition-transform duration-300">A</div>
-                <span class="text-xl font-bold tracking-tight text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-pink-400 transition-colors duration-300">Aemeath</span>
+                <svg class="w-8 h-8 shrink-0 group-hover:scale-105 transition-transform duration-300" role="img" aria-label="Aemeath logo"><use href="#aem-logo"/></svg>
+                <span class="text-xl font-bold tracking-tight text-slate-900 dark:text-white group-hover:text-pink-600 dark:group-hover:text-teal-400 transition-colors duration-300">Aemeath</span>
             </div>
 
             <!-- Center: Search Bar -->
-            <div class="hidden md:flex items-center bg-slate-100/50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/5 rounded-full px-4 py-2 w-72 cursor-text hover:bg-white dark:hover:bg-[#0d1117] hover:border-purple-400/50 dark:hover:border-purple-500/50 hover:shadow-[0_0_15px_rgba(168,85,247,0.1)] hover:scale-105 transition-all duration-300 group">
-                <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 mr-2 group-hover:text-purple-500 dark:group-hover:text-pink-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                <span class="text-sm text-slate-500 dark:text-slate-400 flex-1 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">Search docs...</span>
-                <kbd class="text-[10px] bg-white dark:bg-white/10 px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/5 text-slate-400 group-hover:border-purple-200 dark:group-hover:border-purple-500/30 transition-colors">Ctrl K</kbd>
-            </div>
+            <a href="https://naufalraism.github.io/aemeath/" class="aem-glass hidden md:flex items-center bg-slate-100/50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/5 rounded-full px-4 py-2 w-72 cursor-pointer hover:bg-white dark:hover:bg-[#0d1117] hover:border-pink-400/50 dark:hover:border-pink-500/50 hover:shadow-[0_0_15px_rgba(244,114,182,0.1)] hover:scale-105 transition-all duration-300 group">
+                <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 mr-2 group-hover:text-pink-500 dark:group-hover:text-teal-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                <span class="text-sm text-slate-500 dark:text-slate-400 flex-1 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">Read the docs</span>
+            </a>
 
             <!-- Right: Menu & Icons -->
-            <div class="flex items-center gap-1 md:gap-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+            <div class="aem-glass px-2 py-1 flex items-center gap-1 md:gap-2 text-sm font-medium text-slate-600 dark:text-slate-400">
                 
-                <a href="#features" class="hover:text-purple-600 dark:hover:text-pink-400 transition-colors duration-200 hidden lg:block px-3 py-2">Features</a>
-                <a href="#ecosystem" class="hover:text-purple-600 dark:hover:text-pink-400 transition-colors duration-200 hidden lg:block px-3 py-2">Ecosystem</a>
+                <a href="https://naufalraism.github.io/aemeath/" class="hover:text-pink-600 dark:hover:text-teal-400 transition-colors duration-200 hidden lg:block px-3 py-2">Docs</a>
+                <a href="#features" class="hover:text-pink-600 dark:hover:text-teal-400 transition-colors duration-200 hidden lg:block px-3 py-2">Features</a>
+                <a href="#ecosystem" class="hover:text-pink-600 dark:hover:text-teal-400 transition-colors duration-200 hidden lg:block px-3 py-2">Packages</a>
+                <a href="#security" class="hover:text-pink-600 dark:hover:text-teal-400 transition-colors duration-200 hidden lg:block px-3 py-2">Security</a>
                 
                 <div class="h-4 w-px bg-slate-300 dark:bg-white/10 mx-2 hidden md:block"></div>
 
                 <!-- Toggle Tema -->
-                <button id="theme-toggle" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500 hover:text-purple-600 dark:hover:text-pink-400 transition-all duration-300 hover:rotate-12">
+                <button id="theme-toggle" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500 hover:text-pink-600 dark:hover:text-teal-400 transition-all duration-300 hover:rotate-12">
                     <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                     <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
                 </button>
@@ -95,7 +203,7 @@
                 </a>
 
                 <!-- Get Started -->
-                <a href="#code" class="bg-slate-900 text-white dark:bg-white dark:text-black px-5 py-2.5 rounded-full hover:bg-slate-800 dark:hover:bg-slate-200 transition-all duration-300 text-xs font-bold ml-1 md:ml-2 shadow-md hover:shadow-lg hover:shadow-purple-500/30 dark:hover:shadow-purple-500/30 hover:-translate-y-0.5">Get Started</a>
+                <a href="https://naufalraism.github.io/aemeath/guide/getting-started" class="bg-slate-900 text-white dark:bg-white dark:text-black px-5 py-2.5 rounded-full hover:bg-slate-800 dark:hover:bg-slate-200 transition-all duration-300 text-xs font-bold ml-1 md:ml-2 shadow-md hover:shadow-lg hover:shadow-pink-500/30 dark:hover:shadow-pink-500/30 hover:-translate-y-0.5">Get Started</a>
             </div>
         </div>
     </nav>
@@ -103,23 +211,28 @@
     <!-- 2. Hero Section -->
     <header class="relative pt-48 pb-20 overflow-hidden min-h-screen flex flex-col justify-center transition-colors duration-300">
         <div class="absolute inset-0 bg-grid pointer-events-none -z-10"></div>
-        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-purple-500/20 dark:bg-purple-600/20 blur-[100px] rounded-full -z-10"></div>
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-pink-500/20 dark:bg-pink-600/20 blur-[100px] rounded-full -z-10"></div>
+        <div class="absolute inset-0 pointer-events-none -z-10" aria-hidden="true">
+            <div class="aurora-blob aurora-1"></div>
+            <div class="aurora-blob aurora-2"></div>
+            <div class="aurora-blob aurora-3"></div>
+        </div>
         
         <div class="max-w-4xl mx-auto px-6 text-center relative z-10 w-full mt-10">
-            <div class="reveal inline-flex items-center gap-2 bg-purple-100 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 text-purple-700 dark:text-purple-300 text-xs font-semibold px-4 py-1.5 rounded-full mb-8 backdrop-blur-md">
-                <span class="flex h-2 w-2 relative"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span></span>
-                ✨ Aemeath v0.1.0 is now live
-            </div>
+            <a href="https://github.com/naufalraism/aemeath/releases" class="reveal inline-flex items-center gap-2 bg-pink-100 dark:bg-pink-500/10 border border-pink-200 dark:border-pink-500/20 text-pink-700 dark:text-pink-300 text-xs font-semibold px-4 py-1.5 rounded-full mb-8 backdrop-blur-md">
+                <span class="flex h-2 w-2 relative"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-pink-500"></span></span>
+                Aemeath v0.3.1 · pre-1.0 · release notes
+            </a>
             <h1 class="reveal text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-[1.1] text-slate-900 dark:text-white">
-                The Modern Standard <br>
-                <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 dark:from-purple-400 dark:via-pink-500 dark:to-purple-400">for Go APIs.</span>
+                Write your API once. <br>
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-cyan-400 to-pink-500 dark:from-pink-400 dark:via-cyan-400 dark:to-pink-400">Get the docs and client.</span>
             </h1>
             <p class="reveal text-base md:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-                Type-safe routing, automated OpenAPI documentation, and seamless TypeScript client generation. All built on top of Go's blazing-fast <code class="text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-500/10 px-1.5 py-0.5 rounded-md text-sm font-mono font-semibold">net/http</code>.
+                Type-safe routing, OpenAPI documentation, and a TypeScript client with Zod schemas and React Query hooks, all generated from your Go structs. Built on top of Go's standard <code class="text-pink-600 dark:text-pink-300 bg-pink-100 dark:bg-pink-500/10 px-1.5 py-0.5 rounded-md text-sm font-mono font-semibold">net/http</code>.
             </p>
             <div class="reveal flex flex-col sm:flex-row justify-center gap-4 mb-16">
-                <a href="#code" class="bg-purple-600 hover:bg-purple-500 text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] flex items-center justify-center gap-2 text-sm">Get Started</a>
-                <div class="group relative flex items-center bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 cursor-pointer hover:border-purple-300 dark:hover:border-white/20 transition-all" onclick="navigator.clipboard.writeText('go get github.com/naufalraism/aemeath')">
+                <a href="https://naufalraism.github.io/aemeath/guide/getting-started" class="bg-pink-600 hover:bg-pink-500 text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-[0_0_20px_rgba(244,114,182,0.3)] flex items-center justify-center gap-2 text-sm">Get Started</a>
+                <div class="group relative flex items-center bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 cursor-pointer hover:border-pink-300 dark:hover:border-white/20 transition-all" data-copy="go get github.com/naufalraism/aemeath">
                     <span class="text-slate-400 dark:text-slate-500 font-mono text-sm mr-3">$</span>
                     <span class="text-slate-700 dark:text-slate-300 font-mono text-sm">go get github.com/naufalraism/aemeath</span>
                 </div>
@@ -127,136 +240,257 @@
         </div>
     </header>
 
+
     <!-- 3. Design for Go (Code Showcase) -->
-    <section id="code" class="py-24 relative bg-slate-50 dark:bg-transparent transition-colors duration-300">
+    <section id="code" class="py-24 relative transition-colors duration-300 bg-slate-50 dark:bg-transparent">
         <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
             <div class="reveal">
-                <h2 class="text-sm font-bold tracking-wider text-slate-500 uppercase mb-2">The Philosophy</h2>
-                <h3 class="text-5xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">Engineered <br><span class="text-pink-500">for Go.</span></h3>
-                <p class="text-slate-600 dark:text-slate-400 text-lg mb-6">Aemeath was built to prove that Go doesn't have to be verbose. We bring the ergonomics of modern frameworks to the raw speed of Go.</p>
+                <div class="eb">Why Aemeath</div>
+                <h2 class="sh">Engineered <br><span class="ac ac-blue">for Go.</span></h2>
+                <p class="text-slate-600 dark:text-slate-400 text-lg mb-6">Aemeath was built to prove that Go doesn't have to be verbose. We bring the ergonomics of modern frameworks to plain, standard-library Go.</p>
                 <p class="text-slate-600 dark:text-slate-400 text-lg mb-6">No hidden magic. Plain Go types and a thin layer over net/http that your IDE naturally understands.</p>
-                <p class="text-slate-600 dark:text-slate-400 text-lg font-medium">A framework that feels <span class="text-pink-500 font-bold">just like Go, but better</span>.</p>
+                <p class="text-slate-600 dark:text-slate-400 text-lg font-medium">Your handlers stay plain Go, <span class="text-teal-500 font-bold">the rest is generated</span>.</p>
                 
                 <div class="grid grid-cols-2 gap-6 mt-10">
                     <div>
                         <div class="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
-                            <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                            <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                             Type-Safe
                         </div>
                         <p class="text-sm text-slate-500">Zero manual parsing.</p>
                     </div>
                     <div>
                         <div class="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
-                            <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <svg class="w-5 h-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                             Auto TS Client
                         </div>
                         <p class="text-sm text-slate-500">Frontend types included.</p>
                     </div>
                     <div>
                         <div class="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
-                            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                            Zero Boilerplate
+                            <svg class="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                            Same rules everywhere
                         </div>
-                        <p class="text-sm text-slate-500">Write less, ship more.</p>
+                        <p class="text-sm text-slate-500">One set of validation tags drives the server, OpenAPI, TypeScript and Zod.</p>
                     </div>
                     <div>
                         <div class="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
                             <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
-                            Blazing Fast
+                            Standard Library
                         </div>
-                        <p class="text-sm text-slate-500">Built on net/http.</p>
+                        <p class="text-sm text-slate-500">The core has no third-party dependencies.</p>
                     </div>
                 </div>
+
             </div>
             
-            <!-- Valid Go code, Elysia-style (soft glow) -->
-            <div class="reveal bg-gradient-to-br from-[#fffbfd] via-[#f4ecff] to-[#eaddff] dark:from-[#301454] dark:via-[#1a0a30] dark:to-[#0d1117] rounded-2xl border border-pink-100 dark:border-purple-500/30 overflow-hidden shadow-[0_0_30px_rgba(168,85,247,0.15)] dark:shadow-[0_0_40px_rgba(168,85,247,0.25)] hover:shadow-[0_0_40px_rgba(168,85,247,0.25)] dark:hover:shadow-[0_0_50px_rgba(168,85,247,0.4)] transition-all duration-500 relative group">
+            <!-- Code sample -->
+            <div class="reveal bg-gradient-to-br from-[#fffbfd] via-[#fff0f6] to-[#ffdcec] dark:from-[#4a1530] dark:via-[#2a0a1c] dark:to-[#0d1117] rounded-2xl border border-teal-100 dark:border-pink-500/30 overflow-hidden shadow-[0_0_30px_rgba(244,114,182,0.15)] dark:shadow-[0_0_40px_rgba(244,114,182,0.25)] hover:shadow-[0_0_40px_rgba(244,114,182,0.25)] dark:hover:shadow-[0_0_50px_rgba(244,114,182,0.4)] transition-all duration-500 relative group">
                 
                 <!-- Glass header (Mac dots) -->
-                <div class="flex items-center justify-between px-4 py-3 bg-white/40 dark:bg-white/[0.02] border-b border-pink-100/50 dark:border-purple-500/20 backdrop-blur-md">
+                <div class="flex items-center justify-between px-4 py-3 bg-white/40 dark:bg-white/[0.02] border-b border-teal-100/50 dark:border-pink-500/20 backdrop-blur-md">
                     <div class="flex gap-2">
                         <div class="w-3 h-3 rounded-full bg-red-400"></div>
                         <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
                         <div class="w-3 h-3 rounded-full bg-green-400"></div>
                     </div>
                     <div class="text-xs text-slate-500 dark:text-slate-300 font-mono font-medium">main.go</div>
-                    <button class="text-xs text-slate-500 hover:text-purple-600 dark:text-slate-400 dark:hover:text-pink-400 bg-white/50 dark:bg-white/5 hover:bg-white px-2 py-1 rounded transition-colors shadow-sm">Copy</button>
+                    <button data-copy-from="pre" class="text-xs text-slate-500 hover:text-pink-600 dark:text-slate-400 dark:hover:text-teal-400 bg-white/50 dark:bg-white/5 hover:bg-white px-2 py-1 rounded transition-colors shadow-sm">Copy</button>
                 </div>
 
                 <!-- Code body -->
                 <div class="p-6 overflow-x-auto text-sm text-slate-700 dark:text-slate-200 font-mono leading-relaxed">
-<pre><code><span class="text-purple-600 dark:text-purple-400 font-bold">package</span> main
+<pre><code><span class="text-pink-600 dark:text-pink-400 font-bold">package</span> main
 
-<span class="text-purple-600 dark:text-purple-400 font-bold">import</span> (
+<span class="text-pink-600 dark:text-pink-400 font-bold">import</span> (
     <span class="text-emerald-600 dark:text-emerald-400 font-bold">"github.com/naufalraism/aemeath"</span>
     <span class="text-emerald-600 dark:text-emerald-400 font-bold">"log"</span>
 )
 
-<span class="text-purple-600 dark:text-purple-400 font-bold">func</span> <span class="text-blue-600 dark:text-blue-400 font-bold">main</span>() {
-    app := aemeath.<span class="text-pink-600 dark:text-pink-400 font-bold">New</span>()
+<span class="text-pink-600 dark:text-pink-400 font-bold">type</span> <span class="text-cyan-800 dark:text-cyan-400 font-bold">UserIn</span> <span class="text-pink-600 dark:text-pink-400 font-bold">struct</span> {
+    Name <span class="text-cyan-800 dark:text-cyan-400 font-bold">string</span> <span class="text-teal-700 dark:text-teal-400 font-bold">`json:"name" validate:"required"`</span>
+}
+
+<span class="text-pink-600 dark:text-pink-400 font-bold">type</span> <span class="text-cyan-800 dark:text-cyan-400 font-bold">UserOut</span> <span class="text-pink-600 dark:text-pink-400 font-bold">struct</span> {
+    Message <span class="text-cyan-800 dark:text-cyan-400 font-bold">string</span> <span class="text-teal-700 dark:text-teal-400 font-bold">`json:"message"`</span>
+}
+
+<span class="text-pink-600 dark:text-pink-400 font-bold">func</span> <span class="text-cyan-800 dark:text-cyan-400 font-bold">main</span>() {
+    app := aemeath.<span class="text-teal-700 dark:text-teal-400 font-bold">New</span>()
 
     <span class="text-slate-400 dark:text-slate-500">// 1. Basic Route</span>
-    aemeath.<span class="text-pink-600 dark:text-pink-400 font-bold">GET</span>(app, <span class="text-emerald-600 dark:text-emerald-400 font-bold">"/"</span>, <span class="text-purple-600 dark:text-purple-400 font-bold">func</span>(c *aemeath.Ctx, _ struct{}) (<span class="text-blue-600 dark:text-blue-400 font-bold">string</span>, <span class="text-blue-600 dark:text-blue-400 font-bold">error</span>) {
-        <span class="text-purple-600 dark:text-purple-400 font-bold">return</span> <span class="text-emerald-600 dark:text-emerald-400 font-bold">"Hello Aemeath"</span>, <span class="text-orange-500 dark:text-orange-400 font-bold">nil</span>
+    aemeath.<span class="text-teal-700 dark:text-teal-400 font-bold">GET</span>(app, <span class="text-emerald-600 dark:text-emerald-400 font-bold">"/"</span>, <span class="text-pink-600 dark:text-pink-400 font-bold">func</span>(c *aemeath.Ctx, _ struct{}) (<span class="text-cyan-800 dark:text-cyan-400 font-bold">string</span>, <span class="text-cyan-800 dark:text-cyan-400 font-bold">error</span>) {
+        <span class="text-pink-600 dark:text-pink-400 font-bold">return</span> <span class="text-emerald-600 dark:text-emerald-400 font-bold">"Hello Aemeath"</span>, <span class="text-orange-500 dark:text-orange-400 font-bold">nil</span>
     })
 
     <span class="text-slate-400 dark:text-slate-500">// 2. Type-Safe Route (Auto Validate JSON)</span>
-    aemeath.<span class="text-pink-600 dark:text-pink-400 font-bold">POST</span>(app, <span class="text-emerald-600 dark:text-emerald-400 font-bold">"/user"</span>, <span class="text-purple-600 dark:text-purple-400 font-bold">func</span>(c *aemeath.Ctx, in UserIn) (UserOut, <span class="text-blue-600 dark:text-blue-400 font-bold">error</span>) {
-        <span class="text-purple-600 dark:text-purple-400 font-bold">return</span> UserOut{Message: <span class="text-emerald-600 dark:text-emerald-400 font-bold">"Hi, "</span> + in.Name}, <span class="text-orange-500 dark:text-orange-400 font-bold">nil</span>
+    aemeath.<span class="text-teal-700 dark:text-teal-400 font-bold">POST</span>(app, <span class="text-emerald-600 dark:text-emerald-400 font-bold">"/user"</span>, <span class="text-pink-600 dark:text-pink-400 font-bold">func</span>(c *aemeath.Ctx, in UserIn) (UserOut, <span class="text-cyan-800 dark:text-cyan-400 font-bold">error</span>) {
+        <span class="text-pink-600 dark:text-pink-400 font-bold">return</span> UserOut{Message: <span class="text-emerald-600 dark:text-emerald-400 font-bold">"Hi, "</span> + in.Name}, <span class="text-orange-500 dark:text-orange-400 font-bold">nil</span>
     })
 
     <span class="text-slate-400 dark:text-slate-500">// 3. Auto OpenAPI & TS Client Generation</span>
-    app.<span class="text-pink-600 dark:text-pink-400 font-bold">EnableDocs</span>(aemeath.Info{Title: <span class="text-emerald-600 dark:text-emerald-400 font-bold">"Aemeath"</span>})
-    app.<span class="text-pink-600 dark:text-pink-400 font-bold">EnableClient</span>()
+    app.<span class="text-teal-700 dark:text-teal-400 font-bold">EnableDocs</span>(aemeath.Info{Title: <span class="text-emerald-600 dark:text-emerald-400 font-bold">"Aemeath"</span>})
+    app.<span class="text-teal-700 dark:text-teal-400 font-bold">EnableClient</span>()
 
-    log.<span class="text-pink-600 dark:text-pink-400 font-bold">Fatal</span>(app.<span class="text-pink-600 dark:text-pink-400 font-bold">Listen</span>(<span class="text-emerald-600 dark:text-emerald-400 font-bold">":3000"</span>))
+    log.<span class="text-teal-700 dark:text-teal-400 font-bold">Fatal</span>(app.<span class="text-teal-700 dark:text-teal-400 font-bold">Listen</span>(<span class="text-emerald-600 dark:text-emerald-400 font-bold">":3000"</span>))
 }</code></pre>
                 </div>
             </div>
         </div>
     </section>
 
+
+
+    <!-- SECTION: Try it (task.go demo, ported from the redesign) -->
+    <section id="try" class="aem py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300">
+        <div class="max-w-6xl mx-auto px-6 grid lg:grid-cols-[5fr_6fr] gap-12 items-center">
+            <div class="reveal">
+                <div class="eyebrow">Generated output</div>
+                <h2 class="sh">Change the struct.<br><span class="ac ac-pink">The outputs follow.</span></h2>
+                <p class="sub">Add or remove a field and the TypeScript client, the Zod schema and the OpenAPI document change with it. What you see here is real output from Aemeath's generators, trimmed to the part that changes.</p>
+            </div>
+      <div class="demo reveal" id="demo">
+        <div class="demo-bar"><span class="t">task.go</span><span class="hint">Real output of Aemeath's generators</span></div>
+        <div class="fields" role="group" aria-label="Add or remove fields of the Go struct">
+          <span class="lab">Try it</span>
+          <button class="chip" type="button" data-bit="1" aria-pressed="true">priority</button>
+          <button class="chip" type="button" data-bit="2" aria-pressed="false">tags</button>
+          <button class="chip" type="button" data-bit="4" aria-pressed="false">note</button>
+        </div>
+        <div class="goblock"><pre class="code" id="gocode" aria-label="Go struct"></pre></div>
+        <div class="constel">
+          <div class="star-src"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="5" fill="#f4a3c4"/><path d="M16 2v7M16 23v7M2 16h7M23 16h7" stroke="#f4a3c4" stroke-width="1.5" stroke-linecap="round"/></svg>TaskIn</div>
+          <svg class="lines" viewBox="0 0 100 124" preserveAspectRatio="none" aria-hidden="true">
+            <path id="l0" d="M0 62 C45 62, 55 18, 100 18"/>
+            <path id="l1" d="M0 62 C45 62, 55 62, 100 62"/>
+            <path id="l2" d="M0 62 C45 62, 55 106, 100 106"/>
+          </svg>
+          <div class="tabs" role="tablist" aria-label="Generated output">
+            <button class="tab" role="tab" type="button" data-tab="ts" aria-selected="true">TypeScript</button>
+            <button class="tab" role="tab" type="button" data-tab="zod" aria-selected="false">Zod</button>
+            <button class="tab" role="tab" type="button" data-tab="openapi" aria-selected="false">OpenAPI</button>
+          </div>
+        </div>
+        <div class="out">
+          <div class="out-bar"><span id="fname">client.ts</span><button class="copy" id="outcopy" type="button">Copy</button></div>
+          <pre class="code" id="outcode" tabindex="0" aria-live="polite"></pre>
+        </div>
+        <div class="demo-foot">Trimmed to the part that changes; whitespace adjusted for reading.</div>
+      </div>
+        </div>
+    </section>
+
+
+    <!-- 5. Features Grid -->
+    <section id="features" class="py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300 bg-slate-50 dark:bg-transparent">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center mb-16 reveal">
+                <div class="eb eb-c">Features</div>
+                <h2 class="sh">Built for real projects. <span class="ac ac-gold">Designed for you.</span></h2>
+                <p class="text-slate-600 dark:text-slate-400 max-w-xl mx-auto">Everything you need to build real APIs, without the cognitive overhead.</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-pink-500/5 dark:hover:bg-white/[0.05] dark:hover:border-pink-500/30 transition-all duration-300 group">
+                    <div class="w-12 h-12 rounded-xl bg-pink-100 dark:bg-pink-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">🛡️</div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">End-to-End Type Safe</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Define your request and response structs once. Binding reads the path, query, headers, cookies, JSON and forms, and every validation failure comes back at once as a 422 with per-field errors.</p>
+                </div>
+                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-teal-500/5 dark:hover:bg-white/[0.05] dark:hover:border-teal-500/30 transition-all duration-300 group" style="transition-delay: 100ms;">
+                    <div class="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">⚡</div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Client Generator</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Generate a fully-typed TypeScript client, Zod schemas and React Query hooks directly from your Go structs. No more manual API typing.</p>
+                </div>
+                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-cyan-500/5 dark:hover:bg-white/[0.05] dark:hover:border-cyan-500/30 transition-all duration-300 group" style="transition-delay: 200ms;">
+                    <div class="w-12 h-12 rounded-xl bg-cyan-100 dark:bg-cyan-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">📖</div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Auto OpenAPI</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Beautiful, interactive Scalar API documentation generated automatically from your code.</p>
+                </div>
+                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-pink-500/5 dark:hover:bg-white/[0.05] dark:hover:border-pink-500/30 transition-all duration-300 group">
+                    <div class="w-12 h-12 rounded-xl bg-pink-100 dark:bg-pink-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">🔌</div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Plugin Ecosystem</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">JWT, sessions, CSRF, OpenID Connect, PostgreSQL, MySQL, Redis, metrics and tracing. Each one is only compiled in when you import it.</p>
+                </div>
+                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-teal-500/5 dark:hover:bg-white/[0.05] dark:hover:border-teal-500/30 transition-all duration-300 group" style="transition-delay: 100ms;">
+                    <div class="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">📡</div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Realtime</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Server-Sent Events are in the core. WebSockets come as an optional package that accepts same-origin browser connections only.</p>
+                </div>
+                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-cyan-500/5 dark:hover:bg-white/[0.05] dark:hover:border-cyan-500/30 transition-all duration-300 group" style="transition-delay: 200ms;">
+                    <div class="w-12 h-12 rounded-xl bg-cyan-100 dark:bg-cyan-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">📂</div>
+                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Static File Serving</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Serve a public folder with no directory listings. Your global middleware still applies to it.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+        <!-- 7. Packages -->
+    <section id="ecosystem" class="aem py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300">
+        <div class="max-w-6xl mx-auto px-6">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Packages</div>
+      <h2 class="sh">Import <span class="ac ac-pink">only what you use.</span></h2>
+      <p class="sub">Each plugin is its own package. Its dependencies are compiled into your binary only if you import it.</p>
+    </div>
+    <div class="charts">
+      <div class="chart reveal"><h3>Core</h3><div class="d">No third-party dependency</div><ul>
+        <li><b>routing</b>typed binding and route groups</li><li><b>dependencies</b>typed, with <code>Get[T]</code></li><li><b>validation</b>required, min, oneof, email, pattern…; 422 with field errors</li><li><b>OpenAPI</b>and a <code>/docs</code> viewer</li><li><b>generators</b>TypeScript, Zod, hooks</li><li><b>forms</b>and file uploads</li><li><b>middleware</b>Logger, Recover, CORS, Gzip, RateLimiter</li><li><b>aetest</b>in-process typed test client</li></ul></div>
+      <div class="chart reveal"><h3>Identity</h3><div class="d">Sign-in and sessions</div><ul>
+        <li><b>jwt</b>secret, public key, JWKS</li><li><b>session</b>server-side, Redis optional</li><li><b>csrf</b>token and Origin checks</li><li><b>oidc</b>OpenID Connect login</li><li><b>oauth2</b>Google, GitHub, …</li></ul></div>
+      <div class="chart reveal"><h3>Data</h3><div class="d">Storage and mail</div><ul>
+        <li><b>db</b>GORM, SQLite built in</li><li><b>postgres</b>and <b>mysql</b> drivers</li><li><b>cache</b>Redis</li><li><b>mailer</b>SMTP</li></ul></div>
+      <div class="chart reveal"><h3>Operations</h3><div class="d">Run it in production</div><ul>
+        <li><b>metrics</b>Prometheus text format</li><li><b>tracing</b>W3C context, OTLP/HTTP</li><li><b>jobs</b>queue, retries, schedules</li><li><b>ops</b>request IDs, slog logging, timeouts, graceful shutdown</li><li><b>health</b><code>/healthz</code>, <code>/readyz</code></li><li><b>ws</b>same-origin WebSockets</li></ul></div>
+    </div>
+    <p class="note reveal"><a href="https://naufalraism.github.io/aemeath/guide/plugins" style="border-bottom:1px solid var(--line)">Read about plugins and typed dependencies →</a></p>
+            <p class="note reveal">Guides: <a href="https://naufalraism.github.io/aemeath/guide/routing" class="underline decoration-slate-300 dark:decoration-white/20 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">Routing</a> · <a href="https://naufalraism.github.io/aemeath/guide/validation" class="underline decoration-slate-300 dark:decoration-white/20 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">Validation</a> · <a href="https://naufalraism.github.io/aemeath/guide/forms" class="underline decoration-slate-300 dark:decoration-white/20 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">Forms &amp; uploads</a> · <a href="https://naufalraism.github.io/aemeath/guide/auth" class="underline decoration-slate-300 dark:decoration-white/20 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">Authentication</a> · <a href="https://naufalraism.github.io/aemeath/guide/database" class="underline decoration-slate-300 dark:decoration-white/20 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">Databases</a> · <a href="https://naufalraism.github.io/aemeath/guide/jobs" class="underline decoration-slate-300 dark:decoration-white/20 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">Jobs</a> · <a href="https://naufalraism.github.io/aemeath/guide/typescript" class="underline decoration-slate-300 dark:decoration-white/20 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">TypeScript &amp; Zod</a> · <a href="https://naufalraism.github.io/aemeath/guide/testing" class="underline decoration-slate-300 dark:decoration-white/20 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">Testing</a> · <a href="https://naufalraism.github.io/aemeath/guide/observability" class="underline decoration-slate-300 dark:decoration-white/20 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">Metrics &amp; tracing</a></p>
+        </div>
+    </section>
+
+
     <!-- ========================================== -->
     <!-- SECTION: AEMEATH CLI -->
     <!-- ========================================== -->
-    <section id="cli" class="py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300">
+    <section id="cli" class="py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300 bg-slate-50 dark:bg-transparent">
         <div class="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
             
             <!-- Left: Description -->
             <div class="reveal">
-                <h2 class="text-sm font-bold tracking-wider text-slate-500 uppercase mb-2">Developer Experience</h2>
-                <h3 class="text-5xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">Scaffold at <br><span class="text-blue-500">Light Speed.</span></h3>
-                <p class="text-slate-600 dark:text-slate-400 text-lg mb-6">Stop writing boilerplate. The Aemeath CLI generates projects, scaffolds APIs, and manages hot reload so you can focus on building features.</p>
+                <div class="eb">Command line</div>
+                <h2 class="sh">From an empty folder <br><span class="ac ac-blue">to a running API.</span></h2>
+                <p class="text-slate-600 dark:text-slate-400 text-lg mb-6">Stop writing boilerplate. The Aemeath CLI creates projects from templates, scaffolds CRUD APIs, jobs and Dockerfiles, and rebuilds your server when files change, so you can focus on building features.</p>
                 
                 <ul class="space-y-4 mb-8 text-slate-600 dark:text-slate-400">
                     <li class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                        <div class="w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-500/20 flex items-center justify-center text-cyan-800 dark:text-cyan-400 shrink-0">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                         </div>
-                        <span><strong class="text-slate-900 dark:text-white">aemeath new</strong> - Initialize a new project instantly</span>
+                        <span><strong class="text-slate-900 dark:text-white">aemeath new</strong> - Start from the <strong class="text-slate-900 dark:text-white">api</strong>, <strong class="text-slate-900 dark:text-white">db</strong> or <strong class="text-slate-900 dark:text-white">fullstack</strong> template. The db templates support SQLite, PostgreSQL and MySQL. The fullstack one adds a React + TypeScript app that uses the generated client.</span>
                     </li>
                     <li class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                        <div class="w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-500/20 flex items-center justify-center text-cyan-800 dark:text-cyan-400 shrink-0">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                         </div>
-                        <span><strong class="text-slate-900 dark:text-white">aemeath generate api</strong> - Scaffold CRUD handlers</span>
+                        <span><strong class="text-slate-900 dark:text-white">aemeath generate</strong> - Scaffold handlers, jobs, models, middleware, tests and a Dockerfile.</span>
                     </li>
                     <li class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                        <div class="w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-500/20 flex items-center justify-center text-cyan-800 dark:text-cyan-400 shrink-0">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                         </div>
-                        <span><strong class="text-slate-900 dark:text-white">aemeath dev</strong> - Hot reload built-in</span>
+                        <span><strong class="text-slate-900 dark:text-white">aemeath dev</strong> - Rebuilds and restarts when files change, and can refresh your TypeScript files too.</span>
                     </li>
                 </ul>
                 
-                <a href="https://github.com/naufalraism/aemeath-cli" target="_blank" class="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+                <a href="https://github.com/naufalraism/aemeath-cli" target="_blank" class="inline-flex items-center gap-2 text-cyan-800 dark:text-cyan-400 font-bold hover:text-cyan-800 dark:hover:text-cyan-300 transition-colors">
                     View CLI on GitHub
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
                 </a>
+                <a href="https://naufalraism.github.io/aemeath/cli/overview" class="inline-flex items-center gap-2 ml-6 text-slate-600 dark:text-slate-400 font-medium hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors">CLI docs</a>
             </div>
 
             <!-- Right: Terminal mockup -->
-            <div class="reveal bg-[#0d1117] rounded-2xl border border-slate-700 dark:border-white/10 overflow-hidden shadow-2xl shadow-blue-500/10 relative group">
+            <div class="reveal bg-[#0d1117] rounded-2xl border border-slate-700 dark:border-white/10 overflow-hidden shadow-2xl shadow-cyan-500/10 relative group">
                 <!-- Terminal header -->
                 <div class="flex items-center justify-between px-4 py-3 bg-[#161b22] border-b border-white/5">
                     <div class="flex gap-2">
@@ -265,44 +499,51 @@
                         <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
                     </div>
                     <div class="text-xs text-slate-500 font-medium font-mono">bash</div>
-                    <button class="text-xs text-slate-400 hover:text-white bg-white/5 px-2 py-1 rounded transition-colors">Copy</button>
+                    <button data-copy="aemeath new my-app&#10;cd my-app&#10;aemeath generate api User&#10;aemeath dev" class="text-xs text-slate-400 hover:text-white bg-white/5 px-2 py-1 rounded transition-colors">Copy</button>
                 </div>
                 <!-- Terminal body -->
                 <div class="p-6 overflow-x-auto text-sm text-slate-300 font-mono leading-loose">
                     <div class="mb-4">
                         <span class="text-emerald-400">$</span> aemeath new my-app<br>
-                        <span class="text-slate-500">✨ Project 'my-app' created successfully!</span>
+                        <span class="text-slate-500">✨ Project "my-app" created in my-app (template: api)</span><br>
+                        <span class="text-slate-500">📦 Running go mod tidy ...</span><br>
+                        <span class="text-slate-500">👉 Next: cd my-app &amp;&amp; aemeath dev</span>
                     </div>
                     <div class="mb-4">
                         <span class="text-emerald-400">$</span> cd my-app<br>
                         <span class="text-emerald-400">$</span> aemeath generate api User<br>
-                        <span class="text-slate-500">✨ Handler for 'User' generated successfully!</span>
+                        <span class="text-slate-500">✨ handlers/user.go created</span><br>
+                        <span class="text-slate-500">✨ handlers/user_test.go created</span><br>
+                        <span class="text-slate-500">✨ main.go: registered handlers.UserHandler(app)</span>
                     </div>
                     <div>
                         <span class="text-emerald-400">$</span> aemeath dev<br>
-                        <span class="text-blue-400">⚡ Starting Aemeath Dev Server (Hot Reload)...</span><br>
-                        <span class="text-slate-500">🔄 Server running at http://localhost:3000</span>
+                        <span class="text-cyan-400">⚡ Aemeath dev server (hot reload)</span><br>
+                        <span class="text-slate-500">🔨 Building ...</span><br>
+                        <span class="text-slate-500">✅ Server running. Watching for changes (Ctrl+C to stop).</span>
                     </div>
                 </div>
             </div>
         </div>
     </section>
+
     <!-- ========================================== -->
     <!-- END OF SECTION: AEMEATH CLI -->
     <!-- ========================================== -->
 
     <!-- 4. Performance (Benchmarks) -->
-    <section id="benchmarks" class="py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300 bg-slate-50 dark:bg-transparent">
+    <section id="benchmarks" class="py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300">
         <div class="max-w-4xl mx-auto px-6">
             <div class="text-center mb-16 reveal">
-                <h2 class="text-3xl md:text-5xl font-bold mb-4 text-slate-900 dark:text-white">Fast, on top of net/http.</h2>
+                <div class="eb eb-c">Performance</div>
+                <h2 class="sh">A thin layer over <span class="ac ac-pink">net/http.</span></h2>
                 <p class="text-slate-600 dark:text-slate-400">Time per request for one JSON route (lower is better). Aemeath adds typed binding and validation on top of the standard library for a small fixed cost.</p>
             </div>
             <div class="space-y-8 bg-white dark:bg-[#0d1117] p-8 rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl reveal">
                 <div>
                     <div class="flex justify-between mb-2 text-sm text-slate-600 dark:text-slate-400">
                         <span class="font-medium">net/http (baseline)</span>
-                        <span class="font-mono">1,246 ns/op</span>
+                        <span class="font-mono">1,126 ns/op</span>
                     </div>
                     <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4">
                         <div class="bg-slate-400 dark:bg-slate-600 h-4 rounded-full" style="width: 49%"></div>
@@ -310,196 +551,105 @@
                 </div>
                 <div>
                     <div class="flex justify-between mb-2 text-sm font-medium">
-                        <span class="text-purple-500 font-bold text-lg">Aemeath</span>
-                        <span class="font-mono text-purple-500 font-bold">2,238 ns/op</span>
+                        <span class="text-pink-500 font-bold text-lg">Aemeath</span>
+                        <span class="font-mono text-pink-500 font-bold">2,120 ns/op</span>
                     </div>
                     <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4">
-                        <div class="bg-gradient-to-r from-purple-500 to-pink-500 h-4 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]" style="width: 89%"></div>
+                        <div class="bg-gradient-to-r from-pink-500 to-cyan-400 h-4 rounded-full shadow-[0_0_15px_rgba(244,114,182,0.5)]" style="width: 93%"></div>
                     </div>
                 </div>
                 <div>
                     <div class="flex justify-between mb-2 text-sm text-slate-600 dark:text-slate-400">
                         <span class="font-medium">Gin</span>
-                        <span class="font-mono">2,521 ns/op</span>
+                        <span class="font-mono">2,280 ns/op</span>
                     </div>
                     <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4">
                         <div class="bg-slate-400 dark:bg-slate-600 h-4 rounded-full" style="width: 100%"></div>
                     </div>
                 </div>
-                <p class="text-xs text-slate-500 dark:text-slate-500">Microbenchmark with httptest on an Intel i7-10750H (Go 1.27). Not a load test; results vary by machine. Reproduce with <code>cd benchmarks &amp;&amp; go test -bench . -benchmem</code>.</p>
+                <p class="text-xs text-slate-500 dark:text-slate-500">Microbenchmark with httptest, median of five runs on an Intel i7-10750H (Windows, Go 1.27). Memory per request: net/http 1,040 B, Aemeath 1,152 B, Gin 1,433 B. Not a load test; results vary by machine. Reproduce with <code>cd benchmarks &amp;&amp; go test -bench . -benchmem -count 5 -benchtime 2s</code>.</p>
             </div>
+            <p class="mt-8 text-center text-sm reveal"><a href="https://naufalraism.github.io/aemeath/guide/comparison" class="text-slate-600 dark:text-slate-400 underline decoration-pink-400 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">How Aemeath compares with Huma, Fuego, Gin and others, including where it is weaker →</a></p>
         </div>
     </section>
 
-    <!-- 5. Features Grid -->
-    <section id="features" class="py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300">
+
+    <!-- Security -->
+    <section id="security" class="aem py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300 bg-slate-50 dark:bg-transparent">
         <div class="max-w-6xl mx-auto px-6">
-            <div class="text-center mb-16 reveal">
-                <h2 class="text-3xl md:text-4xl font-bold mb-4 text-slate-900 dark:text-white">Built for scale. Designed for you.</h2>
-                <p class="text-slate-600 dark:text-slate-400 max-w-xl mx-auto">Everything you need to build production-ready APIs, without the cognitive overhead.</p>
-            </div>
-            <div class="grid md:grid-cols-3 gap-6">
-                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-purple-500/5 dark:hover:bg-white/[0.05] dark:hover:border-purple-500/30 transition-all duration-300 group">
-                    <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">🛡️</div>
-                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">End-to-End Type Safe</h3>
-                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Define your request and response structs once. Aemeath automatically validates and binds them.</p>
-                </div>
-                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-pink-500/5 dark:hover:bg-white/[0.05] dark:hover:border-pink-500/30 transition-all duration-300 group" style="transition-delay: 100ms;">
-                    <div class="w-12 h-12 rounded-xl bg-pink-100 dark:bg-pink-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">⚡</div>
-                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Client Generator</h3>
-                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Generate fully-typed TypeScript clients directly from your Go structs. No more manual API typing.</p>
-                </div>
-                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-blue-500/5 dark:hover:bg-white/[0.05] dark:hover:border-blue-500/30 transition-all duration-300 group" style="transition-delay: 200ms;">
-                    <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">📖</div>
-                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Auto OpenAPI</h3>
-                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Beautiful, interactive Scalar API documentation generated automatically from your code.</p>
-                </div>
-                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-purple-500/5 dark:hover:bg-white/[0.05] dark:hover:border-purple-500/30 transition-all duration-300 group">
-                    <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">🔌</div>
-                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Plugin Ecosystem</h3>
-                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">First-class support for JWT, Rate Limiting, CORS, and Database (GORM) integrations.</p>
-                </div>
-                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-pink-500/5 dark:hover:bg-white/[0.05] dark:hover:border-pink-500/30 transition-all duration-300 group" style="transition-delay: 100ms;">
-                    <div class="w-12 h-12 rounded-xl bg-pink-100 dark:bg-pink-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">📡</div>
-                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">WebSocket Ready</h3>
-                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Real-time communication out-of-the-box. Seamlessly integrated with the Context API.</p>
-                </div>
-                <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-blue-500/5 dark:hover:bg-white/[0.05] dark:hover:border-blue-500/30 transition-all duration-300 group" style="transition-delay: 200ms;">
-                    <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">📂</div>
-                    <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Static File Serving</h3>
-                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Serve SPAs, HTML, and assets easily. Perfect for full-stack apps or traditional websites.</p>
-                </div>
-            </div>
+    <div class="sec-head reveal">
+      <div class="eyebrow">Security</div>
+      <h2 class="sh">Safe defaults, <span class="ac ac-gold">honest status.</span></h2>
+      <p class="sub">Aemeath tries to make the secure choice the default one. You still own how you configure and deploy your app.</p>
+    </div>
+    <div class="sec-grid">
+      <div class="panel reveal"><h3>What the defaults do</h3>
+        <ul class="checks">
+          <li>JWT middleware rejects an empty secret, non-HMAC algorithms for secrets, and tokens without an expiry.</li>
+          <li>Sessions use random 43-character ids, never adopt an unknown id, and rotate the id at login with <code>Renew</code>.</li>
+          <li>WebSockets accept same-origin browser connections only.</li>
+          <li>CORS refuses to combine credentials with the <code>*</code> origin.</li>
+          <li>Static files never list directories; the in-memory session store is capped.</li>
+        </ul></div>
+      <div class="panel status reveal"><h3>Pre-1.0, not independently audited</h3>
+        <p>The code runs with the race detector, fuzzing and CodeQL in CI, but no outside team has reviewed it yet. There is no warranty, as the MIT licence says.</p>
+        <p>Found a problem? Please report it privately through GitHub instead of opening a public issue. <a href="https://github.com/naufalraism/aemeath/blob/main/SECURITY.md">Read the security policy</a></p></div>
+    </div>
         </div>
     </section>
 
-    <!-- 6. Timeline: Zero Duplication -->
-    <section id="philosophy" class="py-24 border-t border-slate-200 dark:border-white/5 relative transition-colors duration-300 bg-slate-50 dark:bg-transparent">
-        <div class="max-w-5xl mx-auto px-6">
-            <div class="text-center mb-20 reveal">
-                <h2 class="text-sm font-bold tracking-wider text-slate-500 uppercase mb-2">Under the Hood</h2>
-                <h3 class="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-6">Zero Duplication</h3>
-                <p class="text-slate-600 dark:text-slate-400 text-lg max-w-3xl mx-auto">Your Go Structs are the single blueprint. From validation, TypeScript clients, to OpenAPI docs, Aemeath ensures everything stays perfectly in sync.</p>
-            </div>
-            
-            <div class="relative">
-                <div class="timeline-line hidden md:block"></div>
-                
-                <div class="relative flex flex-col md:flex-row items-center justify-between mb-16 reveal">
-                    <div class="md:w-5/12 text-center md:text-right pr-0 md:pr-12 mb-6 md:mb-0">
-                        <h4 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">1. Request Validation</h4>
-                        <p class="text-slate-600 dark:text-slate-400">Aemeath validates the incoming JSON against your struct tags, ensuring only clean data reaches your handler.</p>
-                    </div>
-                    <div class="absolute left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-purple-100 dark:bg-slate-800 border-4 border-white dark:border-[#05050f] z-10 hidden md:block"></div>
-                    <div class="md:w-5/12 pl-0 md:pl-12 w-full">
-                        <div class="bg-gradient-to-br from-white via-purple-50 to-fuchsia-50 dark:from-[#1f1135] dark:via-[#160d24] dark:to-[#0d1117] rounded-xl p-5 text-xs font-mono text-slate-800 dark:text-slate-200 border border-purple-100 dark:border-purple-500/30 shadow-[0_0_25px_rgba(168,85,247,0.15)] hover:shadow-[0_0_35px_rgba(168,85,247,0.25)] transition-all duration-300">
-                            <span class="text-purple-700 dark:text-purple-400 font-bold">type</span> <span class="text-blue-600 dark:text-blue-400 font-bold">User</span> <span class="text-purple-700 dark:text-purple-400 font-bold">struct</span> { Name <span class="text-emerald-600 dark:text-emerald-400 font-bold">string</span> <span class="text-pink-600 dark:text-pink-400 font-bold">\`validate:"required"\`</span> }
-                        </div>
-                    </div>
-                </div>
-
-                <div class="relative flex flex-col md:flex-row-reverse items-center justify-between mb-16 reveal">
-                    <div class="md:w-5/12 text-center md:text-left pl-0 md:pl-12 mb-6 md:mb-0">
-                        <h4 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">2. Type Inference</h4>
-                        <p class="text-slate-600 dark:text-slate-400">The TypeScript client is automatically generated from your Go structs. No manual frontend typing required.</p>
-                    </div>
-                    <div class="absolute left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-pink-100 dark:bg-slate-800 border-4 border-white dark:border-[#05050f] z-10 hidden md:block"></div>
-                    <div class="md:w-5/12 pr-0 md:pr-12 w-full">
-                        <div class="bg-gradient-to-br from-white via-pink-50 to-rose-50 dark:from-[#2d0f21] dark:via-[#1c0b15] dark:to-[#0d1117] rounded-xl p-5 text-xs font-mono text-slate-800 dark:text-slate-200 border border-pink-100 dark:border-pink-500/30 shadow-[0_0_25px_rgba(236,72,153,0.15)] hover:shadow-[0_0_35px_rgba(236,72,153,0.25)] transition-all duration-300">
-                            <span class="text-purple-700 dark:text-purple-400 font-bold">export interface</span> <span class="text-blue-600 dark:text-blue-400 font-bold">User</span> { name: <span class="text-emerald-600 dark:text-emerald-400 font-bold">string</span>; }
-                        </div>
-                    </div>
-                </div>
-
-                <div class="relative flex flex-col md:flex-row items-center justify-between reveal">
-                    <div class="md:w-5/12 text-center md:text-right pr-0 md:pr-12 mb-6 md:mb-0">
-                        <h4 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">3. OpenAPI Docs</h4>
-                        <p class="text-slate-600 dark:text-slate-400">Scalar OpenAPI documentation is generated automatically. Always accurate and up-to-date with your code.</p>
-                    </div>
-                    <div class="absolute left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-blue-100 dark:bg-slate-800 border-4 border-white dark:border-[#05050f] z-10 hidden md:block"></div>
-                    <div class="md:w-5/12 pl-0 md:pl-12 w-full">
-                        <div class="bg-gradient-to-br from-white via-blue-50 to-cyan-50 dark:from-[#0d1b33] dark:via-[#0b1426] dark:to-[#0d1117] rounded-xl p-5 text-xs font-mono text-slate-800 dark:text-slate-200 border border-blue-100 dark:border-blue-500/30 shadow-[0_0_25px_rgba(59,130,246,0.15)] hover:shadow-[0_0_35px_rgba(59,130,246,0.25)] transition-all duration-300">
-                            app.<span class="text-pink-600 dark:text-pink-400 font-bold">EnableDocs</span>(aemeath.Info{...})
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 7. Ecosystem Section -->
-    <section id="ecosystem" class="py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300">
-        <div class="max-w-5xl mx-auto px-6">
-            <div class="text-center mb-16 reveal">
-                <h2 class="text-3xl md:text-4xl font-bold mb-4 text-slate-900 dark:text-white">Rich Ecosystem</h2>
-                <p class="text-slate-600 dark:text-slate-400 max-w-xl mx-auto">Supercharge your Aemeath app with official plugins and integrations.</p>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 reveal">
-                <div class="bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-white/10 p-5 rounded-xl text-center hover:border-purple-400 dark:hover:border-purple-500/50 hover:shadow-lg dark:hover:shadow-none transition-all cursor-pointer">
-                    <div class="text-3xl mb-3">🔐</div>
-                    <h4 class="font-bold text-slate-900 dark:text-white text-sm">JWT Auth</h4>
-                    <p class="text-xs text-slate-500 mt-1">Security</p>
-                </div>
-                <div class="bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-white/10 p-5 rounded-xl text-center hover:border-purple-400 dark:hover:border-purple-500/50 hover:shadow-lg dark:hover:shadow-none transition-all cursor-pointer">
-                    <div class="text-3xl mb-3">🗄️</div>
-                    <h4 class="font-bold text-slate-900 dark:text-white text-sm">GORM</h4>
-                    <p class="text-xs text-slate-500 mt-1">Database</p>
-                </div>
-                <div class="bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-white/10 p-5 rounded-xl text-center hover:border-purple-400 dark:hover:border-purple-500/50 hover:shadow-lg dark:hover:shadow-none transition-all cursor-pointer">
-                    <div class="text-3xl mb-3">🚦</div>
-                    <h4 class="font-bold text-slate-900 dark:text-white text-sm">Rate Limiter</h4>
-                    <p class="text-xs text-slate-500 mt-1">Traffic</p>
-                </div>
-                <div class="bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-white/10 p-5 rounded-xl text-center hover:border-purple-400 dark:hover:border-purple-500/50 hover:shadow-lg dark:hover:shadow-none transition-all cursor-pointer">
-                    <div class="text-3xl mb-3">🌐</div>
-                    <h4 class="font-bold text-slate-900 dark:text-white text-sm">CORS</h4>
-                    <p class="text-xs text-slate-500 mt-1">Middleware</p>
-                </div>
-            </div>
-        </div>
-    </section>
 
     <!-- 8. Orbit: Deploy Anywhere -->
-    <section class="py-24 border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-transparent transition-colors duration-300">
+    <section class="py-24 border-t border-slate-200 dark:border-white/5 transition-colors duration-300">
         <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-center gap-16">
             <div class="orbit-container reveal">
                 <div class="orbit orbit-1"></div>
                 <div class="orbit orbit-2"></div>
                 
-                <div class="orbit-badge" style="top: 10%; left: 20%;">Docker</div>
-                <div class="orbit-badge" style="top: 80%; left: 10%;">AWS</div>
-                <div class="orbit-badge" style="top: 10%; right: 20%;">Vercel</div>
-                <div class="orbit-badge" style="top: 80%; right: 10%;">Railway</div>
-                <div class="orbit-badge" style="top: 50%; left: -5%;">K8s</div>
-                <div class="orbit-badge" style="top: 50%; right: -5%;">Cloudflare</div>
+                <div class="orbit-badge" style="top: 10%; left: 20%;"><svg style="width:16px;height:16px;margin-right:7px;flex:none" viewBox="0 0 24 24" fill="#2496ED" aria-hidden="true"><path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z"/></svg>Docker</div>
+                <div class="orbit-badge" style="top: 80%; left: 10%;"><svg style="width:16px;height:16px;margin-right:7px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/></svg>AWS</div>
+                <div class="orbit-badge" style="top: 10%; right: 20%;"><svg style="width:16px;height:16px;margin-right:7px;flex:none" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.987 0c-2.45-.01-5.002.925-6.541 2.897-1.17 1.502-1.664 3.474-1.49 5.356.29 2.112 1.476 3.96 2.676 5.672a41.5 41.5 0 0 0 4.216 4.831c-1.063.832-1.943 2.286-1.357 3.644.821 2.32 4.665 2.05 5.122-.372.39-1.288-.694-2.533-1.428-3.309 2.388-2.431 4.706-5.036 6.17-8.145.595-1.32.902-2.802.614-4.24-.28-2.341-1.823-4.473-3.967-5.46C14.76.266 13.364.016 11.987 0m-.236 1.577v15.534C9.881 13.483 7.724 9.266 8.73 5.069c.35-1.539 1.253-3.309 3.02-3.492m1.996.04c1.534.357 3.031 1.096 3.906 2.48 1.3 1.93 1.318 4.55.1 6.521-1.268 2.395-3.06 4.463-4.916 6.415 1.472-2.974 3.074-6.106 3.182-9.5-.043-2.08-.438-4.612-2.272-5.916M11.97 20.103c.848.342 1.597 1.983.153 2.173-.664.15-1.367-.599-.995-1.222.213-.355.488-.73.842-.95"/></svg>Fly.io</div>
+                <div class="orbit-badge" style="top: 80%; right: 10%;"><svg style="width:16px;height:16px;margin-right:7px;flex:none" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M.113 10.27A13.026 13.026 0 000 11.48h18.23c-.064-.125-.15-.237-.235-.347-3.117-4.027-4.793-3.677-7.19-3.78-.8-.034-1.34-.048-4.524-.048-1.704 0-3.555.005-5.358.01-.234.63-.459 1.24-.567 1.737h9.342v1.216H.113v.002zm18.26 2.426H.009c.02.326.05.645.094.961h16.955c.754 0 1.179-.429 1.315-.96zm-17.318 4.28s2.81 6.902 10.93 7.024c4.855 0 9.027-2.883 10.92-7.024H1.056zM11.988 0C7.5 0 3.593 2.466 1.531 6.108l4.75-.005v-.002c3.71 0 3.849.016 4.573.047l.448.016c1.563.052 3.485.22 4.996 1.364.82.621 2.007 1.99 2.712 2.965.654.902.842 1.94.396 2.934-.408.914-1.289 1.458-2.353 1.458H.391s.099.42.249.886h22.748A12.026 12.026 0 0024 12.005C24 5.377 18.621 0 11.988 0z"/></svg>Railway</div>
+                <div class="orbit-badge" style="top: 50%; left: -5%;"><svg style="width:16px;height:16px;margin-right:7px;flex:none" viewBox="0 0 24 24" fill="#326CE5" aria-hidden="true"><path d="M10.204 14.35l.007.01-.999 2.413a5.171 5.171 0 0 1-2.075-2.597l2.578-.437.004.005a.44.44 0 0 1 .484.606zm-.833-2.129a.44.44 0 0 0 .173-.756l.002-.011L7.585 9.7a5.143 5.143 0 0 0-.73 3.255l2.514-.725.002-.009zm1.145-1.98a.44.44 0 0 0 .699-.337l.01-.005.15-2.62a5.144 5.144 0 0 0-3.01 1.442l2.147 1.523.004-.002zm.76 2.75l.723.349.722-.347.18-.78-.5-.623h-.804l-.5.623.179.779zm1.5-3.095a.44.44 0 0 0 .7.336l.008.003 2.134-1.513a5.188 5.188 0 0 0-2.992-1.442l.148 2.615.002.001zm10.876 5.97l-5.773 7.181a1.6 1.6 0 0 1-1.248.594l-9.261.003a1.6 1.6 0 0 1-1.247-.596l-5.776-7.18a1.583 1.583 0 0 1-.307-1.34L2.1 5.573c.108-.47.425-.864.863-1.073L11.305.513a1.606 1.606 0 0 1 1.385 0l8.345 3.985c.438.209.755.604.863 1.073l2.062 8.955c.108.47-.005.963-.308 1.34zm-3.289-2.057c-.042-.01-.103-.026-.145-.034-.174-.033-.315-.025-.479-.038-.35-.037-.638-.067-.895-.148-.105-.04-.18-.165-.216-.216l-.201-.059a6.45 6.45 0 0 0-.105-2.332 6.465 6.465 0 0 0-.936-2.163c.052-.047.15-.133.177-.159.008-.09.001-.183.094-.282.197-.185.444-.338.743-.522.142-.084.273-.137.415-.242.032-.024.076-.062.11-.089.24-.191.295-.52.123-.736-.172-.216-.506-.236-.745-.045-.034.027-.08.062-.111.088-.134.116-.217.23-.33.35-.246.25-.45.458-.673.609-.097.056-.239.037-.303.033l-.19.135a6.545 6.545 0 0 0-4.146-2.003l-.012-.223c-.065-.062-.143-.115-.163-.25-.022-.268.015-.557.057-.905.023-.163.061-.298.068-.475.001-.04-.001-.099-.001-.142 0-.306-.224-.555-.5-.555-.275 0-.499.249-.499.555l.001.014c0 .041-.002.092 0 .128.006.177.044.312.067.475.042.348.078.637.056.906a.545.545 0 0 1-.162.258l-.012.211a6.424 6.424 0 0 0-4.166 2.003 8.373 8.373 0 0 1-.18-.128c-.09.012-.18.04-.297-.029-.223-.15-.427-.358-.673-.608-.113-.12-.195-.234-.329-.349-.03-.026-.077-.062-.111-.088a.594.594 0 0 0-.348-.132.481.481 0 0 0-.398.176c-.172.216-.117.546.123.737l.007.005.104.083c.142.105.272.159.414.242.299.185.546.338.743.522.076.082.09.226.1.288l.16.143a6.462 6.462 0 0 0-1.02 4.506l-.208.06c-.055.072-.133.184-.215.217-.257.081-.546.11-.895.147-.164.014-.305.006-.48.039-.037.007-.09.02-.133.03l-.004.002-.007.002c-.295.071-.484.342-.423.608.061.267.349.429.645.365l.007-.001.01-.003.129-.029c.17-.046.294-.113.448-.172.33-.118.604-.217.87-.256.112-.009.23.069.288.101l.217-.037a6.5 6.5 0 0 0 2.88 3.596l-.09.218c.033.084.069.199.044.282-.097.252-.263.517-.452.813-.091.136-.185.242-.268.399-.02.037-.045.095-.064.134-.128.275-.034.591.213.71.248.12.556-.007.69-.282v-.002c.02-.039.046-.09.062-.127.07-.162.094-.301.144-.458.132-.332.205-.68.387-.897.05-.06.13-.082.215-.105l.113-.205a6.453 6.453 0 0 0 4.609.012l.106.192c.086.028.18.042.256.155.136.232.229.507.342.84.05.156.074.295.145.457.016.037.043.09.062.129.133.276.442.402.69.282.247-.118.341-.435.213-.71-.02-.039-.045-.096-.065-.134-.083-.156-.177-.261-.268-.398-.19-.296-.346-.541-.443-.793-.04-.13.007-.21.038-.294-.018-.022-.059-.144-.083-.202a6.499 6.499 0 0 0 2.88-3.622c.064.01.176.03.213.038.075-.05.144-.114.28-.104.266.039.54.138.87.256.154.06.277.128.448.173.036.01.088.019.13.028l.009.003.007.001c.297.064.584-.098.645-.365.06-.266-.128-.537-.423-.608zM16.4 9.701l-1.95 1.746v.005a.44.44 0 0 0 .173.757l.003.01 2.526.728a5.199 5.199 0 0 0-.108-1.674A5.208 5.208 0 0 0 16.4 9.7zm-4.013 5.325a.437.437 0 0 0-.404-.232.44.44 0 0 0-.372.233h-.002l-1.268 2.292a5.164 5.164 0 0 0 3.326.003l-1.27-2.296h-.01zm1.888-1.293a.44.44 0 0 0-.27.036.44.44 0 0 0-.214.572l-.003.004 1.01 2.438a5.15 5.15 0 0 0 2.081-2.615l-2.6-.44-.004.005z"/></svg>K8s</div>
+                <div class="orbit-badge" style="top: 50%; right: -5%;"><svg style="width:16px;height:16px;margin-right:7px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3m16.5 0h.008v.008h-.008v-.008zm-3 0h.008v.008h-.008v-.008z"/></svg>VPS</div>
                 
-                <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-4xl shadow-2xl shadow-purple-500/50 z-10 border-4 border-white dark:border-[#05050f]">A</div>
+                <div class="w-24 h-24 rounded-2xl z-10 flex items-center justify-center bg-white dark:bg-[#0d1522] border border-slate-200 dark:border-white/10 shadow-2xl shadow-pink-500/30"><svg class="w-14 h-14" role="img" aria-label="Aemeath logo"><use href="#aem-logo"/></svg></div>
             </div>
             <div class="max-w-md reveal">
-                <h2 class="text-4xl md:text-5xl font-bold mb-6 text-slate-900 dark:text-white leading-tight">Compile Once. <br><span class="text-purple-500">Run Anywhere.</span></h2>
+                <div class="eb">Deploy</div>
+                <h2 class="sh">Compile Once. <br><span class="ac ac-pink">Run Anywhere.</span></h2>
                 <p class="text-slate-600 dark:text-slate-400 text-lg mb-4">Aemeath compiles into a single static binary. No Node.js, no Python, no vendor lock-in.</p>
-                <p class="text-slate-600 dark:text-slate-400 text-lg">Deploy your Aemeath app anywhere: Docker, AWS, Vercel, Railway, or even a Raspberry Pi.</p>
+                <p class="text-slate-600 dark:text-slate-400 text-lg">Deploy your Aemeath app anywhere: Docker, AWS, Railway, Fly.io, or even a Raspberry Pi.</p>
             </div>
         </div>
     </section>
 
+
     <!-- 9. Final CTA -->
     <section class="py-24 border-t border-slate-200 dark:border-white/5 relative overflow-hidden transition-colors duration-300 bg-slate-50 dark:bg-transparent">
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-purple-500/20 blur-[120px] rounded-full -z-10"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-pink-500/20 blur-[120px] rounded-full -z-10"></div>
         <div class="max-w-3xl mx-auto px-6 text-center reveal">
-            <h2 class="text-4xl md:text-5xl font-bold mb-6 text-slate-900 dark:text-white">Ready to build the future?</h2>
-            <p class="text-lg text-slate-600 dark:text-slate-400 mb-10">Join the next generation of Go developers. No boilerplate, just pure productivity.</p>
+            <h2 class="sh">Start with <span class="ac ac-grad">one struct.</span></h2>
+            <p class="text-lg text-slate-600 dark:text-slate-400 mb-10">The getting-started guide takes a few minutes, and the <a href="https://naufalraism.github.io/aemeath/guide/tutorial" class="underline decoration-pink-400 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300">tutorial</a> builds a small notes app end to end.</p>
             <div class="flex flex-col sm:flex-row justify-center gap-4">
-                <a href="#code" class="bg-purple-600 hover:bg-purple-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)]">Get Started Now</a>
+                <a href="https://naufalraism.github.io/aemeath/guide/getting-started" class="bg-pink-600 hover:bg-pink-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(244,114,182,0.4)]">Get started</a>
                 <a href="https://github.com/naufalraism/aemeath" class="bg-white dark:bg-white/10 text-slate-900 dark:text-white font-semibold px-8 py-3.5 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/20 transition-all">Star on GitHub</a>
             </div>
         </div>
     </section>
 
     <!-- 10. Footer -->
-    <footer class="py-8 text-center relative overflow-hidden transition-colors duration-300 mt-12 bg-white dark:bg-[#05050f]">
+    <footer class="py-10 text-center relative overflow-hidden transition-colors duration-300 mt-12 bg-white dark:bg-[#070d17]">
+        <nav class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm mb-5 text-slate-600 dark:text-slate-400" aria-label="Footer">
+            <a class="hover:text-pink-600 dark:hover:text-pink-300 transition-colors" href="https://naufalraism.github.io/aemeath/">Docs</a>
+            <a class="hover:text-pink-600 dark:hover:text-pink-300 transition-colors" href="https://naufalraism.github.io/aemeath/guide/comparison">Compare</a>
+            <a class="hover:text-pink-600 dark:hover:text-pink-300 transition-colors" href="https://github.com/naufalraism/aemeath/blob/main/CHANGELOG.md">Changelog</a>
+            <a class="hover:text-pink-600 dark:hover:text-pink-300 transition-colors" href="https://github.com/naufalraism/aemeath/blob/main/SECURITY.md">Security</a>
+            <a class="hover:text-pink-600 dark:hover:text-pink-300 transition-colors" href="https://github.com/naufalraism/aemeath">GitHub</a>
+        </nav>
         <p class="text-slate-500 dark:text-slate-400 mb-2">Built with 💖 for Aemeath</p>
-        <p class="text-sm text-slate-400 dark:text-slate-600">© 2026 Naufal Raism. Licensed under MIT.</p>
+        <p class="text-sm text-slate-400 dark:text-slate-500">© 2026 Naufal Raism. Licensed under MIT.</p>
+        <p class="text-sm text-slate-400 dark:text-slate-500 mt-2">Inspired by the developer experience of <a class="underline underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300" href="https://elysiajs.com/">ElysiaJS</a>.</p>
     </footer>
 
     <!-- Scripts -->
@@ -542,5 +692,111 @@
             }
         });
     </script>
+    <script>
+        // Copy buttons: copy the text, then say so for a moment.
+        document.addEventListener('click', function (e) {
+            const el = e.target.closest('[data-copy], [data-copy-from]');
+            if (!el) return;
+            let text = el.getAttribute('data-copy');
+            if (text === null) {
+                const src = el.closest('.reveal').querySelector(el.getAttribute('data-copy-from'));
+                text = src ? src.innerText : '';
+            }
+            const label = el.tagName === 'BUTTON' ? el : el.lastElementChild;
+            const done = function () {
+                const old = label.textContent;
+                label.textContent = 'Copied!';
+                setTimeout(function () { label.textContent = old; }, 1400);
+            };
+            if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+        });
+    </script>
+<script>
+(function(){
+  var DATA={"0": {"ts": "export interface TaskOut {\n  id: string;\n}\n\nexport function createClient(opts: ClientOptions) {\n  return {\n    postTasks: (input: {\n      body: {\n        /** @maxLength 100 */\n        title: string;\n        done?: boolean;\n      };\n    }) =>\n      request<TaskOut>(opts, \"POST\", \"/tasks\", input),\n  };\n}", "zod": "import { z } from \"zod\";\n\nexport const postTasksBodySchema = z.object({\n  title: z.string().max(100),\n  done: z.boolean().optional(),\n});", "openapi": "{\n  \"paths\": {\n    \"/tasks\": {\n      \"post\": {\n        \"requestBody\": {\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"properties\": {\n                  \"done\": {\n                    \"type\": \"boolean\"\n                  },\n                  \"title\": {\n                    \"maxLength\": 100,\n                    \"type\": \"string\"\n                  }\n                },\n                \"required\": [\n                  \"title\"\n                ],\n                \"type\": \"object\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}"}, "1": {"ts": "export interface TaskOut {\n  id: string;\n}\n\nexport function createClient(opts: ClientOptions) {\n  return {\n    postTasks: (input: {\n      body: {\n        /** @maxLength 100 */\n        title: string;\n        done?: boolean;\n        /** @minimum 1 @maximum 5 */\n        priority?: number;\n      };\n    }) =>\n      request<TaskOut>(opts, \"POST\", \"/tasks\", input),\n  };\n}", "zod": "import { z } from \"zod\";\n\nexport const postTasksBodySchema = z.object({\n  title: z.string().max(100),\n  done: z.boolean().optional(),\n  priority: z.number().int().gte(1).lte(5).optional(),\n});", "openapi": "{\n  \"paths\": {\n    \"/tasks\": {\n      \"post\": {\n        \"requestBody\": {\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"properties\": {\n                  \"done\": {\n                    \"type\": \"boolean\"\n                  },\n                  \"priority\": {\n                    \"maximum\": 5,\n                    \"minimum\": 1,\n                    \"type\": \"integer\"\n                  },\n                  \"title\": {\n                    \"maxLength\": 100,\n                    \"type\": \"string\"\n                  }\n                },\n                \"required\": [\n                  \"title\"\n                ],\n                \"type\": \"object\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}"}, "2": {"ts": "export interface TaskOut {\n  id: string;\n}\n\nexport function createClient(opts: ClientOptions) {\n  return {\n    postTasks: (input: {\n      body: {\n        /** @maxLength 100 */\n        title: string;\n        done?: boolean;\n        /** @maxItems 5 */\n        tags?: Array<string>;\n      };\n    }) =>\n      request<TaskOut>(opts, \"POST\", \"/tasks\", input),\n  };\n}", "zod": "import { z } from \"zod\";\n\nexport const postTasksBodySchema = z.object({\n  title: z.string().max(100),\n  done: z.boolean().optional(),\n  tags: z.array(z.string()).max(5).optional(),\n});", "openapi": "{\n  \"paths\": {\n    \"/tasks\": {\n      \"post\": {\n        \"requestBody\": {\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"properties\": {\n                  \"done\": {\n                    \"type\": \"boolean\"\n                  },\n                  \"tags\": {\n                    \"items\": {\n                      \"type\": \"string\"\n                    },\n                    \"maxItems\": 5,\n                    \"type\": \"array\"\n                  },\n                  \"title\": {\n                    \"maxLength\": 100,\n                    \"type\": \"string\"\n                  }\n                },\n                \"required\": [\n                  \"title\"\n                ],\n                \"type\": \"object\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}"}, "3": {"ts": "export interface TaskOut {\n  id: string;\n}\n\nexport function createClient(opts: ClientOptions) {\n  return {\n    postTasks: (input: {\n      body: {\n        /** @maxLength 100 */\n        title: string;\n        done?: boolean;\n        /** @minimum 1 @maximum 5 */\n        priority?: number;\n        /** @maxItems 5 */\n        tags?: Array<string>;\n      };\n    }) =>\n      request<TaskOut>(opts, \"POST\", \"/tasks\", input),\n  };\n}", "zod": "import { z } from \"zod\";\n\nexport const postTasksBodySchema = z.object({\n  title: z.string().max(100),\n  done: z.boolean().optional(),\n  priority: z.number().int().gte(1).lte(5).optional(),\n  tags: z.array(z.string()).max(5).optional(),\n});", "openapi": "{\n  \"paths\": {\n    \"/tasks\": {\n      \"post\": {\n        \"requestBody\": {\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"properties\": {\n                  \"done\": {\n                    \"type\": \"boolean\"\n                  },\n                  \"priority\": {\n                    \"maximum\": 5,\n                    \"minimum\": 1,\n                    \"type\": \"integer\"\n                  },\n                  \"tags\": {\n                    \"items\": {\n                      \"type\": \"string\"\n                    },\n                    \"maxItems\": 5,\n                    \"type\": \"array\"\n                  },\n                  \"title\": {\n                    \"maxLength\": 100,\n                    \"type\": \"string\"\n                  }\n                },\n                \"required\": [\n                  \"title\"\n                ],\n                \"type\": \"object\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}"}, "4": {"ts": "export interface TaskOut {\n  id: string;\n}\n\nexport function createClient(opts: ClientOptions) {\n  return {\n    postTasks: (input: {\n      body: {\n        /** @maxLength 100 */\n        title: string;\n        done?: boolean;\n        /** @maxLength 500 */\n        note?: string;\n      };\n    }) =>\n      request<TaskOut>(opts, \"POST\", \"/tasks\", input),\n  };\n}", "zod": "import { z } from \"zod\";\n\nexport const postTasksBodySchema = z.object({\n  title: z.string().max(100),\n  done: z.boolean().optional(),\n  note: z.string().max(500).optional(),\n});", "openapi": "{\n  \"paths\": {\n    \"/tasks\": {\n      \"post\": {\n        \"requestBody\": {\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"properties\": {\n                  \"done\": {\n                    \"type\": \"boolean\"\n                  },\n                  \"note\": {\n                    \"maxLength\": 500,\n                    \"type\": \"string\"\n                  },\n                  \"title\": {\n                    \"maxLength\": 100,\n                    \"type\": \"string\"\n                  }\n                },\n                \"required\": [\n                  \"title\"\n                ],\n                \"type\": \"object\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}"}, "5": {"ts": "export interface TaskOut {\n  id: string;\n}\n\nexport function createClient(opts: ClientOptions) {\n  return {\n    postTasks: (input: {\n      body: {\n        /** @maxLength 100 */\n        title: string;\n        done?: boolean;\n        /** @minimum 1 @maximum 5 */\n        priority?: number;\n        /** @maxLength 500 */\n        note?: string;\n      };\n    }) =>\n      request<TaskOut>(opts, \"POST\", \"/tasks\", input),\n  };\n}", "zod": "import { z } from \"zod\";\n\nexport const postTasksBodySchema = z.object({\n  title: z.string().max(100),\n  done: z.boolean().optional(),\n  priority: z.number().int().gte(1).lte(5).optional(),\n  note: z.string().max(500).optional(),\n});", "openapi": "{\n  \"paths\": {\n    \"/tasks\": {\n      \"post\": {\n        \"requestBody\": {\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"properties\": {\n                  \"done\": {\n                    \"type\": \"boolean\"\n                  },\n                  \"note\": {\n                    \"maxLength\": 500,\n                    \"type\": \"string\"\n                  },\n                  \"priority\": {\n                    \"maximum\": 5,\n                    \"minimum\": 1,\n                    \"type\": \"integer\"\n                  },\n                  \"title\": {\n                    \"maxLength\": 100,\n                    \"type\": \"string\"\n                  }\n                },\n                \"required\": [\n                  \"title\"\n                ],\n                \"type\": \"object\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}"}, "6": {"ts": "export interface TaskOut {\n  id: string;\n}\n\nexport function createClient(opts: ClientOptions) {\n  return {\n    postTasks: (input: {\n      body: {\n        /** @maxLength 100 */\n        title: string;\n        done?: boolean;\n        /** @maxItems 5 */\n        tags?: Array<string>;\n        /** @maxLength 500 */\n        note?: string;\n      };\n    }) =>\n      request<TaskOut>(opts, \"POST\", \"/tasks\", input),\n  };\n}", "zod": "import { z } from \"zod\";\n\nexport const postTasksBodySchema = z.object({\n  title: z.string().max(100),\n  done: z.boolean().optional(),\n  tags: z.array(z.string()).max(5).optional(),\n  note: z.string().max(500).optional(),\n});", "openapi": "{\n  \"paths\": {\n    \"/tasks\": {\n      \"post\": {\n        \"requestBody\": {\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"properties\": {\n                  \"done\": {\n                    \"type\": \"boolean\"\n                  },\n                  \"note\": {\n                    \"maxLength\": 500,\n                    \"type\": \"string\"\n                  },\n                  \"tags\": {\n                    \"items\": {\n                      \"type\": \"string\"\n                    },\n                    \"maxItems\": 5,\n                    \"type\": \"array\"\n                  },\n                  \"title\": {\n                    \"maxLength\": 100,\n                    \"type\": \"string\"\n                  }\n                },\n                \"required\": [\n                  \"title\"\n                ],\n                \"type\": \"object\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}"}, "7": {"ts": "export interface TaskOut {\n  id: string;\n}\n\nexport function createClient(opts: ClientOptions) {\n  return {\n    postTasks: (input: {\n      body: {\n        /** @maxLength 100 */\n        title: string;\n        done?: boolean;\n        /** @minimum 1 @maximum 5 */\n        priority?: number;\n        /** @maxItems 5 */\n        tags?: Array<string>;\n        /** @maxLength 500 */\n        note?: string;\n      };\n    }) =>\n      request<TaskOut>(opts, \"POST\", \"/tasks\", input),\n  };\n}", "zod": "import { z } from \"zod\";\n\nexport const postTasksBodySchema = z.object({\n  title: z.string().max(100),\n  done: z.boolean().optional(),\n  priority: z.number().int().gte(1).lte(5).optional(),\n  tags: z.array(z.string()).max(5).optional(),\n  note: z.string().max(500).optional(),\n});", "openapi": "{\n  \"paths\": {\n    \"/tasks\": {\n      \"post\": {\n        \"requestBody\": {\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"properties\": {\n                  \"done\": {\n                    \"type\": \"boolean\"\n                  },\n                  \"note\": {\n                    \"maxLength\": 500,\n                    \"type\": \"string\"\n                  },\n                  \"priority\": {\n                    \"maximum\": 5,\n                    \"minimum\": 1,\n                    \"type\": \"integer\"\n                  },\n                  \"tags\": {\n                    \"items\": {\n                      \"type\": \"string\"\n                    },\n                    \"maxItems\": 5,\n                    \"type\": \"array\"\n                  },\n                  \"title\": {\n                    \"maxLength\": 100,\n                    \"type\": \"string\"\n                  }\n                },\n                \"required\": [\n                  \"title\"\n                ],\n                \"type\": \"object\"\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}"}};
+  // copy buttons
+  function flash(btn,txt){var old=btn.textContent;btn.textContent=txt;setTimeout(function(){btn.textContent=old},1400)}
+  function copy(text,label){
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){flash(label,'Copied!')},function(){})}
+  }
+  [].forEach.call([],function(el){
+    var go=function(){copy(el.getAttribute('data-copy'),el.classList.contains('install')?el.querySelector('.c'):el)};
+    el.addEventListener('click',go);
+    el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}});
+  });
+
+  // ---- the demo ----
+  var FIELDS=[
+    {bit:1,name:'Priority',type:'int',tag:'`json:"priority" validate:"min=1,max=5"`'},
+    {bit:2,name:'Tags',type:'[]string',tag:'`json:"tags" validate:"max=5"`'},
+    {bit:4,name:'Note',type:'string',tag:'`json:"note" validate:"max=500"`'}];
+  var mask=1, tab='ts', prev={ts:'',zod:'',openapi:''}, first=true;
+  var gocode=document.getElementById('gocode'), outcode=document.getElementById('outcode'), fname=document.getElementById('fname');
+  var FILE={ts:'client.ts',zod:'schemas.ts',openapi:'openapi.json'};
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  function hlLine(l,kind){
+    var h=esc(l);
+    if(kind==='go'){
+      h=h.replace(/(`[^`]*`)/g,'<span class="s">$1</span>').replace(/\b(type|struct)\b/g,'<span class="k">$1</span>').replace(/\b(string|bool|int)\b(?![^<]*<\/span>)/g,'<span class="t">$1</span>').replace(/(\/\/.*)$/,'<span class="c">$1</span>');
+      return h;
+    }
+    h=h.replace(/(\/\*\*.*?\*\/|\/\/.*$)/g,'<span class="c">$1</span>');
+    h=h.replace(/(&quot;|")([^"\n]*?)\1(?![^<]*<\/span>)/g,function(m){return '<span class="s">'+m+'</span>'});
+    h=h.replace(/\b(export|interface|function|return|const|import|from|type)\b(?![^<]*<\/span>)/g,'<span class="k">$1</span>');
+    h=h.replace(/\b(string|number|boolean|Array|z|ZodType)\b(?![^<]*<\/span>)/g,'<span class="t">$1</span>');
+    h=h.replace(/\b(\d+)\b(?![^<]*<\/span>)/g,'<span class="n">$1</span>');
+    return h;
+  }
+  function renderGo(){
+    var rows=[['Title','string','`json:"title" validate:"required,max=100"`'],['Done','bool','`json:"done"`']];
+    FIELDS.forEach(function(f){if(mask&f.bit) rows.push([f.name,f.type,f.tag])});
+    var w1=Math.max.apply(null,rows.map(function(r){return r[0].length})), w2=Math.max.apply(null,rows.map(function(r){return r[1].length}));
+    var lines=['type TaskIn struct {'];
+    rows.forEach(function(r){lines.push('  '+(r[0]+' '.repeat(w1)).slice(0,w1)+' '+(r[1]+' '.repeat(w2)).slice(0,w2)+' '+r[2])});
+    lines.push('}','','aemeath.POST(app, "/tasks", createTask)');
+    gocode.innerHTML=lines.map(function(l){return hlLine(l,'go')}).join('\n');
+  }
+  function renderOut(animate){
+    var text=DATA[mask][tab], old=prev[tab].split('\n'), kind=tab==='openapi'?'json':'ts';
+    var html=text.split('\n').map(function(l){
+      var added=animate&&old.indexOf(l)<0&&prev[tab]!=='';
+      return '<span class="ln'+(added?' added':'')+'">'+hlLine(l,kind)+'</span>';
+    }).join('');
+    outcode.innerHTML=html; prev[tab]=text; fname.textContent=FILE[tab];
+  }
+  function lines(flow){
+    ['ts','zod','openapi'].forEach(function(t,i){
+      var p=document.getElementById('l'+i); p.classList.toggle('on',t===tab);
+      p.classList.remove('flow'); if(flow){void p.getBoundingClientRect(); p.classList.add('flow')}
+    });
+  }
+  function update(animate){
+    // keep the other tabs' previous text in sync so the highlight compares like with like
+    renderGo(); renderOut(animate); lines(animate);
+  }
+  [].forEach.call(document.querySelectorAll('.aem .chip'),function(b){
+    b.addEventListener('click',function(){
+      var bit=+b.getAttribute('data-bit'); mask^=bit; b.setAttribute('aria-pressed',(mask&bit)?'true':'false');
+      var snap={ts:DATA[mask^bit].ts,zod:DATA[mask^bit].zod,openapi:DATA[mask^bit].openapi}; prev[tab]=snap[tab];
+      update(true);
+    });
+  });
+  var tabs=[].slice.call(document.querySelectorAll('.aem .tab'));
+  function selectTab(t,focus){
+    tab=t; tabs.forEach(function(b){var on=b.getAttribute('data-tab')===t;b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;if(on&&focus)b.focus()});
+    prev[tab]=''; renderOut(false); lines(false);
+  }
+  tabs.forEach(function(b,i){
+    b.addEventListener('click',function(){selectTab(b.getAttribute('data-tab'))});
+    b.addEventListener('keydown',function(e){
+      if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault();selectTab(tabs[(i+1)%3].getAttribute('data-tab'),true)}
+      if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault();selectTab(tabs[(i+2)%3].getAttribute('data-tab'),true)}
+    });
+  });
+  tabs.forEach(function(b){b.tabIndex=b.getAttribute('aria-selected')==='true'?0:-1});
+  document.getElementById('outcopy').addEventListener('click',function(){copy(DATA[mask][tab],this)});
+  update(false);
+})();
+</script>
 </body>
 </html>
