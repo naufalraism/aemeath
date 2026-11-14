@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.1] - 2026-11-14
+
+### Fixed
+
+- **`session.MemoryStore`** no longer grows without bound: expired sessions are swept automatically and live sessions are capped at 100,000 (`WithMaxSessions` changes it). When full, new visitors get no session until older ones expire; existing sessions are unaffected.
+
 ## [0.3.0] - 2026-11-12
 
 ### Added (authentication, databases, forms, observability)
