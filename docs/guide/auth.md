@@ -72,7 +72,18 @@ aemeath.GET(app, "/api/csrf", func(c *aemeath.Ctx, _ struct{}) (map[string]strin
 
 The front end fetches the token once and sends it as `X-CSRF-Token` on every `POST`, `PUT`, `PATCH` and `DELETE`. Requests with a missing or wrong token get 403. If the request has an `Origin` header, it must be same-origin or listed in `TrustedOrigins`. Fetch a new token after login, because the session id (and token) change.
 
-Set `Cookie: "XSRF-TOKEN"` to also publish the token in a readable cookie for front-end libraries that read it automatically.
+For a plain HTML form, which cannot send headers, put the token in a hidden field named `csrf_token` (change it with `FormField`). Both `application/x-www-form-urlencoded` and `multipart/form-data` bodies work, and the route still binds the rest of the form:
+
+```html
+<form method="post" action="/notes">
+  <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+  <input name="title">
+</form>
+```
+
+The token is only created when something asks for it (`csrf.Token`), so visitors who never do, such as crawlers, get no session.
+
+Set `Cookie: "XSRF-TOKEN"` to also publish the token in a readable cookie for front-end libraries that read it automatically. That creates a session for every visitor who loads a page, so use a store that can hold them (Redis) rather than `MemoryStore`.
 
 CSRF only matters for cookie authentication. Pure Bearer-token APIs do not need it.
 

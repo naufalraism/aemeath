@@ -2,14 +2,17 @@
 // forgery. It needs the session middleware (the token lives in the session).
 //
 // Unsafe methods (anything but GET/HEAD/OPTIONS) must carry the session's token
-// in the X-CSRF-Token header, and any Origin header present must be same-origin
-// or trusted.
+// in the X-CSRF-Token header or, for HTML forms, in a "csrf_token" form field,
+// and any Origin header present must be same-origin or trusted.
 package csrf
 
 import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
+	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
 
@@ -20,6 +23,7 @@ import (
 // Config configures Middleware.
 type Config struct {
 	Header         string   // default "X-CSRF-Token"
+	FormField      string   // form field checked when the header is absent, default "csrf_token"
 	Cookie         string   // if set, also publish the token in a readable cookie (e.g. "XSRF-TOKEN")
 	TrustedOrigins []string // extra allowed origins, e.g. "https://app.example.com"
 	Insecure       bool     // allow the optional cookie over plain HTTP (development only)
@@ -56,6 +60,9 @@ func Middleware(cfg Config) aemeath.Middleware {
 	if cfg.Header == "" {
 		cfg.Header = "X-CSRF-Token"
 	}
+	if cfg.FormField == "" {
+		cfg.FormField = "csrf_token"
+	}
 	trusted := map[string]bool{}
 	for _, o := range cfg.TrustedOrigins {
 		trusted[o] = true
@@ -77,12 +84,45 @@ func Middleware(cfg Config) aemeath.Middleware {
 			// cannot carry a valid token, and creating one would store a session.
 			tok := session.From(c).String(sessionKey)
 			got := c.R.Header.Get(cfg.Header)
+			if got == "" {
+				v, err := formToken(c, cfg.FormField)
+				if err != nil {
+					return err
+				}
+				got = v
+			}
 			if tok == "" || subtle.ConstantTimeCompare([]byte(got), []byte(tok)) != 1 {
 				return aemeath.Forbidden("csrf: missing or invalid token")
 			}
 			return next(c)
 		}
 	}
+}
+
+// formToken reads the token from an HTML form body (urlencoded or multipart),
+// with the same size limits as typed routes. The parsed form is cached on the
+// request, so the route can still bind it.
+func formToken(c *aemeath.Ctx, field string) (string, error) {
+	mt, _, _ := mime.ParseMediaType(c.R.Header.Get("Content-Type"))
+	var err error
+	switch mt {
+	case "application/x-www-form-urlencoded":
+		c.R.Body = http.MaxBytesReader(c.W, c.R.Body, aemeath.DefaultMaxBodyBytes)
+		err = c.R.ParseForm()
+	case "multipart/form-data":
+		c.R.Body = http.MaxBytesReader(c.W, c.R.Body, aemeath.DefaultMaxMultipartBytes)
+		err = c.R.ParseMultipartForm(8 << 20) // same memory limit as typed routes
+	default:
+		return "", nil
+	}
+	if err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			return "", aemeath.PayloadTooLarge(fmt.Sprintf("request body exceeds the limit of %d bytes", mbe.Limit))
+		}
+		return "", aemeath.BadRequest("invalid form body")
+	}
+	return c.R.PostFormValue(field), nil
 }
 
 func sameOrigin(origin string, r *http.Request) bool {

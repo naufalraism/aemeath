@@ -1,6 +1,8 @@
 package csrf_test
 
 import (
+	"bytes"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -129,5 +131,48 @@ func TestNoSessionForVisitorsWithoutToken(t *testing.T) {
 	}
 	if w := call(app, "POST", "/act", sess, map[string]string{"X-CSRF-Token": token}); w.Code != 200 {
 		t.Fatalf("valid request: %d %s", w.Code, w.Body)
+	}
+}
+
+// HTML forms cannot send custom headers, so a form POST was always rejected.
+// The token is now also accepted from the form body, which the route can
+// still bind afterwards.
+func TestTokenFromFormField(t *testing.T) {
+	app := aemeath.New()
+	app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore(), Insecure: true}), csrf.Middleware(csrf.Config{}))
+	aemeath.GET(app, "/token", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{csrf.Token(c)}, nil })
+	type note struct {
+		Title string `form:"title" validate:"required"`
+	}
+	aemeath.POST(app, "/notes", func(c *aemeath.Ctx, in note) (tok, error) { return tok{in.Title}, nil })
+	sess, token := start(app)
+
+	post := func(contentType, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/notes", strings.NewReader(body))
+		r.Host = "app.test"
+		r.Header.Set("Content-Type", contentType)
+		r.AddCookie(&http.Cookie{Name: "aemeath_session", Value: sess})
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, r)
+		return w
+	}
+
+	if w := post("application/x-www-form-urlencoded", "title=hello&csrf_token="+token); w.Code != 200 || !strings.Contains(w.Body.String(), "hello") {
+		t.Fatalf("urlencoded with token: %d %s", w.Code, w.Body)
+	}
+	if w := post("application/x-www-form-urlencoded", "title=hello&csrf_token=wrong"); w.Code != 403 {
+		t.Fatalf("urlencoded with a wrong token: %d", w.Code)
+	}
+	if w := post("application/x-www-form-urlencoded", "title=hello"); w.Code != 403 {
+		t.Fatalf("urlencoded without token: %d", w.Code)
+	}
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	_ = mw.WriteField("title", "multi")
+	_ = mw.WriteField("csrf_token", token)
+	_ = mw.Close()
+	if w := post(mw.FormDataContentType(), buf.String()); w.Code != 200 || !strings.Contains(w.Body.String(), "multi") {
+		t.Fatalf("multipart with token: %d %s", w.Code, w.Body)
 	}
 }
