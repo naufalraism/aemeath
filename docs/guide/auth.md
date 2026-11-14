@@ -36,6 +36,9 @@ aemeath.POST(app, "/logout", func(c *aemeath.Ctx, _ struct{}) (struct{}, error) 
 })
 ```
 
+`MemoryStore` sweeps expired sessions by itself and keeps at most 100,000 live sessions (`WithMaxSessions(n)` changes it). When it is full, new visitors get no session until older ones expire; existing sessions keep working. It lives in one process and is lost on restart, so use the Redis store when you run more than one instance.
+
+
 Safety properties, each covered by a test:
 
 - An id the server did not issue is **never adopted**, so an attacker cannot plant a known id in a victim's browser (session fixation).

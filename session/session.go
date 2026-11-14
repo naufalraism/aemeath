@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
@@ -225,11 +226,29 @@ func (s *Session) Renew(ctx context.Context) error {
 // Destroy deletes the session and clears the cookie (logout).
 func (s *Session) Destroy() { s.mu.Lock(); defer s.mu.Unlock(); s.destroy = true }
 
-// MemoryStore is an in-process Store, suitable for development and tests.
+// ErrStoreFull is returned by MemoryStore.Save when the store holds MaxSessions
+// live sessions and the id is new. The middleware then sends no cookie, so the
+// visitor simply gets no session until older ones expire.
+var ErrStoreFull = errors.New("session: memory store is full")
+
+const (
+	// DefaultMaxSessions is the live-session cap of a MemoryStore.
+	DefaultMaxSessions = 100_000
+	sweepEvery         = time.Minute
+	fullSweepEvery     = time.Second
+)
+
+// MemoryStore is an in-process Store, suitable for development, tests and a
+// single small instance. Expired sessions are swept in the background of Save
+// (no goroutine) and the number of live sessions is capped, so a flood of
+// one-time visitors cannot grow memory without bound. Use a shared store such as
+// cache.NewSessionStore (Redis) when you run more than one instance.
 type MemoryStore struct {
-	mu  sync.Mutex
-	m   map[string]entry
-	now func() time.Time
+	mu        sync.Mutex
+	m         map[string]entry
+	now       func() time.Time
+	max       int
+	lastSweep time.Time
 }
 
 type entry struct {
@@ -237,11 +256,24 @@ type entry struct {
 	expires time.Time
 }
 
-// NewMemoryStore creates a MemoryStore.
-func NewMemoryStore() *MemoryStore { return &MemoryStore{m: map[string]entry{}, now: time.Now} }
+// NewMemoryStore creates a MemoryStore capped at DefaultMaxSessions live sessions.
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{m: map[string]entry{}, now: time.Now, max: DefaultMaxSessions}
+}
 
 // WithClock replaces the clock (tests).
 func (s *MemoryStore) WithClock(f func() time.Time) *MemoryStore { s.now = f; return s }
+
+// WithMaxSessions sets the cap on live sessions; n <= 0 keeps DefaultMaxSessions.
+func (s *MemoryStore) WithMaxSessions(n int) *MemoryStore {
+	if n <= 0 {
+		n = DefaultMaxSessions
+	}
+	s.mu.Lock()
+	s.max = n
+	s.mu.Unlock()
+	return s
+}
 
 // Len returns the number of live sessions.
 func (s *MemoryStore) Len() int {
@@ -264,6 +296,16 @@ func copyMap(m map[string]any) map[string]any {
 	return o
 }
 
+// sweep drops every expired entry. The caller holds s.mu.
+func (s *MemoryStore) sweep(now time.Time) {
+	for id, e := range s.m {
+		if !e.expires.After(now) {
+			delete(s.m, id)
+		}
+	}
+	s.lastSweep = now
+}
+
 func (s *MemoryStore) Load(_ context.Context, id string) (map[string]any, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -278,7 +320,17 @@ func (s *MemoryStore) Load(_ context.Context, id string) (map[string]any, bool, 
 func (s *MemoryStore) Save(_ context.Context, id string, d map[string]any, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.m[id] = entry{data: copyMap(d), expires: s.now().Add(ttl)}
+	now := s.now()
+	_, exists := s.m[id]
+	// Periodic sweep; when full, sweep again (at most once a second) to make room.
+	since := now.Sub(s.lastSweep)
+	if since >= sweepEvery || (!exists && len(s.m) >= s.max && since >= fullSweepEvery) {
+		s.sweep(now)
+	}
+	if !exists && len(s.m) >= s.max {
+		return ErrStoreFull
+	}
+	s.m[id] = entry{data: copyMap(d), expires: now.Add(ttl)}
 	return nil
 }
 
