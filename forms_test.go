@@ -32,7 +32,7 @@ type UploadOut struct {
 	Secret string   `json:"secret"`
 }
 
-func formApp(t *testing.T) *aemeath.App {
+func formApp(_ *testing.T) *aemeath.App {
 	app := aemeath.New()
 	aemeath.POST(app, "/upload", func(c *aemeath.Ctx, in UploadIn) (UploadOut, error) {
 		f, err := in.Avatar.Open() // must still be readable inside the handler
@@ -54,7 +54,7 @@ type part struct {
 	data           []byte
 }
 
-func multipartReq(t *testing.T, fields url.Values, files []part) *http.Request {
+func multipartReq(_ *testing.T, fields url.Values, files []part) *http.Request {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 	for k, vs := range fields {
