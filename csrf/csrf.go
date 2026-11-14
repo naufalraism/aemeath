@@ -47,6 +47,11 @@ func safe(m string) bool {
 }
 
 // Middleware enforces CSRF protection. Install it after session.Middleware.
+//
+// The token is created lazily: by csrf.Token (for example in a GET /api/csrf
+// handler), or on safe requests when Config.Cookie asks for a readable cookie.
+// Without Config.Cookie, a visitor who never asks for a token gets no
+// session, so crawlers and bots cannot fill the session store.
 func Middleware(cfg Config) aemeath.Middleware {
 	if cfg.Header == "" {
 		cfg.Header = "X-CSRF-Token"
@@ -57,19 +62,22 @@ func Middleware(cfg Config) aemeath.Middleware {
 	}
 	return func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
 		return func(c *aemeath.Ctx) error {
-			tok := Token(c)
-			if cfg.Cookie != "" {
-				// #nosec G124 -- deliberately not HttpOnly: front-end code must read this token to send it back in the header.
-				c.SetCookie(&http.Cookie{Name: cfg.Cookie, Value: tok, Path: "/", Secure: !cfg.Insecure, SameSite: http.SameSiteLaxMode})
-			}
 			if safe(c.R.Method) {
+				if cfg.Cookie != "" {
+					// The front end reads this cookie, so it must exist before the first unsafe request.
+					// #nosec G124 -- deliberately not HttpOnly: front-end code must read this token to send it back in the header.
+					c.SetCookie(&http.Cookie{Name: cfg.Cookie, Value: Token(c), Path: "/", Secure: !cfg.Insecure, SameSite: http.SameSiteLaxMode})
+				}
 				return next(c)
 			}
 			if o := c.R.Header.Get("Origin"); o != "" && !sameOrigin(o, c.R) && !trusted[o] {
 				return aemeath.Forbidden("csrf: cross-origin request rejected")
 			}
+			// Never create a token here: a request that arrives without one
+			// cannot carry a valid token, and creating one would store a session.
+			tok := session.From(c).String(sessionKey)
 			got := c.R.Header.Get(cfg.Header)
-			if subtle.ConstantTimeCompare([]byte(got), []byte(tok)) != 1 {
+			if tok == "" || subtle.ConstantTimeCompare([]byte(got), []byte(tok)) != 1 {
 				return aemeath.Forbidden("csrf: missing or invalid token")
 			}
 			return next(c)

@@ -98,3 +98,36 @@ func TestOptionalCookie(t *testing.T) {
 		t.Fatal("XSRF cookie missing")
 	}
 }
+
+// Visitors who never ask for a token (crawlers, bots, health checks) must not
+// get a session: they used to fill the store until real users could no longer
+// log in.
+func TestNoSessionForVisitorsWithoutToken(t *testing.T) {
+	store := session.NewMemoryStore().WithMaxSessions(3)
+	app := aemeath.New()
+	app.Use(session.Middleware(session.Config{Store: store, Insecure: true}), csrf.Middleware(csrf.Config{}))
+	aemeath.GET(app, "/", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{"home"}, nil })
+	aemeath.GET(app, "/token", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{csrf.Token(c)}, nil })
+	aemeath.POST(app, "/act", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{"done"}, nil })
+
+	for i := 0; i < 10; i++ {
+		if w := call(app, "GET", "/", "", nil); w.Header().Get("Set-Cookie") != "" {
+			t.Fatalf("anonymous GET %d set a cookie: %s", i, w.Header().Get("Set-Cookie"))
+		}
+		if w := call(app, "POST", "/act", "", nil); w.Code != 403 {
+			t.Fatalf("anonymous POST without token: %d", w.Code)
+		}
+	}
+	if n := store.Len(); n != 0 {
+		t.Fatalf("store holds %d sessions after anonymous traffic, want 0", n)
+	}
+
+	// A real visitor still gets a token, a session, and can act.
+	sess, token := start(app)
+	if sess == "" || token == "" {
+		t.Fatal("asking for the token must create the session")
+	}
+	if w := call(app, "POST", "/act", sess, map[string]string{"X-CSRF-Token": token}); w.Code != 200 {
+		t.Fatalf("valid request: %d %s", w.Code, w.Body)
+	}
+}
