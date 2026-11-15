@@ -42,6 +42,8 @@ type JWKS struct {
 	keys        map[string]jwk
 	fetched     time.Time
 	lastAttempt time.Time
+	lastErr     error         // result of the last fetch, returned while no key was ever loaded
+	inflight    chan struct{} // non-nil while a fetch runs; closed when it ends
 }
 
 type jwk struct {
@@ -95,24 +97,52 @@ func NewJWKS(rawURL string, opts ...JWKSOption) (*JWKS, error) {
 // Key returns the public key with the given id, and the algorithm the key is
 // restricted to ("" when the provider does not say). An empty kid is accepted
 // only when the provider publishes exactly one key.
+//
+// At most one fetch runs at a time and the lock is not held during it, so a
+// slow provider never makes other requests wait in line. Fetches happen at
+// most once per minRefresh, also while no key could ever be loaded (a
+// provider that is down then costs one request per minRefresh, not one per
+// incoming token).
 func (j *JWKS) Key(ctx context.Context, kid string) (crypto.PublicKey, string, error) {
 	j.mu.Lock()
-	defer j.mu.Unlock()
-
 	if j.fresh() {
 		if k, ok := j.lookup(kid); ok {
+			j.mu.Unlock()
 			return k.key, k.alg, nil
 		}
 	}
 	// Unknown key or stale cache: refresh, but not more often than minRefresh.
-	if j.keys == nil || j.now().Sub(j.lastAttempt) >= j.minRefresh {
-		j.lastAttempt = j.now()
-		if err := j.fetch(ctx); err != nil && j.keys == nil {
-			return nil, "", err
+	if wait := j.inflight; wait != nil {
+		// Another request is fetching: wait for its result instead of fetching too.
+		j.mu.Unlock()
+		select {
+		case <-wait:
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
 		}
+		j.mu.Lock()
+	} else if j.lastAttempt.IsZero() || j.now().Sub(j.lastAttempt) >= j.minRefresh {
+		j.lastAttempt = j.now()
+		done := make(chan struct{})
+		j.inflight = done
+		j.mu.Unlock()
+
+		keys, err := j.download(ctx) // network: without the lock
+
+		j.mu.Lock()
+		if err == nil {
+			j.keys, j.fetched = keys, j.now()
+		}
+		j.lastErr = err
+		j.inflight = nil
+		close(done)
 	}
+	defer j.mu.Unlock()
 	if k, ok := j.lookup(kid); ok {
 		return k.key, k.alg, nil
+	}
+	if j.keys == nil && j.lastErr != nil {
+		return nil, "", j.lastErr
 	}
 	return nil, "", ErrKeyNotFound
 }
@@ -144,28 +174,29 @@ type jwkJSON struct {
 	Y   string `json:"y"`
 }
 
-func (j *JWKS) fetch(ctx context.Context) error {
+// download fetches and parses the key set. It does not touch j.
+func (j *JWKS) download(ctx context.Context) (map[string]jwk, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, j.url, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	res, err := j.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("jwt: fetching the JWKS: %w", err)
+		return nil, fmt.Errorf("jwt: fetching the JWKS: %w", err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("jwt: the JWKS endpoint answered %d", res.StatusCode)
+		return nil, fmt.Errorf("jwt: the JWKS endpoint answered %d", res.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var set struct {
 		Keys []jwkJSON `json:"keys"`
 	}
 	if err := json.Unmarshal(body, &set); err != nil {
-		return fmt.Errorf("jwt: the JWKS is not valid JSON: %w", err)
+		return nil, fmt.Errorf("jwt: the JWKS is not valid JSON: %w", err)
 	}
 	keys := make(map[string]jwk, len(set.Keys))
 	for _, raw := range set.Keys {
@@ -179,10 +210,9 @@ func (j *JWKS) fetch(ctx context.Context) error {
 		keys[raw.Kid] = jwk{key: key, alg: raw.Alg}
 	}
 	if len(keys) == 0 {
-		return errors.New("jwt: the JWKS has no usable signing key")
+		return nil, errors.New("jwt: the JWKS has no usable signing key")
 	}
-	j.keys, j.fetched = keys, j.now()
-	return nil
+	return keys, nil
 }
 
 func b64(s string) ([]byte, error) { return base64.RawURLEncoding.DecodeString(s) }
