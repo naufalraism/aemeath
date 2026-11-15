@@ -221,3 +221,49 @@ func TestTokenChangesAtLogin(t *testing.T) {
 		t.Fatal("second request")
 	}
 }
+
+// The Origin check compared only the host, so on an https server a page
+// served over plain http on the same host (which an attacker on the network
+// can modify) passed.
+func TestOriginSchemeOnTLS(t *testing.T) {
+	app := aemeath.New()
+	app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore()}), csrf.Middleware(csrf.Config{}))
+	aemeath.GET(app, "/token", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{csrf.Token(c)}, nil })
+	aemeath.POST(app, "/act", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{"done"}, nil })
+
+	do := func(target, sess string, h map[string]string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", target, nil) // https:// target => r.TLS is set
+		if h != nil {
+			r.Method = "POST"
+		}
+		if sess != "" {
+			r.AddCookie(&http.Cookie{Name: "aemeath_session", Value: sess})
+		}
+		for k, v := range h {
+			r.Header.Set(k, v)
+		}
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, r)
+		return w
+	}
+	w := do("https://bank.example/token", "", nil)
+	var sess string
+	for _, c := range w.Result().Cookies() {
+		sess = c.Value
+	}
+	b := w.Body.String()
+	i := strings.Index(b, `"token":"`) + 9
+	token := b[i : i+43]
+
+	for origin, want := range map[string]int{
+		"https://bank.example": 200,
+		"http://bank.example":  403,
+		"ftp://bank.example":   403,
+	} {
+		if got := do("https://bank.example/act", sess, map[string]string{"X-CSRF-Token": token, "Origin": origin}).Code; got != want {
+			t.Errorf("TLS server, Origin %s: %d, want %d", origin, got, want)
+		}
+	}
+	// Plain-HTTP servers (and TLS-terminating proxies) keep comparing the host
+	// only: see TestOriginCheck.
+}

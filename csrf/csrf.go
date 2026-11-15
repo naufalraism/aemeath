@@ -125,10 +125,18 @@ func formToken(c *aemeath.Ctx, field string) (string, error) {
 	return c.R.PostFormValue(field), nil
 }
 
+// sameOrigin compares the Origin header with the request's host and, when
+// the server terminates TLS itself, its scheme: an https server must not
+// accept an http:// page on the same host (plain HTTP can be tampered with).
+// Behind a TLS-terminating proxy the scheme is not known here, so only the
+// host is compared; the token check still applies.
 func sameOrigin(origin string, r *http.Request) bool {
 	u, err := url.Parse(origin)
-	if err != nil {
+	if err != nil || u.Host != r.Host {
 		return false
 	}
-	return u.Host == r.Host
+	if r.TLS != nil && u.Scheme != "https" {
+		return false
+	}
+	return u.Scheme == "https" || u.Scheme == "http"
 }
