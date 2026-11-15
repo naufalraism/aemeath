@@ -30,7 +30,8 @@ const (
 
 // Config configures Middleware. Set exactly one of SecretKey, PublicKey, JWKSURL or JWKS.
 type Config struct {
-	// SecretKey verifies HMAC (HS256/384/512) tokens.
+	// SecretKey verifies HMAC (HS256/384/512) tokens. It must be at least 32
+	// bytes (MinSecretBytes); generate one with `openssl rand -base64 32`.
 	SecretKey string
 
 	// PublicKey verifies tokens signed with the matching private key: an
@@ -80,6 +81,10 @@ func methodsForKey(pub crypto.PublicKey) []string {
 	return nil
 }
 
+// MinSecretBytes is the shortest HMAC secret Middleware, NewVerifier and Issue
+// accept: 32 bytes, the output size of SHA-256 (RFC 7518, section 3.2).
+const MinSecretBytes = 32
+
 var asymmetricMethods = []string{"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512", "EdDSA"}
 
 // Middleware verifies Bearer tokens. It panics at startup when the key
@@ -102,6 +107,9 @@ func newParser(cfg Config) (*gojwt.Parser, gojwt.Keyfunc) {
 	)
 	switch {
 	case cfg.SecretKey != "":
+		if len(cfg.SecretKey) < MinSecretBytes {
+			panic(fmt.Sprintf("aemeath/jwt: Config.SecretKey is %d bytes; HMAC secrets must be at least %d random bytes, or anyone holding one token can brute-force it offline (generate one: openssl rand -base64 32)", len(cfg.SecretKey), MinSecretBytes))
+		}
 		key := []byte(cfg.SecretKey)
 		methods = []string{"HS256", "HS384", "HS512"}
 		keyFunc = func(*gojwt.Token) (any, error) { return key, nil }

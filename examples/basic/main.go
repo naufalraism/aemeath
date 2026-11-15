@@ -36,7 +36,7 @@ type User struct {
 }
 
 // devSecret is only used when JWT_SECRET is not set. Never deploy with it.
-const devSecret = "dev-only-secret-change-me"
+const devSecret = "dev-only-secret-change-me-0123456789"
 
 func main() {
 	// Load the .env file if present.

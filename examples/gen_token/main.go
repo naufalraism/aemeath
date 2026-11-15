@@ -14,7 +14,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const devSecret = "dev-only-secret-change-me"
+const devSecret = "dev-only-secret-change-me-0123456789"
 
 func main() {
 	secret := os.Getenv("JWT_SECRET")

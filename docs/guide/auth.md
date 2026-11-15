@@ -93,6 +93,7 @@ CSRF only matters for cookie authentication. Pure Bearer-token APIs do not need 
 import "github.com/naufalraism/aemeath/jwt"
 
 // 1. A shared secret (HS256/384/512). Fine when one server issues and verifies.
+//    At least 32 random bytes, e.g. `openssl rand -base64 32`; shorter panics at startup.
 app.Use(jwt.Middleware(jwt.Config{SecretKey: os.Getenv("JWT_SECRET")}))
 
 // 2. A public key (RS256, ES256, EdDSA...). The verifier cannot mint tokens.

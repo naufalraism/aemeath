@@ -413,7 +413,7 @@ func TestIssue(t *testing.T) {
 		t.Error("a key of the wrong type must be refused")
 	}
 
-	tok, err := jwt.Issue("HS256", []byte("s3cret"), jwt.IssueOptions{
+	tok, err := jwt.Issue("HS256", []byte("s3cret-0123456789-abcdefghijklmnop"), jwt.IssueOptions{
 		Subject: "user-7", TTL: time.Hour, KeyID: "main",
 		Claims: map[string]any{"role": "admin", "exp": 9999999999, "sub": "someone-else"},
 	})
@@ -428,7 +428,7 @@ func TestIssue(t *testing.T) {
 	if exp, _ := claims["exp"].(float64); exp > float64(time.Now().Add(2*time.Hour).Unix()) {
 		t.Errorf("a caller must not be able to override exp: %v", claims["exp"])
 	}
-	if got := status(build(jwt.Config{SecretKey: "s3cret"}), tok); got != 200 {
+	if got := status(build(jwt.Config{SecretKey: "s3cret-0123456789-abcdefghijklmnop"}), tok); got != 200 {
 		t.Errorf("a token we issued must be accepted by the middleware: %d", got)
 	}
 }

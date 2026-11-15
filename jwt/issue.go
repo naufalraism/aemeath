@@ -3,6 +3,7 @@ package jwt
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
@@ -34,6 +35,9 @@ func Issue(alg string, key any, o IssueOptions) (string, error) {
 	method := gojwt.GetSigningMethod(alg)
 	if method == nil {
 		return "", fmt.Errorf("jwt: unsupported algorithm %q", alg)
+	}
+	if secret, ok := key.([]byte); ok && strings.HasPrefix(alg, "HS") && len(secret) < MinSecretBytes {
+		return "", fmt.Errorf("jwt: the HMAC secret is %d bytes; it must be at least %d", len(secret), MinSecretBytes)
 	}
 	now := time.Now()
 	claims := gojwt.MapClaims{}
