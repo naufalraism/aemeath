@@ -1,6 +1,7 @@
 package ws_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -135,5 +136,43 @@ func TestUpgradeThroughWrappersWithoutHijack(t *testing.T) {
 				t.Fatalf("got %q, %v", msg, err)
 			}
 		})
+	}
+}
+
+// ReadMessage buffers a whole message: without a limit one client could make
+// the server hold 64 MiB (or more) in memory.
+func TestDefaultReadLimit(t *testing.T) {
+	got := make(chan error, 1)
+	app := aemeath.New()
+	app.Handle("GET", "/ws", func(c *aemeath.Ctx) error {
+		conn, err := ws.Upgrade(c)
+		if err != nil {
+			return nil
+		}
+		defer func() { _ = conn.Close() }()
+		_, _, err = conn.ReadMessage()
+		got <- err
+		return nil
+	})
+	srv := httptest.NewServer(app)
+	defer srv.Close()
+
+	for _, tc := range []struct {
+		size    int
+		wantErr bool
+	}{{1000, false}, {int(ws.DefaultReadLimit), false}, {int(ws.DefaultReadLimit) + 1, true}, {8 << 20, true}} {
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = conn.WriteMessage(websocket.BinaryMessage, make([]byte, tc.size))
+		err = <-got
+		_ = conn.Close()
+		if (err != nil) != tc.wantErr {
+			t.Errorf("message of %d bytes: read error %v, want error=%v", tc.size, err, tc.wantErr)
+		}
+		if tc.wantErr && !errors.Is(err, websocket.ErrReadLimit) {
+			t.Errorf("message of %d bytes: %v, want ErrReadLimit", tc.size, err)
+		}
 	}
 }
