@@ -12,6 +12,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,6 +51,9 @@ type Session struct {
 }
 
 const stateKey = "aemeath.session"
+
+// internalPrefix marks session keys owned by the framework (csrf, oidc).
+const internalPrefix = "aemeath."
 
 func newID() string {
 	b := make([]byte, 32)
@@ -255,14 +259,21 @@ func (s *Session) Delete(key string) {
 	s.dirty = true
 }
 
-// Renew issues a fresh id and deletes the old session, keeping the data.
-// Call it at login to defeat session fixation.
+// Renew issues a fresh id and deletes the old session, keeping your data.
+// Call it at login to defeat session fixation. Entries the framework keeps
+// in the session (keys starting with "aemeath.", such as the CSRF token) are
+// dropped, so a token an attacker learned before login stops working.
 func (s *Session) Renew(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.id != "" {
 		if err := s.cfg.Store.Delete(ctx, s.id); err != nil {
 			return err
+		}
+	}
+	for k := range s.data {
+		if strings.HasPrefix(k, internalPrefix) {
+			delete(s.data, k)
 		}
 	}
 	s.id = newID()

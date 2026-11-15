@@ -229,3 +229,23 @@ func TestUntouchedSessionIgnoresStore(t *testing.T) {
 		t.Fatalf("status %d", w.Code)
 	}
 }
+
+func TestRenewKeepsUserDataDropsFrameworkEntries(t *testing.T) {
+	app := aemeath.New()
+	app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore(), Insecure: true}))
+	app.Handle("POST", "/login", func(c *aemeath.Ctx) error {
+		s := session.From(c)
+		s.Set("cart", "3 items")
+		s.Set("aemeath.csrf", "old-token")
+		if err := s.Renew(c.Context()); err != nil {
+			return err
+		}
+		if s.String("cart") != "3 items" || s.String("aemeath.csrf") != "" {
+			return aemeath.InternalError("cart=" + s.String("cart") + " csrf=" + s.String("aemeath.csrf"))
+		}
+		return c.Text(200, "ok")
+	})
+	if w := do(app, "POST", "/login", ""); w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+}

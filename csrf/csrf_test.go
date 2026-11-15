@@ -176,3 +176,48 @@ func TestTokenFromFormField(t *testing.T) {
 		t.Fatalf("multipart with token: %d %s", w.Code, w.Body)
 	}
 }
+
+// The token used to survive login (session.Renew kept it), although the guide
+// says it changes: a token learned before login stayed valid afterwards.
+func TestTokenChangesAtLogin(t *testing.T) {
+	app := aemeath.New()
+	app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore(), Insecure: true}), csrf.Middleware(csrf.Config{}))
+	aemeath.GET(app, "/token", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{csrf.Token(c)}, nil })
+	aemeath.POST(app, "/login", func(c *aemeath.Ctx, _ none) (tok, error) {
+		s := session.From(c)
+		if err := s.Renew(c.Context()); err != nil {
+			return tok{}, err
+		}
+		s.Set("user", "ann")
+		return tok{"in"}, nil
+	})
+	aemeath.POST(app, "/act", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{"done"}, nil })
+
+	sess, before := start(app)
+	w := call(app, "POST", "/login", sess, map[string]string{"X-CSRF-Token": before})
+	if w.Code != 200 {
+		t.Fatalf("login: %d %s", w.Code, w.Body)
+	}
+	var newSess string
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "aemeath_session" {
+			newSess = c.Value
+		}
+	}
+	if code := call(app, "POST", "/act", newSess, map[string]string{"X-CSRF-Token": before}).Code; code != 403 {
+		t.Fatalf("the token from before login still works after login: %d", code)
+	}
+	b := call(app, "GET", "/token", newSess, nil).Body.String()
+	i := strings.Index(b, `"token":"`) + 9
+	after := b[i : i+43]
+	if after == before {
+		t.Fatal("the token did not change at login")
+	}
+	if code := call(app, "POST", "/act", newSess, map[string]string{"X-CSRF-Token": after}).Code; code != 200 {
+		t.Fatalf("the new token: %d", code)
+	}
+	// The user's own data survives Renew.
+	if code := call(app, "POST", "/act", newSess, map[string]string{"X-CSRF-Token": after}).Code; code != 200 {
+		t.Fatal("second request")
+	}
+}
