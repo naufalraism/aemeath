@@ -45,21 +45,47 @@ func NewLocalStorage(uploadDir string) *LocalStorage {
 }
 
 // safeBase strips any directory part (both / and \ separators) from a
-// client-supplied file name so it can never escape UploadDir.
+// client-supplied file name so it can never escape UploadDir. Trailing dots
+// and spaces are removed too, because Windows drops them when it creates the
+// file ("x.html." would become "x.html").
 func safeBase(filename string) string {
 	if i := strings.LastIndexAny(filename, `/\`); i >= 0 {
 		filename = filename[i+1:]
 	}
-	filename = filepath.Base(filename)
-	if filename == "." || filename == ".." || filename == string(filepath.Separator) || filename == "" {
+	filename = strings.TrimRight(filepath.Base(filename), ". ")
+	if filename == "" || filename == string(filepath.Separator) {
 		return "file"
 	}
 	return filename
 }
 
+// activeExts are extensions a browser renders or runs (HTML, SVG, XML,
+// JavaScript), or that a web server executes. An upload with one of them,
+// served from your origin, is stored XSS or worse, whatever its first bytes
+// look like (a PNG header followed by <script> passes accept:"image/png").
+var activeExts = map[string]bool{
+	".html": true, ".htm": true, ".xhtml": true, ".xht": true, ".shtml": true, ".mht": true, ".mhtml": true,
+	".svg": true, ".svgz": true, ".xml": true, ".xsl": true, ".xslt": true,
+	".js": true, ".mjs": true, ".cjs": true, ".swf": true, ".hta": true, ".htc": true,
+	".php": true, ".phtml": true, ".asp": true, ".aspx": true, ".jsp": true, ".cgi": true,
+}
+
+// neutralize appends ".txt" to a name with an active extension, so the file
+// is served as plain text by Static, http.FileServer, nginx and the like.
+func neutralize(name string) string {
+	if activeExts[strings.ToLower(filepath.Ext(name))] {
+		return name + ".txt"
+	}
+	return name
+}
+
 // Save writes src to a new file and returns the stored name. The stored name
 // is "<unix time>_<random>_<original name>", so uploads with the same original
-// name never overwrite each other.
+// name never overwrite each other. Names with an extension a browser would
+// render or run (.html, .svg, .js, ...) get ".txt" appended ("x.html" is
+// stored as "..._x.html.txt"), so serving the upload folder cannot become
+// stored XSS. Check the type yourself (accept tag, IsAllowedFile) to refuse
+// such files instead.
 func (s *LocalStorage) Save(filename string, src io.Reader) (string, error) {
 	if err := os.MkdirAll(s.UploadDir, s.dirMode()); err != nil {
 		return "", fmt.Errorf("aemeath: failed to create upload directory: %w", err)
@@ -69,7 +95,7 @@ func (s *LocalStorage) Save(filename string, src io.Reader) (string, error) {
 	if _, err := rand.Read(rnd[:]); err != nil {
 		return "", fmt.Errorf("aemeath: failed to generate file name: %w", err)
 	}
-	stored := fmt.Sprintf("%d_%s_%s", time.Now().Unix(), hex.EncodeToString(rnd[:]), safeBase(filename))
+	stored := fmt.Sprintf("%d_%s_%s", time.Now().Unix(), hex.EncodeToString(rnd[:]), neutralize(safeBase(filename)))
 	destPath := filepath.Join(s.UploadDir, stored)
 
 	destFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, s.fileMode())
