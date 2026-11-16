@@ -19,7 +19,7 @@ type CreateUserIn struct {
 | `gt`, `gte`, `lt`, `lte` | numbers | comparisons |
 | `oneof=a b c` | string, number | one of the values |
 | `email`, `url`, `uuid` | string | formats |
-| `pattern=REGEX` | string | regular expression (no commas) |
+| `pattern=REGEX` | string | regular expression (RE2). It takes the rest of the tag, so write it last: `validate:"required,pattern=^\d{1,3}$"` |
 
 ## The response
 

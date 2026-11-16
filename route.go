@@ -207,8 +207,8 @@ func hasJSONName(f reflect.StructField) bool {
 
 // hasRequired reports whether the field has the `validate:"required"` tag.
 func hasRequired(f reflect.StructField) bool {
-	for _, p := range strings.Split(f.Tag.Get("validate"), ",") {
-		if strings.TrimSpace(p) == "required" {
+	for _, p := range splitRules(f.Tag.Get("validate")) {
+		if p == "required" {
 			return true
 		}
 	}

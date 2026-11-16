@@ -170,17 +170,36 @@ var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[
 
 // parseRules parses the `validate` tag of a field. A rule that makes no sense
 // for the field's type panics (startup), it is never ignored silently.
+// splitRules splits a `validate` tag into its rules at the commas. A regular
+// expression may contain commas itself ({1,3}), so pattern= takes everything
+// up to the end of the tag and must be the last rule.
+func splitRules(tag string) []string {
+	var parts []string
+	for tag != "" {
+		if rest := strings.TrimLeft(tag, " "); strings.HasPrefix(rest, "pattern=") {
+			parts = append(parts, rest)
+			break
+		}
+		part, rest, _ := strings.Cut(tag, ",")
+		tag = rest
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
+// ruleAfterComma finds a rule written after the pattern, as tags written
+// before pattern took the rest of the tag did ("pattern=^a$,max=5").
+var ruleAfterComma = regexp.MustCompile(`,\s*(required|omitempty|email|url|uuid|(min|max|len|gt|gte|lt|lte|oneof)=[^,]*)\s*$`)
+
 func parseRules(owner reflect.Type, f reflect.StructField) (required bool, rules []rule) {
 	tag := f.Tag.Get("validate")
 	if tag == "" || tag == "-" {
 		return false, nil
 	}
 	class := classOf(f.Type)
-	for _, part := range strings.Split(tag, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
+	for _, part := range splitRules(tag) {
 		name, arg, hasArg := strings.Cut(part, "=")
 		fail := func(msg string) {
 			panic(fmt.Sprintf("aemeath: field %s.%s: validate:%q: %s", owner.Name(), f.Name, part, msg))
@@ -251,6 +270,9 @@ func parseRules(owner reflect.Type, f reflect.StructField) (required bool, rules
 		case "pattern":
 			needArg()
 			onlyFor(class == kindString, "strings")
+			if m := ruleAfterComma.FindString(arg); m != "" {
+				fail("pattern takes the rest of the tag, so it must be the last rule; move " + strings.TrimLeft(m, ", ") + " before it")
+			}
 			re, err := regexp.Compile(arg)
 			if err != nil {
 				fail("invalid regular expression: " + err.Error())
