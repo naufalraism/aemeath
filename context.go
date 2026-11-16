@@ -76,6 +76,10 @@ func (t *responseTracker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 func (t *responseTracker) Unwrap() http.ResponseWriter { return t.ResponseWriter }
 
+// Stopping returns a channel that is closed when the server starts to shut
+// down; see App.Stopping. Long-running handlers should return when it closes.
+func (c *Ctx) Stopping() <-chan struct{} { return c.app.stopping }
+
 // MarkAuthenticated records that this request comes from an authenticated
 // caller. Authentication middlewares call it once they have verified the
 // caller (jwt.Middleware does); call it from your own middleware when you
@@ -186,9 +190,22 @@ type SSE struct {
 }
 
 // SSE starts a Server-Sent Events response. The server's write timeout is
-// disabled for this stream, and the stream ends when the handler returns or
-// the client disconnects (watch c.Context().Done()).
+// disabled for this stream, and the stream ends when the handler returns.
+// Watch c.Context().Done(): it fires when the client disconnects and when
+// the server starts to shut down.
 func (c *Ctx) SSE() (*SSE, error) {
+	// A stream has no natural end, so its context is also cancelled when the
+	// server starts to shut down; otherwise one connected client would make
+	// every shutdown wait for the full grace period.
+	ctx, cancel := context.WithCancel(c.R.Context())
+	c.R = c.R.WithContext(ctx)
+	go func() {
+		select {
+		case <-c.app.stopping:
+			cancel()
+		case <-ctx.Done(): // the request ended
+		}
+	}()
 	rc := http.NewResponseController(c.W)
 	_ = rc.SetWriteDeadline(time.Time{})
 	h := c.W.Header()

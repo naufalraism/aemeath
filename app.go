@@ -40,7 +40,26 @@ type App struct {
 	shutdownDelay time.Duration
 	shuttingDown  atomic.Bool
 	serving       atomic.Bool // set by the first request; Use panics afterwards
+
+	stopping     chan struct{} // closed when the server starts to shut down
+	stoppingOnce sync.Once
 }
+
+// Stopping returns a channel that is closed when the server starts to shut
+// down (after the delay of SetShutdownDelay). Requests in flight still get
+// their 10 seconds to finish, but handlers that would run for ever, such as a
+// polling loop or a WebSocket read loop, should return when it closes.
+// Streams opened with Ctx.SSE and connections from ws.Upgrade already do: the
+// stream's context is cancelled and the WebSocket is closed.
+//
+// The channel never closes when the app is not run by Listen or Serve (for
+// example inside httptest); call Stop yourself then.
+func (a *App) Stopping() <-chan struct{} { return a.stopping }
+
+// Stop closes the Stopping channel. Listen and Serve call it when a stop
+// signal arrives; call it yourself only when you run the http.Server on your
+// own. It is safe to call more than once.
+func (a *App) Stop() { a.stoppingOnce.Do(func() { close(a.stopping) }) }
 
 // SetShutdownDelay makes the server keep serving for d after SIGINT/SIGTERM
 // while GET /readyz already answers 503, before it stops accepting
@@ -63,8 +82,9 @@ func (a *App) ShuttingDown() bool { return a.shuttingDown.Load() }
 
 // OnShutdown registers a function that runs when the server stops (after
 // in-flight requests have finished), for example to flush a queue or close a
-// connection. Hooks run in reverse order of registration, share a 10 second
-// limit, and a failing hook is logged without stopping the others.
+// connection. Hooks run in reverse order of registration. Each hook gets its
+// own 10 second limit, so a slow one cannot use up the time of the others,
+// and a failing hook is logged without stopping the rest.
 func (a *App) OnShutdown(fn func(context.Context) error) {
 	a.hooksMu.Lock()
 	defer a.hooksMu.Unlock()
@@ -78,17 +98,22 @@ func (a *App) runShutdownHooks() {
 	if len(hooks) == 0 {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	for i := len(hooks) - 1; i >= 0; i-- {
-		if err := hooks[i](ctx); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownHookTimeout)
+		err := hooks[i](ctx)
+		cancel()
+		if err != nil {
 			log.Printf("aemeath: shutdown hook failed: %v", err)
 		}
 	}
 }
 
+// shutdownHookTimeout is the time each shutdown hook gets (a variable so
+// tests can shorten it).
+var shutdownHookTimeout = 10 * time.Second
+
 // New creates a new Aemeath application.
-func New() *App { return &App{mux: http.NewServeMux()} }
+func New() *App { return &App{mux: http.NewServeMux(), stopping: make(chan struct{})} }
 
 // OnError replaces the default error responder. fn receives every error a
 // handler or middleware returns, plus 404 and 405 errors; use AsHTTPError to
@@ -349,6 +374,7 @@ func (a *App) run(srv *http.Server, start func() error) error {
 			}
 		}
 		log.Printf("aemeath: shutting down gracefully (signal: %v)", sig)
+		a.Stop() // streams and WebSockets end now, so they do not hold up the shutdown
 
 		// Give in-flight requests 10 seconds to finish.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

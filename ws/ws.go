@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -44,6 +45,19 @@ func Upgrade(c *aemeath.Ctx) (*websocket.Conn, error) {
 	if DefaultReadLimit > 0 {
 		conn.SetReadLimit(DefaultReadLimit)
 	}
+	// A hijacked connection is invisible to http.Server.Shutdown: without
+	// this, the handler kept running after Listen returned and the client was
+	// cut off without a close frame when the process exited.
+	stopping, done := c.Stopping(), c.Context().Done()
+	go func() {
+		select {
+		case <-stopping:
+			msg := websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutting down")
+			_ = conn.WriteControl(websocket.CloseMessage, msg, time.Now().Add(time.Second))
+			_ = conn.Close() // unblocks the handler's ReadMessage
+		case <-done: // the handler returned
+		}
+	}()
 	return conn, nil
 }
 
