@@ -307,7 +307,7 @@ JWT:
 
 ```go
 group := app.Group("/api", jwt.Middleware(jwt.Config{SecretKey: os.Getenv("JWT_SECRET")}))
-group.Options(aemeath.RequireAuth()) // documents the Bearer scheme and a 401 in /docs
+group.Options(aemeath.RequireAuth()) // 401 unless a middleware authenticated the caller; also documented in /docs
 // in a handler: jwt.UserID(c), jwt.Claims(c)
 ```
 

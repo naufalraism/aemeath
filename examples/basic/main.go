@@ -114,7 +114,7 @@ func main() {
 		aemeath.RateLimiter(30, time.Minute),
 		jwt.Middleware(jwt.Config{SecretKey: jwtSecret}),
 	)
-	// Document the group as protected in /docs (the middleware above enforces it).
+	// RequireAuth is the safety net: a route here answers 401 if the JWT middleware above is ever removed.
 	secretGroup.Options(aemeath.Tags("secret"), aemeath.RequireAuth())
 
 	aemeath.GroupGET(secretGroup, "/profile", func(c *aemeath.Ctx, _ struct{}) (map[string]any, error) {

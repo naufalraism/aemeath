@@ -49,9 +49,13 @@ func Status(code int) RouteOption { return func(c *routeConfig) { c.status = cod
 // Deprecated marks the route as deprecated in the OpenAPI docs.
 func Deprecated() RouteOption { return func(c *routeConfig) { c.deprecated = true } }
 
-// RequireAuth documents the route as protected by a Bearer token (JWT) in the
-// OpenAPI docs, and adds a 401 response. It only documents; enforcing it is
-// the job of a middleware such as jwt.Middleware.
+// RequireAuth makes the route answer 401 unless a middleware authenticated
+// the caller (see Ctx.MarkAuthenticated; jwt.Middleware does it for you). It
+// also documents the route as protected by a Bearer token in the OpenAPI
+// docs, with a 401 response.
+//
+// It is a safety net, not the authentication itself: a route with RequireAuth
+// and no authentication middleware in front of it refuses every request.
 func RequireAuth() RouteOption { return func(c *routeConfig) { c.secure = true } }
 
 func newRouteConfig(opts []RouteOption) routeConfig {
@@ -111,6 +115,9 @@ func prepareInput(t reflect.Type, method, path string) *inputInfo {
 func typedHandler[In, Out any](cfg routeConfig, info *inputInfo, fn func(*Ctx, In) (Out, error)) HandlerFunc {
 	handled := reflect.TypeFor[Out]() == reflect.TypeFor[Handled]()
 	return func(c *Ctx) error {
+		if cfg.secure && !c.authed {
+			return Unauthorized("authentication required")
+		}
 		var in In
 		defer c.runCleanups()
 		if err := bind(c, &in, info); err != nil {

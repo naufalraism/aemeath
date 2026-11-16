@@ -24,6 +24,7 @@ type Ctx struct {
 
 	app      *App
 	cleanups []func()
+	authed   bool            // set by MarkAuthenticated; checked by routes with RequireAuth
 	rw       responseTracker // c.W starts as &rw; lives inside Ctx, so it costs no allocation
 }
 
@@ -74,6 +75,21 @@ func (t *responseTracker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 }
 
 func (t *responseTracker) Unwrap() http.ResponseWriter { return t.ResponseWriter }
+
+// MarkAuthenticated records that this request comes from an authenticated
+// caller. Authentication middlewares call it once they have verified the
+// caller (jwt.Middleware does); call it from your own middleware when you
+// authenticate another way, for example with a session:
+//
+//	if session.From(c).String("user") != "" {
+//		c.MarkAuthenticated()
+//	}
+//
+// Routes registered with RequireAuth answer 401 unless it was called.
+func (c *Ctx) MarkAuthenticated() { c.authed = true }
+
+// Authenticated reports whether MarkAuthenticated was called for this request.
+func (c *Ctx) Authenticated() bool { return c.authed }
 
 // Handled is the output type of a typed route that writes the response itself
 // (a redirect, a file, a stream). Aemeath then sends nothing after the handler returns.

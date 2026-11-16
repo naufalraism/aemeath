@@ -179,6 +179,7 @@ func Middleware(cfg Config) aemeath.Middleware {
 				return unauthorized(c, "invalid or expired token")
 			}
 
+			c.MarkAuthenticated()
 			if claims, ok := token.Claims.(gojwt.MapClaims); ok {
 				c.State[StateClaims] = claims
 				if sub, ok := claims["sub"]; ok {

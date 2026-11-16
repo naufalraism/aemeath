@@ -127,3 +127,22 @@ func TestShortSecretsAreRejected(t *testing.T) {
 	}
 	jwt.Middleware(jwt.Config{SecretKey: strings.Repeat("x", jwt.MinSecretBytes)}) // must not panic
 }
+
+// A valid token marks the request, so routes with RequireAuth accept it.
+func TestMiddlewareSatisfiesRequireAuth(t *testing.T) {
+	const secret = "s3cret-0123456789-abcdefghijklmnop"
+	app := aemeath.New()
+	g := app.Group("/api", jwt.Middleware(jwt.Config{SecretKey: secret}))
+	g.Options(aemeath.RequireAuth())
+	aemeath.GroupGET(g, "/me", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+		return map[string]string{"user": jwt.UserID(c)}, nil
+	})
+	tok := sign(t, secret, gojwt.MapClaims{"sub": "u1", "exp": time.Now().Add(time.Hour).Unix()}, gojwt.SigningMethodHS256)
+	r := httptest.NewRequest("GET", "/api/me", nil)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, r)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "u1") {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+}

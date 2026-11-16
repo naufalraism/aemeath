@@ -50,7 +50,7 @@ Errors are sent as `{"error": "message"}`. Any error that is not an `*aemeath.HT
 
 ```go
 admin := app.Group("/admin", authMiddleware)
-admin.Options(aemeath.Tags("admin"), aemeath.RequireAuth())
+admin.Options(aemeath.Tags("admin"), aemeath.RequireAuth()) // 401 unless authMiddleware authenticated the caller
 
 aemeath.GroupGET(admin, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 	return map[string]string{"status": "ok"}, nil
