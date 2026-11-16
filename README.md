@@ -196,7 +196,7 @@ type CreateUserIn struct {
 | `len=N` | string, slice, map | exactly N |
 | `gt`, `gte`, `lt`, `lte` | numbers | comparisons |
 | `oneof=a b c` | string, number | one of the space separated values |
-| `email`, `url`, `uuid` | string | formats (`url` must be absolute http/https) |
+| `email`, `url`, `uuid` | string | `email`: `local@domain.tld` (non-ASCII letters allowed; `a@b` is refused). `url`: absolute http/https. `uuid`: 8-4-4-4-12 hex, any version. The generated Zod schemas and OpenAPI use the same patterns as the server |
 | `pattern=REGEX` | string | regular expression (RE2); must be the last rule (it may contain commas) |
 
 How it behaves:

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 	"mime/multipart"
-	"net/mail"
-	"net/url"
 	"reflect"
 	"regexp"
 	"sort"
@@ -169,8 +167,6 @@ func classOf(t reflect.Type) kindClass {
 	}
 	return kindOther
 }
-
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // parseRules parses the `validate` tag of a field. A rule that makes no sense
 // for the field's type panics (startup), it is never ignored silently.
@@ -342,15 +338,15 @@ func (r rule) check(v reflect.Value) string {
 			}
 			return "must be one of: " + strings.Join(r.set, ", ")
 		case "email":
-			if a, err := mail.ParseAddress(s); err != nil || a.Address != s {
+			if !validEmail(s) {
 				return "must be a valid email address"
 			}
 		case "url":
-			if u, err := url.Parse(s); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			if !validURL(s) {
 				return "must be a valid http(s) URL"
 			}
 		case "uuid":
-			if !uuidRe.MatchString(s) {
+			if !validUUID(s) {
 				return "must be a valid UUID"
 			}
 		case "pattern":

@@ -170,7 +170,7 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 	}
 	if isTextType(t) {
 		if t.Name() == "UUID" {
-			return "z.string().uuid()"
+			return "z.string()" + zodFormat(uuidPattern, "Invalid UUID")
 		}
 		return "z.string()"
 	}
@@ -205,6 +205,13 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 	return "z.unknown()"
 }
 
+// zodFormat checks a string against one of the shared format patterns (see
+// formats.go) instead of Zod's own .email()/.url()/.uuid(), which differ from
+// the server and between Zod versions.
+func zodFormat(pattern, message string) string {
+	return ".regex(new RegExp(" + strconv.Quote(pattern) + "), " + strconv.Quote(message) + ")"
+}
+
 // zodElem is the schema of an element of a slice, array or map; see elemRef.
 func (g *tsGen) zodElem(t reflect.Type, input bool) string {
 	expr := g.zodType(t, input)
@@ -237,11 +244,11 @@ func zodRules(expr string, f reflect.StructField) string {
 			case "len":
 				expr += ".length(" + num(r.num) + ")"
 			case "email":
-				expr += ".email()"
+				expr += zodFormat(emailPattern, "Invalid email address")
 			case "url":
-				expr += ".url()"
+				expr += zodFormat(urlPattern, "Invalid http(s) URL")
 			case "uuid":
-				expr += ".uuid()"
+				expr += zodFormat(uuidPattern, "Invalid UUID")
 			case "pattern":
 				// Go and JavaScript regular expressions differ; a pattern that
 				// cannot be translated is left to the server.

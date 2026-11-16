@@ -458,11 +458,11 @@ func ruleConstraints(f reflect.StructField) map[string]any {
 			case "oneof":
 				out["enum"] = r.set
 			case "email":
-				out["format"] = "email"
+				out["format"], out["pattern"] = "email", emailPattern
 			case "url":
-				out["format"] = "uri"
+				out["format"], out["pattern"] = "uri", urlPattern
 			case "uuid":
-				out["format"] = "uuid"
+				out["format"], out["pattern"] = "uuid", uuidPattern
 			case "pattern":
 				// OpenAPI patterns are JavaScript regular expressions without
 				// flags; leave out what cannot be expressed that way.

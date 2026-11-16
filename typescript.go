@@ -520,6 +520,9 @@ func tsDoc(f reflect.StructField, input bool) string {
 	if input {
 		c := ruleConstraints(f)
 		for _, k := range []string{"minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "minProperties", "maxProperties", "format", "pattern"} {
+			if _, isFormat := c["format"]; k == "pattern" && isFormat {
+				continue // email, url, uuid: the format says it; skip the long pattern
+			}
 			if v, ok := c[k]; ok {
 				parts = append(parts, fmt.Sprintf("@%s %v", k, v))
 			}

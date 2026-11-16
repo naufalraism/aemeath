@@ -18,7 +18,7 @@ type CreateUserIn struct {
 | `len=N` | string, slice, map | exactly N |
 | `gt`, `gte`, `lt`, `lte` | numbers | comparisons |
 | `oneof=a b c` | string, number | one of the values |
-| `email`, `url`, `uuid` | string | formats |
+| `email`, `url`, `uuid` | string | `email`: `local@domain.tld` (non-ASCII letters allowed; `a@b` is refused). `url`: absolute http/https. `uuid`: 8-4-4-4-12 hex, any version. The Zod schemas and OpenAPI use the same patterns as the server |
 | `pattern=REGEX` | string | regular expression (RE2). It takes the rest of the tag, so write it last: `validate:"required,pattern=^\d{1,3}$"` |
 
 ## The response

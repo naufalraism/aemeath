@@ -99,7 +99,7 @@ func TestGeneratedInputAcceptsNullWhereTheServerDoes(t *testing.T) {
 	for _, want := range []string{
 		"tags: z.array(z.string()).min(1).nullable().optional()",
 		"age: z.number().int().gte(18).nullable().optional()",
-		"website: z.string().url().optional()",
+		`website: z.string().regex(new RegExp("^[hH][tT][tT][pP][sS]?://`,
 	} {
 		if !strings.Contains(zod, want) {
 			t.Errorf("Zod is missing %q", want)

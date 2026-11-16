@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- **Validation (breaking):** `email`, `url` and `uuid` are now defined once and used by the server, the Zod schemas and OpenAPI alike. `email` requires a dot in the domain (`a@b` and `a@[127.0.0.1]` are refused; non-ASCII addresses are still accepted). The Zod schemas no longer accept non-http(s) URLs such as `javascript:` or `ftp:`.
 - **Validation (breaking):** in a JSON body, a key that is present is now validated even when its value is empty. `{"website": ""}` fails `url`, `{"tags": []}` fails `min=1` and `{"kind": 0}` fails `oneof=1 2`; before, rules were skipped for every empty value. Leave the key out or send `null` for "no value". Forms and query strings are unchanged (an empty value is not sent). This matches the generated Zod schemas.
 
 ## [0.3.1] - 2026-11-14
