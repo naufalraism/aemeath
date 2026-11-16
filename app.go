@@ -39,6 +39,7 @@ type App struct {
 
 	shutdownDelay time.Duration
 	shuttingDown  atomic.Bool
+	serving       atomic.Bool // set by the first request; Use panics afterwards
 }
 
 // SetShutdownDelay makes the server keep serving for d after SIGINT/SIGTERM
@@ -167,7 +168,19 @@ func MustGet[T any](c *Ctx) T {
 // Middlewares are resolved lazily on the first request to each route, so
 // calling Use after registering routes still works, but only until the first
 // request has been served.
-func (a *App) Use(m ...Middleware) { a.mws = append(a.mws, m...) }
+func (a *App) Use(m ...Middleware) {
+	a.mustNotBeServing("App.Use")
+	a.mws = append(a.mws, m...)
+}
+
+// mustNotBeServing panics when a middleware is added after the first request.
+// Each route builds its middleware chain once, on its first request, so a
+// later Use would apply to some routes and silently not to others.
+func (a *App) mustNotBeServing(what string) {
+	if a.serving.Load() {
+		panic("aemeath: " + what + " was called after the app started serving requests; add all middlewares during startup")
+	}
+}
 
 // wrap wraps a handler with every registered global middleware.
 func (a *App) wrap(h HandlerFunc) HandlerFunc {
@@ -203,6 +216,9 @@ func (p *probeWriter) WriteHeader(code int)        { p.code = code }
 
 // ServeHTTP implements http.Handler.
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !a.serving.Load() {
+		a.serving.Store(true)
+	}
 	h, pattern := a.mux.Handler(r)
 	if pattern != "" {
 		a.mux.ServeHTTP(w, r)

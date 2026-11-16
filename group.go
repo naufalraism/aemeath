@@ -57,6 +57,7 @@ func (g *Group) Options(opts ...RouteOption) {
 
 // Use adds middlewares to the group.
 func (g *Group) Use(m ...Middleware) {
+	g.app.mustNotBeServing("Group.Use")
 	g.mws = append(g.mws, m...)
 }
 
