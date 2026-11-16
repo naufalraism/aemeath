@@ -56,6 +56,7 @@ type fieldPlan struct {
 	field    reflect.StructField
 	path     []int
 	name     string
+	jsonKey  string // key in a JSON body; "" for path, query, header, cookie and form fields
 	required bool
 	rules    []rule
 	nested   *typePlan
@@ -104,6 +105,9 @@ func buildPlan(t reflect.Type) *typePlan {
 	for _, ff := range flatFields(t) {
 		f := ff.StructField
 		fp := &fieldPlan{field: f, path: ff.Path, name: fieldDisplayName(f)}
+		if _, param := paramSource(f); param == "" && formName(f) == "" && jsonName(f) != "-" {
+			fp.jsonKey = jsonName(f)
+		}
 		fp.required, fp.rules = parseRules(t, f)
 		if fp.required && hasOmitEmpty(f) {
 			panic(fmt.Sprintf("aemeath: field %s.%s has both `required` and `omitempty`, which contradict each other", t.Name(), f.Name))
@@ -409,8 +413,20 @@ func (r rule) checkNumber(x float64) string {
 	return ""
 }
 
-// validate checks v (a struct value) against the plan and appends every failure to errs.
-func (p *typePlan) validate(v reflect.Value, prefix string, errs *[]FieldError) {
+// validate checks v (a struct value) against the plan and appends every
+// failure to errs.
+//
+// sent is the decoded JSON body at this level (a map[string]any), or nil when
+// the value did not come from JSON (forms, query strings). Rules run when a
+// value was provided:
+//
+//   - in JSON, a key that is present with a non-null value is provided, even
+//     when it is empty: {"website": ""} fails `url`, {"tags": []} fails
+//     `min=1`. A missing key or null is not provided.
+//   - elsewhere (forms, query, headers), an empty value counts as not sent,
+//     because an HTML form always submits its empty inputs.
+func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]FieldError) {
+	keys, _ := sent.(map[string]any)
 	for _, fp := range p.fields {
 		path := fp.name
 		if prefix != "" {
@@ -423,12 +439,16 @@ func (p *typePlan) validate(v reflect.Value, prefix string, errs *[]FieldError) 
 			}
 			continue
 		}
-		absent := isAbsent(fv)
-		if fp.required && absent {
+		var sentValue any
+		if keys != nil && fp.jsonKey != "" {
+			sentValue = keys[fp.jsonKey]
+		}
+		empty := isAbsent(fv)
+		if fp.required && empty {
 			*errs = append(*errs, FieldError{Field: path, Rule: "required", Message: "is required"})
 			continue
 		}
-		if !absent {
+		if !empty || sentValue != nil {
 			if target := deref(fv); target.IsValid() {
 				for _, r := range fp.rules {
 					if msg := r.check(target); msg != "" {
@@ -438,31 +458,54 @@ func (p *typePlan) validate(v reflect.Value, prefix string, errs *[]FieldError) 
 			}
 		}
 		if fp.nested != nil {
-			fp.nested.validateNested(fv, path, errs)
+			fp.nested.validateNested(fv, path, sentValue, errs)
 		}
 	}
 }
 
-// validateNested descends into structs reached through pointers, slices and maps.
-func (p *typePlan) validateNested(v reflect.Value, path string, errs *[]FieldError) {
+// validateNested descends into structs reached through pointers, slices and
+// maps, keeping the matching part of the JSON body alongside.
+func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *[]FieldError) {
 	v = deref(v)
 	if !v.IsValid() {
 		return
 	}
 	switch v.Kind() {
 	case reflect.Struct:
-		p.validate(v, path, errs)
+		p.validate(v, path, sent, errs)
 	case reflect.Slice, reflect.Array:
+		items, _ := sent.([]any)
 		for i := 0; i < v.Len(); i++ {
-			p.validateNested(v.Index(i), path+"["+strconv.Itoa(i)+"]", errs)
+			var item any
+			if i < len(items) {
+				item = items[i]
+			}
+			p.validateNested(v.Index(i), path+"["+strconv.Itoa(i)+"]", item, errs)
 		}
 	case reflect.Map:
+		entries, _ := sent.(map[string]any)
 		keys := v.MapKeys()
 		sort.Slice(keys, func(i, j int) bool { return fmt.Sprint(keys[i]) < fmt.Sprint(keys[j]) })
 		for _, k := range keys {
-			p.validateNested(v.MapIndex(k), path+"["+fmt.Sprint(k)+"]", errs)
+			p.validateNested(v.MapIndex(k), path+"["+fmt.Sprint(k)+"]", entries[fmt.Sprint(k)], errs)
 		}
 	}
+}
+
+// hasRules reports whether the plan, or a plan nested in it, has a rule that
+// depends on whether a value was sent. Only then is the body decoded a second
+// time to learn which keys it has.
+func (p *typePlan) hasRules(seen map[*typePlan]bool) bool {
+	if p == nil || seen[p] {
+		return false
+	}
+	seen[p] = true
+	for _, fp := range p.fields {
+		if len(fp.rules) > 0 || fp.nested.hasRules(seen) {
+			return true
+		}
+	}
+	return false
 }
 
 // requiredNeedsPointer reports whether a non-pointer field of this type

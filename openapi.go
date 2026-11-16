@@ -361,7 +361,11 @@ func (sb *schemaBuilder) structSchema(t reflect.Type, input bool, skipParams boo
 			schema := withNull(map[string]any{"type": "string", "pattern": quotedPattern(f.Type)}, f.Type.Kind() == reflect.Pointer)
 			props[name] = sb.annotate(schema, f, false)
 		} else {
-			props[name] = sb.annotate(sb.schemaOf(f.Type, input), f, input)
+			schema := sb.schemaOf(f.Type, input)
+			if input && acceptsNull(f, true) && !isFileType(f.Type) {
+				schema = withNull(schema, true) // null means "not provided"
+			}
+			props[name] = sb.annotate(schema, f, input)
 		}
 
 		// Requiredness depends on direction: input uses `validate:"required"`,

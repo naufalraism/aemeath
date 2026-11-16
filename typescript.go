@@ -482,7 +482,7 @@ func (g *tsGen) fieldType(f reflect.StructField, depth int, input bool) string {
 	}
 	// A nil pointer, slice, or map is encoded as JSON null in responses. In a
 	// request, null is only accepted where the field is optional.
-	if typ != "unknown" && ((f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type))) {
+	if typ != "unknown" && acceptsNull(f, input) {
 		typ += " | null"
 	}
 	return typ
@@ -792,6 +792,16 @@ func tsIdent(s string) string {
 
 // nilable reports whether a nil value of t is encoded as JSON null
 // (a nil slice or map, which is easy to forget to initialize).
+// acceptsNull reports whether the field can be JSON null. In a response, a
+// nil pointer, slice or map is null. In a request, null means "not provided",
+// so it is accepted for those types unless the field is required.
+func acceptsNull(f reflect.StructField, input bool) bool {
+	if f.Type.Kind() != reflect.Pointer && !nilable(f.Type) {
+		return false
+	}
+	return !input || !hasRequired(f)
+}
+
 func nilable(t reflect.Type) bool {
 	return t.Kind() == reflect.Slice || t.Kind() == reflect.Map
 }

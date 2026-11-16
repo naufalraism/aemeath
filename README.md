@@ -203,7 +203,7 @@ How it behaves:
 
 - **All** failures are collected and returned together as `422`:
   `{"error":"validation failed","errors":[{"field":"age","rule":"gte","message":"must be at least 18"}]}`. Nested fields are named `address.city`, `items[1].qty`, `extra[home].city`.
-- Rules other than `required` only run when a value was provided, so an optional field can still be constrained.
+- Rules other than `required` only run when a value was provided, so an optional field can still be constrained. In a **JSON body**, a key that is present is provided, even when it is empty: `{"website": ""}` fails `url` and `{"tags": []}` fails `min=1`; leave the key out (or send `null`) for "no value". In **forms and query strings** an empty value counts as not sent, because an HTML form always submits its empty inputs. The generated Zod schemas follow the JSON rule.
 - For **scalars** (`int`, `bool`, `float`) with `required` you **must** use a pointer so "not sent" differs from "sent as zero". Aemeath panics at **startup** for that, for `required`+`omitempty`, and for unknown or misapplied rules (`min` on a bool, `email` on a number, a bad regex, ...). A typo never becomes a silent runtime bug.
 - Nested structs, pointers to structs, slices and maps of structs are validated recursively; recursive types are supported.
 - Checks only your handler can make: `return aemeath.ValidationError(aemeath.FieldError{Field: "email", Rule: "unique", Message: "is already taken"})`.

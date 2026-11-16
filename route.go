@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // DefaultMaxBodyBytes is the default limit for JSON request bodies (1 MiB).
@@ -72,6 +73,17 @@ type inputInfo struct {
 	plan   *typePlan
 	params []flatField // fields bound from path, query, header or cookie
 	forms  []flatField // fields bound from an urlencoded or multipart form body
+
+	sentOnce sync.Once
+	wantSent bool
+}
+
+// needsSent reports whether validation needs to know which keys the JSON body
+// has (see typePlan.validate). It is false for inputs without rules, which
+// then pay nothing for it.
+func (i *inputInfo) needsSent() bool {
+	i.sentOnce.Do(func() { i.wantSent = i.plan.hasRules(map[*typePlan]bool{}) })
+	return i.wantSent
 }
 
 // prepareInput analyses the input type of a route. It panics at startup for
@@ -242,6 +254,7 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 	if info.hasForm() {
 		return bindWithForm(c, in, info)
 	}
+	var sent any // the JSON body as sent, to tell "" from a missing key
 	if bodyMethod(c.R.Method) && c.R.Body != nil {
 		body, err := io.ReadAll(io.LimitReader(c.R.Body, DefaultMaxBodyBytes+1))
 		if err != nil {
@@ -261,6 +274,9 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 			if err := json.Unmarshal(body, in); err != nil {
 				return BadRequest("invalid JSON body")
 			}
+			if info.needsSent() {
+				sent = decodeSent(body)
+			}
 		}
 	}
 
@@ -278,11 +294,19 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 		return err
 	}
 	var errs []FieldError
-	info.plan.validate(v, "", &errs)
+	info.plan.validate(v, "", sent, &errs)
 	if len(errs) > 0 {
 		return ValidationError(errs...)
 	}
 	return nil
+}
+
+// decodeSent decodes the body a second time, generically, so validation can
+// see which keys were sent. The body is valid JSON: it decoded once already.
+func decodeSent(body []byte) any {
+	var sent any
+	_ = json.Unmarshal(body, &sent)
+	return sent
 }
 
 // bindParams binds path, query, header and cookie values into the struct.

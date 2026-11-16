@@ -40,6 +40,9 @@ Nested fields are named `address.city`, `items[1].qty` or `extra[home].city`. Th
 ## Rules to know
 
 - Rules other than `required` only run when a value was provided.
+  - In a **JSON body**, a key that is present is provided, even when it is empty: `{"website": ""}` fails `url`, `{"tags": []}` fails `min=1`, `{"kind": 0}` fails `oneof=1 2`. Leave the key out, or send `null`, for "no value".
+  - In **forms and query strings**, an empty value counts as not sent, because an HTML form always submits its empty inputs.
+  - The generated Zod schemas follow the JSON rule, so the browser and the server agree.
 - A scalar (`int`, `bool`, `float`) with `required` must be a pointer, so "not sent" differs from "sent as zero". Aemeath **panics at startup** otherwise, and for unknown or misapplied rules (`min` on a bool, a bad regex, ...).
 - For checks only your handler can make: `return aemeath.ValidationError(aemeath.FieldError{Field: "email", Rule: "unique", Message: "is already taken"})`.
 
