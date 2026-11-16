@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -68,5 +69,46 @@ func TestMemoryStoreCap(t *testing.T) {
 func TestMemoryStoreDefaultCap(t *testing.T) {
 	if NewMemoryStore().max != DefaultMaxSessions || NewMemoryStore().WithMaxSessions(0).max != DefaultMaxSessions {
 		t.Fatal("default cap not applied")
+	}
+}
+
+// A map or slice stored in a session used to be shared by every request of
+// that session (the copy was one level deep); two requests writing to it at
+// the same time crashed the program with "concurrent map writes".
+func TestMemoryStoreCopiesNestedValues(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+	orig := map[string]any{
+		"cart":  map[string]int{"a": 1},
+		"tags":  []string{"x"},
+		"deep":  map[string]any{"list": []any{map[string]any{"n": 1}}},
+		"count": 3,
+	}
+	if err := s.Save(ctx, "id", orig, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	orig["cart"].(map[string]int)["a"] = 99 // the caller's value is not the stored one
+
+	a, _, _ := s.Load(ctx, "id")
+	b, _, _ := s.Load(ctx, "id")
+	if a["cart"].(map[string]int)["a"] != 1 {
+		t.Fatal("Save kept a reference to the caller's map")
+	}
+	var wg sync.WaitGroup
+	for _, d := range []map[string]any{a, b} { // the race detector checks this
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				d["cart"].(map[string]int)["a"]++
+				d["tags"].([]string)[0] = "y"
+				d["deep"].(map[string]any)["list"].([]any)[0].(map[string]any)["n"] = i
+			}
+		}()
+	}
+	wg.Wait()
+	c, _, _ := s.Load(ctx, "id")
+	if c["cart"].(map[string]int)["a"] != 1 || c["tags"].([]string)[0] != "x" || c["count"] != 3 {
+		t.Fatalf("a loaded copy changed the stored session: %v", c)
 	}
 }

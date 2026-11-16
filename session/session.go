@@ -12,6 +12,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -346,12 +347,64 @@ func (s *MemoryStore) Len() int {
 	return n
 }
 
+// copyMap copies session data deeply: maps and slices at any depth are
+// duplicated, so two requests of the same session never share one (writing
+// to a shared map from both crashes the program with "concurrent map
+// writes"). Values behind pointers are not copied; store values, not
+// pointers, in a session.
 func copyMap(m map[string]any) map[string]any {
 	o := make(map[string]any, len(m))
 	for k, v := range m {
-		o[k] = v
+		o[k] = deepCopy(v)
 	}
 	return o
+}
+
+func deepCopy(v any) any {
+	switch x := v.(type) {
+	case nil, string, bool, int, int64, float64:
+		return v // the common cases, without reflection
+	case map[string]any:
+		return copyMap(x)
+	case []any:
+		o := make([]any, len(x))
+		for i, e := range x {
+			o[i] = deepCopy(e)
+		}
+		return o
+	}
+	return cloneValue(reflect.ValueOf(v)).Interface()
+}
+
+func cloneValue(v reflect.Value) reflect.Value {
+	switch v.Kind() {
+	case reflect.Map:
+		if v.IsNil() {
+			return v
+		}
+		o := reflect.MakeMapWithSize(v.Type(), v.Len())
+		for it := v.MapRange(); it.Next(); {
+			o.SetMapIndex(it.Key(), cloneValue(it.Value()))
+		}
+		return o
+	case reflect.Slice:
+		if v.IsNil() {
+			return v
+		}
+		o := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
+		for i := 0; i < v.Len(); i++ {
+			o.Index(i).Set(cloneValue(v.Index(i)))
+		}
+		return o
+	case reflect.Interface:
+		if v.IsNil() {
+			return v
+		}
+		o := reflect.New(v.Type()).Elem()
+		o.Set(cloneValue(v.Elem()))
+		return o
+	}
+	return v
 }
 
 // sweep drops every expired entry. The caller holds s.mu.
