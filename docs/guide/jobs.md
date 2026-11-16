@@ -34,7 +34,7 @@ aemeath.POST(app, "/signup", func(c *aemeath.Ctx, in SignupIn) (User, error) {
 
 ## Retries and failures
 
-A job that returns an error, or panics, is retried. The defaults are 2 extra attempts with exponential backoff (1 s, 2 s, ...), capped at one minute. The final failure is logged with `slog` and counted in `runner.Stats()`.
+A job that returns an error, or panics, is retried. The defaults are 2 extra attempts with exponential backoff (1 s, 2 s, ...), capped at one minute. The final failure is logged with `slog` and counted in `runner.Stats()`. While a job waits for its next attempt its worker is free for other jobs.
 
 ```go
 jobs.New(
