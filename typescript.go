@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -511,6 +512,21 @@ func oneofUnion(f reflect.StructField) string {
 	return ""
 }
 
+// wide64 reports whether the field is an int64 or uint64 sent as a JSON
+// number. JavaScript numbers are exact only up to 2^53, so a large value (a
+// snowflake id, a random 64-bit number) silently changes in the browser.
+// time.Duration is left out: its precision only matters beyond 104 days.
+func wide64(f reflect.StructField) bool {
+	t := f.Type
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if jsonQuoted(f) || t == reflect.TypeFor[time.Duration]() || isCustomJSON(t) || isTextType(t) {
+		return false
+	}
+	return t.Kind() == reflect.Int64 || t.Kind() == reflect.Uint64
+}
+
 // tsDoc builds a JSDoc comment from the description tag and the input constraints.
 func tsDoc(f reflect.StructField, input bool) string {
 	var parts []string
@@ -536,6 +552,9 @@ func tsDoc(f reflect.StructField, input bool) string {
 	}
 	if ex := f.Tag.Get("example"); ex != "" {
 		parts = append(parts, "@example "+ex)
+	}
+	if wide64(f) {
+		parts = append(parts, "("+f.Type.String()+": above 2^53 a JavaScript number loses precision; tag the Go field `json:\",string\"` to send it as a string)")
 	}
 	if len(parts) == 0 {
 		return ""

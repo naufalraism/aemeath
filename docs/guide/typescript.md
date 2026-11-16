@@ -54,3 +54,13 @@ create.mutate({ body: { name: "Ana", email: "ana@example.com" } });
 - Nil slices and maps are `null` in JSON, so output slices/maps are typed `T[] | null`. Use `make([]T, 0)` to send `[]`.
 - `oneof` becomes a literal union (`"admin" | "user"`).
 - Cookie parameters are not part of the browser client.
+
+## Large integers
+
+A JavaScript number is exact only up to 2^53 (about 9 × 10^15). An `int64` or `uint64` above that, such as a snowflake id, silently changes in the browser. The generated types carry a note on such fields. If a field can hold values that large, send it as a string:
+
+```go
+ID uint64 `json:"id,string"`
+```
+
+The client, the Zod schemas and OpenAPI then type it as a string.
