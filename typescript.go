@@ -301,7 +301,7 @@ func (g *tsGen) scanType(t reflect.Type, input bool) {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if isTextType(t) {
+	if isCustomJSON(t) || isTextType(t) {
 		return
 	}
 	switch t.Kind() {
@@ -394,6 +394,9 @@ func (g *tsGen) typeRef(t reflect.Type, depth int, input bool) string {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
+	if isCustomJSON(t) {
+		return "unknown" // MarshalJSON / json.RawMessage: any JSON value
+	}
 	if isTextType(t) {
 		return "string"
 	}
@@ -410,11 +413,11 @@ func (g *tsGen) typeRef(t reflect.Type, depth int, input bool) string {
 		if t.Elem().Kind() == reflect.Uint8 {
 			return "string"
 		}
-		return "Array<" + g.typeRef(t.Elem(), depth+1, input) + ">"
+		return "Array<" + g.elemRef(t.Elem(), depth+1, input) + ">"
 	case reflect.Array:
-		return "Array<" + g.typeRef(t.Elem(), depth+1, input) + ">"
+		return "Array<" + g.elemRef(t.Elem(), depth+1, input) + ">"
 	case reflect.Map:
-		return "Record<string, " + g.typeRef(t.Elem(), depth+1, input) + ">"
+		return "Record<string, " + g.elemRef(t.Elem(), depth+1, input) + ">"
 	case reflect.Struct:
 		if t.Name() != "" {
 			return g.register(t, input)
@@ -426,6 +429,16 @@ func (g *tsGen) typeRef(t reflect.Type, depth int, input bool) string {
 		return "{ " + strings.Join(lines, "; ") + " }"
 	}
 	return "unknown"
+}
+
+// elemRef is the type of an element of a slice, array or map. In a response,
+// a nil pointer, slice or map inside a collection is JSON null.
+func (g *tsGen) elemRef(t reflect.Type, depth int, input bool) string {
+	ref := g.typeRef(t, depth, input)
+	if !input && elemNullable(t) && ref != "unknown" {
+		ref += " | null"
+	}
+	return ref
 }
 
 func (g *tsGen) fields(t reflect.Type, depth int, input bool) []string {
@@ -447,7 +460,7 @@ func (g *tsGen) field(f reflect.StructField, depth int, input bool) (string, boo
 		return "", false
 	}
 	typ := g.fieldType(f, depth, input)
-	opt := hasOmitEmpty(f)
+	opt := outputOptional(f)
 	if input {
 		opt = !inputRequired(f)
 	}
@@ -469,7 +482,7 @@ func (g *tsGen) fieldType(f reflect.StructField, depth int, input bool) string {
 	}
 	// A nil pointer, slice, or map is encoded as JSON null in responses. In a
 	// request, null is only accepted where the field is optional.
-	if (f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type)) {
+	if typ != "unknown" && ((f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type))) {
 		typ += " | null"
 	}
 	return typ

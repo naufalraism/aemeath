@@ -300,6 +300,8 @@ func (sb *schemaBuilder) schemaOf(t reflect.Type, input bool) map[string]any {
 	switch {
 	case t == timeType:
 		s = map[string]any{"type": "string", "format": "date-time"}
+	case isCustomJSON(t):
+		return map[string]any{} // MarshalJSON / json.RawMessage: any JSON value
 	case isTextType(t):
 		s = map[string]any{"type": "string"}
 		if t.Name() == "UUID" {
@@ -368,7 +370,7 @@ func (sb *schemaBuilder) structSchema(t reflect.Type, input bool, skipParams boo
 			if inputRequired(f) {
 				required = append(required, name)
 			}
-		} else if !hasOmitEmpty(f) {
+		} else if !outputOptional(f) {
 			required = append(required, name)
 		}
 	}
@@ -458,7 +460,11 @@ func ruleConstraints(f reflect.StructField) map[string]any {
 			case "uuid":
 				out["format"] = "uuid"
 			case "pattern":
-				out["pattern"] = r.arg
+				// OpenAPI patterns are JavaScript regular expressions without
+				// flags; leave out what cannot be expressed that way.
+				if p, flags, ok := jsRegexp(r.arg); ok && flags == "" {
+					out["pattern"] = p
+				}
 			}
 		case kindNumber:
 			switch r.name {

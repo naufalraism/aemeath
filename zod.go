@@ -145,7 +145,7 @@ func (g *tsGen) zodFieldNamed(f reflect.StructField, name string, input bool) st
 	if (f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type)) {
 		expr += ".nullable()"
 	}
-	optional := hasOmitEmpty(f)
+	optional := outputOptional(f)
 	if input {
 		optional = !inputRequired(f)
 	}
@@ -164,6 +164,9 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 	}
 	if t == timeType {
 		return `z.string().datetime({ offset: true })`
+	}
+	if isCustomJSON(t) {
+		return "z.unknown()" // MarshalJSON / json.RawMessage: any JSON value
 	}
 	if isTextType(t) {
 		if t.Name() == "UUID" {
@@ -185,9 +188,9 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 		if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
 			return "z.string()"
 		}
-		return "z.array(" + g.zodType(t.Elem(), input) + ")"
+		return "z.array(" + g.zodElem(t.Elem(), input) + ")"
 	case reflect.Map:
-		return "z.record(z.string(), " + g.zodType(t.Elem(), input) + ")"
+		return "z.record(z.string(), " + g.zodElem(t.Elem(), input) + ")"
 	case reflect.Struct:
 		if t.Name() != "" {
 			name := g.register(t, input)
@@ -200,6 +203,15 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 		return "z.object({ " + strings.Join(lines, ", ") + " })"
 	}
 	return "z.unknown()"
+}
+
+// zodElem is the schema of an element of a slice, array or map; see elemRef.
+func (g *tsGen) zodElem(t reflect.Type, input bool) string {
+	expr := g.zodType(t, input)
+	if !input && elemNullable(t) && expr != "z.unknown()" {
+		expr += ".nullable()"
+	}
+	return expr
 }
 
 // zodRules appends the Zod checks that correspond to the `validate` rules of f.
@@ -231,7 +243,15 @@ func zodRules(expr string, f reflect.StructField) string {
 			case "uuid":
 				expr += ".uuid()"
 			case "pattern":
-				expr += ".regex(new RegExp(" + strconv.Quote(r.arg) + "))"
+				// Go and JavaScript regular expressions differ; a pattern that
+				// cannot be translated is left to the server.
+				if p, flags, ok := jsRegexp(r.arg); ok {
+					if flags != "" {
+						expr += ".regex(new RegExp(" + strconv.Quote(p) + ", " + strconv.Quote(flags) + "))"
+					} else {
+						expr += ".regex(new RegExp(" + strconv.Quote(p) + "))"
+					}
+				}
 			case "oneof":
 				quoted := make([]string, len(r.set))
 				for i, v := range r.set {

@@ -69,7 +69,7 @@ func TestZodSchemas(t *testing.T) {
 	for _, want := range []string{
 		`import { z } from "zod";`,
 		`export const ZUserSchema: z.ZodType<ZUser> = z.object({`,
-		`friends: z.array(z.lazy(() => ZUserSchema)).nullable().optional()`, // recursive type, optional + nullable
+		`friends: z.array(z.lazy(() => ZUserSchema).nullable()).nullable().optional()`, // recursive type; a []*T can hold nil
 		`nick: z.string().nullable()`,
 		`export const postSignupBodySchema = z.object({`,
 		`name: z.string().min(3).max(10)`,
