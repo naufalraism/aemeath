@@ -1,6 +1,7 @@
 package aemeath
 
 import (
+	"path"
 	"reflect"
 	"strings"
 	"sync"
@@ -18,11 +19,12 @@ type Group struct {
 }
 
 func cleanPrefix(p string) string {
-	p = strings.TrimSuffix(p, "/")
-	if p != "" && !strings.HasPrefix(p, "/") {
-		p = "/" + p
+	if strings.Trim(p, "/") == "" {
+		return ""
 	}
-	return p
+	// Repeated slashes are collapsed: "/api//" used to leave "/api/", which
+	// turned the group's "/" route into a catch-all for everything below it.
+	return path.Clean("/" + p)
 }
 
 // Group creates a route group with a common prefix and optional middlewares.
@@ -70,15 +72,19 @@ func (g *Group) wrap(h HandlerFunc) HandlerFunc {
 
 // fullPath joins the group prefix and a route path. A path of "/" maps to the
 // group prefix itself (an exact match, not a catch-all subtree).
-func (g *Group) fullPath(path string) string {
-	p := strings.TrimPrefix(path, "/")
+func (g *Group) fullPath(route string) string {
+	p := strings.Trim(route, "/")
 	if p == "" {
 		if g.prefix == "" {
 			return "/{$}"
 		}
 		return g.prefix
 	}
-	return g.prefix + "/" + p
+	full := path.Clean(g.prefix + "/" + p) // "//x" joins as "/x"
+	if strings.HasSuffix(route, "/") {
+		full += "/" // a trailing slash keeps its meaning: the subtree below it
+	}
+	return full
 }
 
 // Handle registers a plain route inside the group.

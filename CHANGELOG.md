@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Groups** collapse repeated slashes in the prefix and in route paths: `app.Group("/api//")` registered its `"/"` route as the catch-all `/api/`, and `Group("//")` panicked. `"//x"` now joins as `/x`.
+- **The request target `*`** (as in `OPTIONS *`) is answered `400`, like `net/http.ServeMux`, instead of `404` or `405`.
+
 ### Security
 
 - **`LocalStorage.Save`** replaces control characters and invisible formatting characters (newline, tab, NUL, right-to-left override, zero-width space) in the stored name with `_`. `evil\u202Egnp.exe` displayed as `evilexe.png`, and a newline in a name forged lines in logs that print it. Ordinary letters in any script are kept.
