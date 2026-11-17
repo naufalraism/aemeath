@@ -10,6 +10,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -170,7 +172,16 @@ func (c *Ctx) Redirect(code int, url string) error {
 
 // File serves a file from disk (with Range and conditional request support).
 // Use it from a route returning Handled. Never pass a path built from user input.
+// Like Static, it sends X-Content-Type-Options: nosniff and serves a file
+// whose extension has no known type as application/octet-stream, never as a
+// type guessed from the content.
 func (c *Ctx) File(path string) error {
+	c.W.Header().Set("X-Content-Type-Options", "nosniff")
+	if _, set := c.W.Header()["Content-Type"]; !set && !knownType(filepath.Ext(path)) {
+		if st, err := os.Stat(path); err == nil && !st.IsDir() {
+			c.W.Header().Set("Content-Type", "application/octet-stream")
+		}
+	}
 	http.ServeFile(c.W, c.R, path)
 	return nil
 }

@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **`Static` and `Ctx.File`** send `X-Content-Type-Options: nosniff` on every file, and a file whose extension has no known type ("note", "report.dat") as `application/octet-stream` instead of a type guessed from its content. An uploaded file that started with `<!doctype html>` used to be served as `text/html` (stored XSS) even though `LocalStorage` renames `.html`, `.svg` and `.js` uploads.
+
 ### Documentation
 
 - The README's performance section now separates the one-machine timings from the allocation counts, which are measured by `BenchmarkHelloRoute` and `BenchmarkValidatedJSONPost` (16 and 35 allocations today, not the 13 and 31 it used to claim).
