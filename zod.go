@@ -2,6 +2,7 @@ package aemeath
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -180,9 +181,9 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 		return "z.boolean()"
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return "z.number().int()"
+		return "z.number().int()" + zodRange(t.Kind())
 	case reflect.Float32, reflect.Float64:
-		return "z.number()"
+		return "z.number()" + zodRange(t.Kind())
 	case reflect.Slice, reflect.Array:
 		if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
 			return "z.string()"
@@ -404,4 +405,28 @@ func hasRule(rules []rule, name string) bool {
 		}
 	}
 	return false
+}
+
+// zodRange is the range of a Go number type, which encoding/json enforces:
+// 128 does not fit an int8 and -1 does not fit a uint, so the server answers
+// 400. (int and int64 are left to Zod's own safe-integer range; see the
+// documentation on large integers.)
+func zodRange(k reflect.Kind) string {
+	lo, hi, ok := numberRange(k)
+	if !ok {
+		return ""
+	}
+	out := ".gte(" + jsNum(lo) + ")"
+	if hi != 0 {
+		out += ".lte(" + jsNum(hi) + ")"
+	}
+	return out
+}
+
+// jsNum writes a number for JavaScript, with an exponent when it is large.
+func jsNum(f float64) string {
+	if math.Abs(f) >= 1e21 {
+		return strconv.FormatFloat(f, 'g', -1, 64)
+	}
+	return num(f)
 }
