@@ -439,14 +439,14 @@ app.EnableDocs(aemeath.Info{Title: "My API", Version: "1.0.0"})
 
 ```go
 app.Static("/public", "./public") // no directory listings; global middlewares apply
-if err := app.Listen(":3000"); err != nil { // read header 5 s, read 15 s, write 15 s, idle 60 s
+if err := app.Listen(":3000"); err != nil { // read header 5 s, read 15 s, write 15 s, idle 60 s, headers 64 KiB
 	log.Fatal(err)
 }
 ```
 
 `Listen` returns `nil` after a graceful shutdown (Ctrl+C, `SIGTERM`), so do not write `log.Fatal(app.Listen(...))`: `log.Fatal(nil)` prints `<nil>` and exits with status 1, which makes a clean shutdown look like a crash to Docker, Kubernetes and CI. Check the error instead, as above.
 
-For custom timeouts or TLS: `srv := app.NewServer(":3000"); srv.WriteTimeout = 0; app.Serve(srv)`, or `app.ListenTLS(addr, cert, key)`.
+For custom timeouts, limits or TLS: `srv := app.NewServer(":3000"); srv.WriteTimeout = 0; app.Serve(srv)`, or `app.ListenTLS(addr, cert, key)`. Requests whose headers exceed 64 KiB (`aemeath.DefaultMaxHeaderBytes`; net/http alone allows 1 MiB) get `431`; raise `srv.MaxHeaderBytes` if your clients send very large cookies.
 
 ## 🔄 Upgrading from the first versions
 

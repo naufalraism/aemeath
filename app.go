@@ -291,8 +291,13 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// NewServer returns an http.Server with safe default timeouts that serves
-// the application. Adjust the returned server (for example WriteTimeout for
+// DefaultMaxHeaderBytes is the header limit NewServer sets (64 KiB): plenty
+// for cookies and tokens, and 16 times less memory per connection than
+// net/http's default of 1 MiB. Larger headers are answered 431.
+const DefaultMaxHeaderBytes = 64 << 10
+
+// NewServer returns an http.Server with safe default timeouts and a header
+// limit (DefaultMaxHeaderBytes) that serves the application. Adjust the returned server (for example WriteTimeout for
 // streaming responses) and pass it to Serve.
 func (a *App) NewServer(addr string) *http.Server {
 	return &http.Server{
@@ -302,6 +307,7 @@ func (a *App) NewServer(addr string) *http.Server {
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    DefaultMaxHeaderBytes,
 	}
 }
 

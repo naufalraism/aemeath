@@ -15,8 +15,9 @@ import (
 	"github.com/naufalraism/aemeath"
 )
 
-// countingConn counts the bytes the client manages to send before the server
-// stops reading (the kernel buffers some of it).
+// sendForever writes chunk until limit or an error, and returns how many bytes
+// the client managed to send before the server stopped reading (the kernel
+// buffers some of it).
 func sendForever(c net.Conn, chunk []byte, limit int64) (sent int64) {
 	for sent < limit {
 		_ = c.SetWriteDeadline(time.Now().Add(2 * time.Second))
