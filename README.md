@@ -53,9 +53,9 @@ Allocation counts do not depend on the machine, so they are the part worth watch
 | Route | Allocations | Memory |
 | :--- | :--- | :--- |
 | plain `GET`, no input | 16 | 1,568 B |
-| JSON `POST`, two validated fields | 46 | 8.1 KB |
+| JSON `POST`, two validated fields | 35 | 7.4 KB |
 
-Both include the cost of building the test request. Of the 46, six come from validating JSON keys that are present but empty, which reads the body a second time. Measure your own routes:
+Both include the cost of building the test request. To tell `{"website": ""}` from a missing key, Aemeath reads the JSON body a second time, but only when a validated value turns out to be empty; a body whose validated values are all filled in is decoded once. Measure your own routes:
 
 ```bash
 go test -run '^$' -bench . -benchmem .      # Aemeath alone

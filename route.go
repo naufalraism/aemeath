@@ -254,9 +254,9 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 	if info.hasForm() {
 		return bindWithForm(c, in, info)
 	}
-	var sent any // the JSON body as sent, to tell "" from a missing key
+	var body []byte // the JSON body as sent, to tell "" from a missing key
 	if bodyMethod(c.R.Method) && c.R.Body != nil {
-		body, err := io.ReadAll(io.LimitReader(c.R.Body, DefaultMaxBodyBytes+1))
+		read, err := io.ReadAll(io.LimitReader(c.R.Body, DefaultMaxBodyBytes+1))
 		if err != nil {
 			var mbe *http.MaxBytesError
 			if errors.As(err, &mbe) {
@@ -264,18 +264,16 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 			}
 			return BadRequest("failed to read request body")
 		}
-		if int64(len(body)) > DefaultMaxBodyBytes {
+		if int64(len(read)) > DefaultMaxBodyBytes {
 			return PayloadTooLarge(fmt.Sprintf("request body exceeds the limit of %d bytes", DefaultMaxBodyBytes))
 		}
+		body = read
 		if len(body) > 0 {
 			if ct := c.R.Header.Get("Content-Type"); ct != "" && !isJSONContentType(ct) {
 				return UnsupportedMediaType("Content-Type must be application/json")
 			}
 			if err := json.Unmarshal(body, in); err != nil {
 				return BadRequest("invalid JSON body")
-			}
-			if info.needsSent() {
-				sent = decodeSent(body)
 			}
 		}
 	}
@@ -294,7 +292,18 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 		return err
 	}
 	var errs []FieldError
-	info.plan.validate(v, "", sent, &errs)
+	var needSent bool
+	var ask *bool // nil unless there is a body to decode a second time
+	if len(body) > 0 && info.needsSent() {
+		ask = &needSent
+	}
+	info.plan.validate(v, "", nil, &errs, ask)
+	if needSent {
+		// A rule depends on whether a key was sent: decode the body once more
+		// and validate again, now knowing the keys.
+		errs = nil
+		info.plan.validate(v, "", decodeSent(body), &errs, nil)
+	}
 	if len(errs) > 0 {
 		return ValidationError(errs...)
 	}
@@ -302,7 +311,9 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 }
 
 // decodeSent decodes the body a second time, generically, so validation can
-// see which keys were sent. The body is valid JSON: it decoded once already.
+// see which keys were sent. It costs about as much as the first decode, so it
+// runs only when a rule's outcome actually depends on it (see typePlan.validate).
+// The body is valid JSON: it decoded once already.
 func decodeSent(body []byte) any {
 	var sent any
 	_ = json.Unmarshal(body, &sent)

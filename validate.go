@@ -421,7 +421,14 @@ func (r rule) checkNumber(x float64) string {
 //     `min=1`. A missing key or null is not provided.
 //   - elsewhere (forms, query, headers), an empty value counts as not sent,
 //     because an HTML form always submits its empty inputs.
-func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]FieldError) {
+//
+// Decoding the body a second time to learn its keys costs as much as the first
+// decode, so the caller may pass sent as nil together with a non-nil needSent.
+// Validation then runs without that knowledge and sets *needSent as soon as a
+// rule is skipped only because the keys are unknown; most bodies never reach
+// that point, and the caller decodes and validates again only when it happens.
+// In the second run needSent is nil, so there is no third run.
+func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]FieldError, needSent *bool) {
 	keys, _ := sent.(map[string]any)
 	for _, fp := range p.fields {
 		path := fp.name
@@ -439,6 +446,9 @@ func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]Fi
 		if keys != nil && fp.jsonKey != "" {
 			sentValue = keys[fp.jsonKey]
 		}
+		if needSent != nil && *needSent {
+			return // the caller is going to decode the body and start over
+		}
 		empty := isAbsent(fv)
 		if fp.required && empty {
 			*errs = append(*errs, FieldError{Field: path, Rule: "required", Message: "is required"})
@@ -452,23 +462,31 @@ func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]Fi
 					}
 				}
 			}
+		} else if needSent != nil && len(fp.rules) > 0 && fp.jsonKey != "" {
+			// The value is empty: whether these rules apply depends on whether
+			// the key was sent, which this run does not know.
+			*needSent = true
+			return
 		}
 		if fp.nested != nil {
-			fp.nested.validateNested(fv, path, sentValue, errs)
+			fp.nested.validateNested(fv, path, sentValue, errs, needSent)
+			if needSent != nil && *needSent {
+				return
+			}
 		}
 	}
 }
 
 // validateNested descends into structs reached through pointers, slices and
 // maps, keeping the matching part of the JSON body alongside.
-func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *[]FieldError) {
+func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *[]FieldError, needSent *bool) {
 	v = deref(v)
 	if !v.IsValid() {
 		return
 	}
 	switch v.Kind() {
 	case reflect.Struct:
-		p.validate(v, path, sent, errs)
+		p.validate(v, path, sent, errs, needSent)
 	case reflect.Slice, reflect.Array:
 		items, _ := sent.([]any)
 		for i := 0; i < v.Len(); i++ {
@@ -476,14 +494,20 @@ func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *
 			if i < len(items) {
 				item = items[i]
 			}
-			p.validateNested(v.Index(i), path+"["+strconv.Itoa(i)+"]", item, errs)
+			p.validateNested(v.Index(i), path+"["+strconv.Itoa(i)+"]", item, errs, needSent)
+			if needSent != nil && *needSent {
+				return
+			}
 		}
 	case reflect.Map:
 		entries, _ := sent.(map[string]any)
 		keys := v.MapKeys()
 		sort.Slice(keys, func(i, j int) bool { return fmt.Sprint(keys[i]) < fmt.Sprint(keys[j]) })
 		for _, k := range keys {
-			p.validateNested(v.MapIndex(k), path+"["+fmt.Sprint(k)+"]", entries[fmt.Sprint(k)], errs)
+			p.validateNested(v.MapIndex(k), path+"["+fmt.Sprint(k)+"]", entries[fmt.Sprint(k)], errs, needSent)
+			if needSent != nil && *needSent {
+				return
+			}
 		}
 	}
 }

@@ -6,9 +6,13 @@ All notable changes to this project are documented here.
 
 ### Documentation
 
-- The README's performance section now separates the one-machine timings from the allocation counts, which are measured by `BenchmarkHelloRoute` and `BenchmarkValidatedJSONPost` (16 and 46 allocations today, not the 13 and 31 it used to claim).
+- The README's performance section now separates the one-machine timings from the allocation counts, which are measured by `BenchmarkHelloRoute` and `BenchmarkValidatedJSONPost` (16 and 35 allocations today, not the 13 and 31 it used to claim).
 - Corrected: the OpenAPI `<Type>Input` components (an operation's own input struct is inlined), the TypeScript types of nil slices and maps, the per-hook shutdown limit, what `jwt.Middleware` and `RateLimiter` actually enforce in `SECURITY.md`, and the comparison page, which still said there was no job runner and no metrics or tracing.
 - `internal/docclaims` tests the statements made in the README and `docs/` against the running framework, so a claim that stops being true fails the build.
+
+### Performance
+
+- A JSON body is decoded a second time (to learn which keys were sent) only when a validated value is empty, instead of on every request with validation rules. A body whose validated values are filled in costs 35 allocations instead of 46 for two fields, and a 200-item list about 40% less time and memory. Validation results are unchanged; a test and a fuzz target compare both ways.
 
 ### Changed
 
