@@ -31,6 +31,19 @@ var Upgrader = websocket.Upgrader{}
 // connection; 0 or less disables the limit.
 var DefaultReadLimit int64 = 1 << 20
 
+// DefaultIdleTimeout closes a connection returned by Upgrade when the client
+// has not answered a ping for this long: 60 seconds. The server pings every
+// half of it, and browsers and WebSocket libraries answer pings by
+// themselves, so a client that only listens stays connected; one that has
+// gone away, or never answers, is closed instead of holding a connection and
+// a goroutine forever (net/http's timeouts end when the connection is taken
+// over). ReadMessage then returns an error, as for any closed connection.
+//
+// If you set your own PongHandler, extend the read deadline in it, as this
+// one does. Change it before the server starts; 0 or less turns it off and
+// leaves timeouts to you.
+var DefaultIdleTimeout = 60 * time.Second
+
 // Upgrade turns the HTTP connection of c into a WebSocket connection. When it
 // fails, the upgrader has already written the error response: return nil.
 //
@@ -45,17 +58,39 @@ func Upgrade(c *aemeath.Ctx) (*websocket.Conn, error) {
 	if DefaultReadLimit > 0 {
 		conn.SetReadLimit(DefaultReadLimit)
 	}
+	// net/http's timeouts end at the takeover: without a deadline, a client
+	// that goes silent holds the connection and the handler forever.
+	var pinger *time.Ticker
+	var ping <-chan time.Time
+	if idle := DefaultIdleTimeout; idle > 0 {
+		_ = conn.SetReadDeadline(time.Now().Add(idle))
+		conn.SetPongHandler(func(string) error { return conn.SetReadDeadline(time.Now().Add(idle)) })
+		pinger = time.NewTicker(idle / 2)
+		ping = pinger.C
+	}
 	// A hijacked connection is invisible to http.Server.Shutdown: without
 	// this, the handler kept running after Listen returned and the client was
 	// cut off without a close frame when the process exited.
 	stopping, done := c.Stopping(), c.Context().Done()
 	go func() {
-		select {
-		case <-stopping:
-			msg := websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutting down")
-			_ = conn.WriteControl(websocket.CloseMessage, msg, time.Now().Add(time.Second))
-			_ = conn.Close() // unblocks the handler's ReadMessage
-		case <-done: // the handler returned
+		if pinger != nil {
+			defer pinger.Stop()
+		}
+		for {
+			select {
+			case <-stopping:
+				msg := websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutting down")
+				_ = conn.WriteControl(websocket.CloseMessage, msg, time.Now().Add(time.Second))
+				_ = conn.Close() // unblocks the handler's ReadMessage
+				return
+			case <-done: // the handler returned
+				return
+			case <-ping:
+				// WriteControl may run alongside the handler's own writes.
+				if conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(10*time.Second)) != nil {
+					return // the connection is gone; the handler's read fails too
+				}
+			}
 		}
 	}()
 	return conn, nil

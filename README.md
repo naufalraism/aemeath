@@ -343,7 +343,7 @@ Other notes:
 - `db` and `cache` close their connection when the server shuts down; register your own cleanup with `app.OnShutdown(func(ctx context.Context) error { ... })` (hooks run in reverse order, each with 10 seconds of its own).
 - `LocalStorage.Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part, and appends `.txt` to names a browser would render or run (`.html`, `.svg`, `.js`, ...) so a served upload folder cannot become stored XSS. It does **not** reject file types: use the `accept` tag or `IsAllowedFile`. Files are private to the server's user (mode `0600`); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
 - For OAuth2, make the `state` with `oauth2.GenerateState()`, keep it in a cookie, and compare it in the callback. See `examples/basic`.
-- WebSockets only accept **same-origin** browser connections by default. To allow others, set `ws.Upgrader.CheckOrigin`.
+- WebSockets only accept **same-origin** browser connections by default. To allow others, set `ws.Upgrader.CheckOrigin`. Messages are limited to 1 MiB (`ws.DefaultReadLimit`), and a connection whose client stops answering pings is closed after 60 seconds (`ws.DefaultIdleTimeout`; the server pings every 30 seconds, and browsers answer by themselves).
 
 ---
 

@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Security
 
+- **`ws.Upgrade`** pings every 30 seconds and closes a connection whose client has not answered for 60 (`ws.DefaultIdleTimeout`, `0` to turn it off). net/http's timeouts end when a WebSocket takes the connection over, so a silent client used to hold a connection and a goroutine forever. Browsers answer pings by themselves; if you set your own `PongHandler`, extend the read deadline in it.
 - **`csrf.Middleware`** refuses an unsafe request from a visitor that was never given a token before reading the body. It used to parse a form body of up to 32 MiB (spilling to temporary files) first, on any POST route, for any client.
 - **Validating a map** turns each key into text once instead of twice per comparison while sorting: a 1 MiB body with 100,000 keys took 615 ms and 118 MB, now 116 ms and 25 MB. Keys that implement `encoding.TextMarshaler` are now named in error paths the way JSON writes them.
 - **Validation** stops after `aemeath.MaxValidationErrors` errors (100 by default, `0` for no limit). A 1 MiB JSON body of empty objects used to produce 349,517 errors and a 25 MB response.
