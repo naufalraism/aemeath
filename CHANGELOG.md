@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Security
 
+- **`LocalStorage.Save`** replaces control characters and invisible formatting characters (newline, tab, NUL, right-to-left override, zero-width space) in the stored name with `_`. `evil\u202Egnp.exe` displayed as `evilexe.png`, and a newline in a name forged lines in logs that print it. Ordinary letters in any script are kept.
 - **`CORS`** sends `Vary: Origin` on every response unless `*` is the only allowed origin, also on responses to origins it does not allow and to requests without an Origin header. A shared cache could store one of those and serve it, without CORS headers, to the allowed front end.
 - **`ws.Upgrade`** pings every 30 seconds and closes a connection whose client has not answered for 60 (`ws.DefaultIdleTimeout`, `0` to turn it off). net/http's timeouts end when a WebSocket takes the connection over, so a silent client used to hold a connection and a goroutine forever. Browsers answer pings by themselves; if you set your own `PongHandler`, extend the read deadline in it.
 - **`csrf.Middleware`** refuses an unsafe request from a visitor that was never given a token before reading the body. It used to parse a form body of up to 32 MiB (spilling to temporary files) first, on any POST route, for any client.

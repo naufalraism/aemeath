@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // LocalStorage stores files on the local disk.
@@ -48,11 +49,24 @@ func NewLocalStorage(uploadDir string) *LocalStorage {
 // client-supplied file name so it can never escape UploadDir. Trailing dots
 // and spaces are removed too, because Windows drops them when it creates the
 // file ("x.html." would become "x.html").
+// cleanName replaces control characters (newlines, tabs, NUL) and invisible
+// formatting characters (right-to-left override, zero-width space, ...) with
+// "_". Kept, "evil\u202Egnp.exe" displays as "evilexe.png" in a file list,
+// and a newline forges lines in a log that prints the name.
+func cleanName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return '_'
+		}
+		return r
+	}, name)
+}
+
 func safeBase(filename string) string {
 	if i := strings.LastIndexAny(filename, `/\`); i >= 0 {
 		filename = filename[i+1:]
 	}
-	filename = strings.TrimRight(filepath.Base(filename), ". ")
+	filename = strings.TrimRight(filepath.Base(cleanName(filename)), ". ")
 	if filename == "" || filename == string(filepath.Separator) {
 		return "file"
 	}
