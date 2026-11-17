@@ -335,3 +335,65 @@ func TestStreamQuietLongerThanTheWriteTimeout(t *testing.T) {
 		t.Errorf("received %d of 3 events: the per-event timeout cut a stream that was only quiet", n)
 	}
 }
+
+// SetShutdownTimeout changes the time requests in flight get after SIGTERM,
+// in both directions.
+func TestShutdownTimeoutIsConfigurable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits up to 12 s")
+	}
+	for _, tc := range []struct {
+		timeout, handler time.Duration
+		want             int
+	}{
+		{1 * time.Second, 30 * time.Second, 0},    // cut after 1 s, not 10
+		{15 * time.Second, 11 * time.Second, 200}, // finishes, past the default 10 s
+	} {
+		app := aemeath.New()
+		app.SetShutdownTimeout(tc.timeout)
+		app.Handle("GET", "/work", func(c *aemeath.Ctx) error {
+			select {
+			case <-time.After(tc.handler):
+				return c.Text(200, "finished")
+			case <-c.Context().Done():
+				return c.Context().Err()
+			}
+		})
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		addr := ln.Addr().String()
+		_ = ln.Close()
+		keep := make(chan os.Signal, 1)
+		signal.Notify(keep, syscall.SIGTERM)
+		served := make(chan error, 1)
+		go func() { served <- app.Serve(app.NewServer(addr)) }()
+		var c net.Conn
+		for i := 0; i < 200 && c == nil; i++ {
+			c, _ = net.Dial("tcp", addr)
+			time.Sleep(10 * time.Millisecond)
+		}
+		if c == nil {
+			t.Fatal("the server did not start")
+		}
+		_, _ = fmt.Fprintf(c, "GET /work HTTP/1.1\r\nHost: x\r\n\r\n")
+		time.Sleep(200 * time.Millisecond)
+		start := time.Now()
+		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+			t.Fatal(err)
+		}
+		code, _, rerr := readResponse(c, 30*time.Second)
+		_ = c.Close()
+		<-served
+		signal.Stop(keep)
+		took := time.Since(start)
+		t.Logf("SetShutdownTimeout(%v), handler needs %v -> %d (%v) %v after SIGTERM", tc.timeout, tc.handler, code, rerr, took.Round(100*time.Millisecond))
+		if code != tc.want {
+			t.Errorf("SetShutdownTimeout(%v), handler of %v: status %d, want %d", tc.timeout, tc.handler, code, tc.want)
+		}
+		if limit := min(tc.timeout, tc.handler) + 2*time.Second; took > limit {
+			t.Errorf("SetShutdownTimeout(%v): the server stopped %v after SIGTERM, later than %v", tc.timeout, took.Round(100*time.Millisecond), limit)
+		}
+	}
+}

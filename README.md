@@ -448,6 +448,14 @@ if err := app.Listen(":3000"); err != nil { // read header 5 s, read 15 s, write
 
 For custom timeouts, limits or TLS: `srv := app.NewServer(":3000"); srv.WriteTimeout = 0; app.Serve(srv)`, or `app.ListenTLS(addr, cert, key)`. Requests whose headers exceed 64 KiB (`aemeath.DefaultMaxHeaderBytes`; net/http alone allows 1 MiB) get `431`; raise `srv.MaxHeaderBytes` if your clients send very large cookies.
 
+What the server does under pressure (each point is tested in `internal/hostile`):
+
+- **Shutdown**: after SIGINT/SIGTERM new connections are refused, streams and WebSockets end at once, and requests in flight get 10 seconds (`app.SetShutdownTimeout(d)` changes it). After that their connections are closed: the client gets no response. Keep `SetShutdownDelay` plus this timeout below the platform's grace period.
+- **Slow clients** are closed by the timeouts above: headers after 5 s, a body after 15 s, a response the client does not read after 15 s, an idle keep-alive after 60 s.
+- **No limit on the number of connections**: a thousand slow clients cost a thousand goroutines until the timeouts close them. On the open internet, put a reverse proxy or load balancer (nginx, Caddy, a cloud load balancer) in front to cap connections per client.
+- **`Timeout(d)`** cancels `c.Context()` and answers `504`, but cannot stop a handler that ignores its context: such a handler runs to the end and its response is discarded. Pass `c.Context()` to database and HTTP calls.
+- **A client that leaves** cancels `c.Context()`; the request is recorded as `499`, not as a server error. `c.Context()` is also cancelled once the response is sent, so background work must use `context.WithoutCancel(c.Context())` or the `jobs` package.
+
 ## 🔄 Upgrading from the first versions
 
 Plugins moved to their own packages and now provide typed dependencies instead of `c.State`:

@@ -37,9 +37,10 @@ type App struct {
 	hooksMu       sync.Mutex
 	shutdownHooks []func(context.Context) error
 
-	shutdownDelay time.Duration
-	shuttingDown  atomic.Bool
-	serving       atomic.Bool // set by the first request; Use panics afterwards
+	shutdownDelay   time.Duration
+	shutdownTimeout time.Duration
+	shuttingDown    atomic.Bool
+	serving         atomic.Bool // set by the first request; Use panics afterwards
 
 	stopping     chan struct{} // closed when the server starts to shut down
 	stoppingOnce sync.Once
@@ -47,7 +48,7 @@ type App struct {
 
 // Stopping returns a channel that is closed when the server starts to shut
 // down (after the delay of SetShutdownDelay). Requests in flight still get
-// their 10 seconds to finish, but handlers that would run for ever, such as a
+// their time to finish (SetShutdownTimeout), but handlers that would run for ever, such as a
 // polling loop or a WebSocket read loop, should return when it closes.
 // Streams opened with Ctx.SSE and connections from ws.Upgrade already do: the
 // stream's context is cancelled and the WebSocket is closed.
@@ -68,13 +69,25 @@ func (a *App) Stop() { a.stoppingOnce.Do(func() { close(a.stopping) }) }
 // signal skips the wait. The default is 0 (stop at once).
 //
 // Keep d below the platform's grace period (30 seconds on Kubernetes), minus
-// the 10 seconds given to in-flight requests.
+// the time given to in-flight requests (SetShutdownTimeout, 10 s by default).
 func (a *App) SetShutdownDelay(d time.Duration) {
 	if d < 0 {
 		d = 0
 	}
 	a.shutdownDelay = d
 }
+
+// DefaultShutdownTimeout is how long Listen and Serve wait, after a stop
+// signal, for requests in flight to finish before closing their connections.
+const DefaultShutdownTimeout = 10 * time.Second
+
+// SetShutdownTimeout changes how long requests in flight get to finish after
+// SIGINT/SIGTERM (DefaultShutdownTimeout, 10 s). When it runs out, the
+// remaining connections are closed: their clients get no response and their
+// handlers see c.Context() cancelled. Keep the delay of SetShutdownDelay plus
+// this timeout below the platform's grace period (30 s on Kubernetes, 10 s on
+// some PaaS), or the process is killed first. d <= 0 restores the default.
+func (a *App) SetShutdownTimeout(d time.Duration) { a.shutdownTimeout = d }
 
 // ShuttingDown reports whether the server has received a stop signal. Long
 // handlers (streams, polling loops) can use it to finish early.
@@ -393,8 +406,12 @@ func (a *App) run(srv *http.Server, start func() error) error {
 		log.Printf("aemeath: shutting down gracefully (signal: %v)", sig)
 		a.Stop() // streams and WebSockets end now, so they do not hold up the shutdown
 
-		// Give in-flight requests 10 seconds to finish.
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Give in-flight requests time to finish.
+		grace := a.shutdownTimeout
+		if grace <= 0 {
+			grace = DefaultShutdownTimeout
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), grace)
 		defer cancel()
 
 		if err := srv.Shutdown(ctx); err != nil {
