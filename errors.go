@@ -1,6 +1,7 @@
 package aemeath
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -34,6 +35,13 @@ func UnsupportedMediaType(msg string) *HTTPError {
 func TooManyRequests(msg string) *HTTPError { return NewError(http.StatusTooManyRequests, msg) }
 func InternalError(msg string) *HTTPError   { return NewError(http.StatusInternalServerError, msg) }
 
+// StatusClientClosedRequest (499, from nginx) is the status recorded when a
+// handler fails with context.Canceled: the client went away (closed the tab,
+// timed out, lost the network) before the response was ready. It is not a
+// server error, so it is not logged as one and not counted as a 5xx. Nothing
+// is sent: the client is no longer there to read it.
+const StatusClientClosedRequest = 499
+
 // toHTTPError converts an arbitrary error into an HTTPError. Unknown errors
 // become a generic 500 so internal details are never leaked to clients.
 func toHTTPError(err error) *HTTPError {
@@ -41,10 +49,26 @@ func toHTTPError(err error) *HTTPError {
 	if errors.As(err, &he) {
 		return he
 	}
+	if errors.Is(err, context.Canceled) {
+		return NewError(StatusClientClosedRequest, "client closed request")
+	}
 	log.Printf("aemeath: internal error: %v", err)
 	return NewError(http.StatusInternalServerError, "internal server error")
 }
 
 // AsHTTPError converts any error into an *HTTPError: an *HTTPError is returned
-// as is, anything else becomes a generic 500 (and is logged, never leaked).
+// as is, an error wrapping context.Canceled becomes 499 (the client left),
+// anything else becomes a generic 500 (and is logged, never leaked).
 func AsHTTPError(err error) *HTTPError { return toHTTPError(err) }
+
+// statusOf is the status an error will produce, without logging anything.
+func statusOf(err error) int {
+	var he *HTTPError
+	switch {
+	case errors.As(err, &he):
+		return he.Code
+	case errors.Is(err, context.Canceled):
+		return StatusClientClosedRequest
+	}
+	return http.StatusInternalServerError
+}

@@ -2,7 +2,6 @@ package aemeath
 
 import (
 	"bufio"
-	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -72,12 +71,7 @@ func Logger() Middleware {
 				}
 				status := sw.status
 				if err != nil {
-					var he *HTTPError
-					if errors.As(err, &he) {
-						status = he.Code
-					} else {
-						status = http.StatusInternalServerError
-					}
+					status = statusOf(err)
 				}
 				if id := c.RequestID(); id != "" {
 					log.Printf("%s %s %d %v id=%s", c.R.Method, path, status, time.Since(start), id)
