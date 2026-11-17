@@ -196,12 +196,20 @@ func (c *Ctx) Text(code int, s string) error {
 
 // SSE is an open Server-Sent Events stream.
 type SSE struct {
-	c  *Ctx
-	rc *http.ResponseController
+	c            *Ctx
+	rc           *http.ResponseController
+	writeTimeout time.Duration
 }
 
+// DefaultSSEWriteTimeout is how long one Send or Comment may take before the
+// stream is given up: a client that stops reading (but keeps the connection
+// open) would otherwise block the handler in Send forever.
+const DefaultSSEWriteTimeout = 10 * time.Second
+
 // SSE starts a Server-Sent Events response. The server's write timeout is
-// disabled for this stream, and the stream ends when the handler returns.
+// replaced by a per-event one (DefaultSSEWriteTimeout, see SetWriteTimeout),
+// so the stream may stay open for as long as it is read, and the stream ends
+// when the handler returns.
 // Watch c.Context().Done(): it fires when the client disconnects and when
 // the server starts to shut down.
 func (c *Ctx) SSE() (*SSE, error) {
@@ -228,7 +236,20 @@ func (c *Ctx) SSE() (*SSE, error) {
 	if err := rc.Flush(); err != nil {
 		return nil, fmt.Errorf("aemeath: streaming is not supported by this ResponseWriter: %w", err)
 	}
-	return &SSE{c: c, rc: rc}, nil
+	return &SSE{c: c, rc: rc, writeTimeout: DefaultSSEWriteTimeout}, nil
+}
+
+// SetWriteTimeout sets how long each Send or Comment may take to reach the
+// client; when it runs out, the call returns an error and the connection is
+// closed. Zero means no limit.
+func (s *SSE) SetWriteTimeout(d time.Duration) { s.writeTimeout = d }
+
+// arm starts the clock for one event. ResponseWriters without deadlines (such
+// as httptest.ResponseRecorder) simply ignore it.
+func (s *SSE) arm() {
+	if s.writeTimeout > 0 {
+		_ = s.rc.SetWriteDeadline(time.Now().Add(s.writeTimeout))
+	}
 }
 
 // Send writes one event. data is encoded as JSON; event may be empty.
@@ -240,6 +261,7 @@ func (s *SSE) Send(event string, data any) error {
 	if err != nil {
 		return err
 	}
+	s.arm()
 	if event != "" {
 		if _, err := fmt.Fprintf(s.c.W, "event: %s\n", event); err != nil {
 			return err
@@ -254,6 +276,7 @@ func (s *SSE) Send(event string, data any) error {
 // Comment writes a comment line, a handy keep-alive (": ping").
 func (s *SSE) Comment(text string) error {
 	text = strings.NewReplacer("\r", " ", "\n", " ").Replace(text)
+	s.arm()
 	if _, err := fmt.Fprintf(s.c.W, ": %s\n\n", text); err != nil {
 		return err
 	}

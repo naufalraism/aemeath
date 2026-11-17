@@ -179,9 +179,11 @@ aemeath.GET(app, "/old", func(c *aemeath.Ctx, _ struct{}) (aemeath.Handled, erro
 `Ctx` also has `SetCookie`, `File`, `Text`, and `SSE()` for Server-Sent Events:
 
 ```go
-sse, err := c.SSE()          // disables the write timeout; c.Context() ends on disconnect and at shutdown
+sse, err := c.SSE()          // no overall write timeout; c.Context() ends on disconnect and at shutdown
 sse.Send("tick", map[string]int{"n": 1})
 ```
+
+Each `Send` must reach the client within 10 seconds (`sse.SetWriteTimeout` changes it, 0 turns it off). A client that stops reading but keeps the connection open gets an error from `Send` instead of holding the handler forever; a stream that is only quiet between events is not affected.
 
 ---
 
