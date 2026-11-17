@@ -55,7 +55,7 @@ jobs.New(
 func (j *ResizeImage) Timeout() time.Duration { return 30 * time.Second }
 ```
 
-Go cannot stop a function from outside, so the limit only frees the worker when the job watches its context: pass `ctx` to database queries (`db.WithContext(ctx)`) and HTTP requests (`http.NewRequestWithContext`).
+Go cannot stop a function from outside, so the limit only frees the worker when the job watches its context: pass `ctx` to database queries (`db.From(c).WithContext(ctx)`, or `gormDB.WithContext(ctx)` outside a handler) and HTTP requests (`http.NewRequestWithContext`).
 
 ## Periodic jobs
 

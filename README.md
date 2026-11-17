@@ -38,7 +38,7 @@ Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeM
 
 Aemeath adds typed binding and validation on top of `net/http` for a small fixed cost per request.
 
-*Microbenchmark of a single JSON route using `httptest`, on an Intel i7-10750H with Go 1.27 (lower is better).*
+*Microbenchmark of a single JSON route using `httptest` (lower is better).*
 
 | Framework | Time (ns/op) | Memory (B/op) | Allocations |
 | :--- | :--- | :--- | :--- |
@@ -46,7 +46,16 @@ Aemeath adds typed binding and validation on top of `net/http` for a small fixed
 | **Aemeath** | **2,120** | **1,152 B** | **13** |
 | Gin | 2,280 | 1,433 B | 16 |
 
-This is a microbenchmark, not a load test: numbers vary by machine and say nothing about real-world throughput, where your handlers and database dominate. The table shows the median of five runs (`go test -bench . -benchmem -count 5 -benchtime 2s`) on Windows. A plain `GET` costs 13 allocations (about 1.1 KB), and a JSON `POST` with two validated fields costs about 31 allocations (7.3 KB), including the cost of building the test request. Measure your own routes:
+That table is one run of `go test -bench . -benchmem -count 5 -benchtime 2s` (median of five) on an Intel i7-10750H on Windows with Go 1.27, against the release of Aemeath current at the time. It is useful for the order of magnitude and for the comparison with Gin, and for nothing more: times vary by machine and Go version, and a microbenchmark says nothing about real-world throughput, where your handlers and database dominate.
+
+Allocation counts do not depend on the machine, so they are the part worth watching, and they have grown since that run. On the current code, measured with the commands below:
+
+| Route | Allocations | Memory |
+| :--- | :--- | :--- |
+| plain `GET`, no input | 16 | 1,568 B |
+| JSON `POST`, two validated fields | 46 | 8.1 KB |
+
+Both include the cost of building the test request. Of the 46, six come from validating JSON keys that are present but empty, which reads the body a second time. Measure your own routes:
 
 ```bash
 go test -run '^$' -bench . -benchmem .      # Aemeath alone
@@ -331,7 +340,7 @@ app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore()}), csr
 
 Other notes:
 
-- `db` and `cache` close their connection when the server shuts down; register your own cleanup with `app.OnShutdown(func(ctx context.Context) error { ... })` (hooks run in reverse order, within 10 seconds).
+- `db` and `cache` close their connection when the server shuts down; register your own cleanup with `app.OnShutdown(func(ctx context.Context) error { ... })` (hooks run in reverse order, each with 10 seconds of its own).
 - `LocalStorage.Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part, and appends `.txt` to names a browser would render or run (`.html`, `.svg`, `.js`, ...) so a served upload folder cannot become stored XSS. It does **not** reject file types: use the `accept` tag or `IsAllowedFile`. Files are private to the server's user (mode `0600`); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
 - For OAuth2, make the `state` with `oauth2.GenerateState()`, keep it in a cookie, and compare it in the callback. See `examples/basic`.
 - WebSockets only accept **same-origin** browser connections by default. To allow others, set `ws.Upgrader.CheckOrigin`.
@@ -395,7 +404,7 @@ postUsersBodySchema.safeParse(formValues); // the same rules the server enforces
 The generated Zod schemas and the server made the same accept/reject decision for every payload in our parity check. A few details:
 
 - **Input**: a field is required only if it has `validate:"required"` (or is a non-pointer struct containing a required field). `oneof` becomes a literal union / `z.enum`. Constraints appear as JSDoc and Zod checks. A required pointer is not nullable.
-- **Output**: a field is required unless it has `json:",omitempty"`. Nil slices and maps are typed `T[] | null` (Go encodes them as `null`); initialize them with `make([]T, 0)` to send `[]`. Pointers are typed `T | null`.
+- **Output**: a field is required unless it has `json:",omitempty"`. Nil slices and maps are nullable (`Array<T> | null`, `Record<K, V> | null`), because Go encodes them as `null`; initialize them with `make([]T, 0)` to send `[]`. Pointers are typed `T | null`.
 - `pattern` rules are Go (RE2) expressions handed to JavaScript's `RegExp`; stick to the common syntax.
 - Cookie parameters are not part of the browser client (the browser manages cookies).
 - The function name comes from `aemeath.OperationID("...")`, or from the method and path (`getHelloByName`).
@@ -422,7 +431,7 @@ Responses with status ≥ 400 are returned as `*aemeath.HTTPError`, with `Errors
 app.EnableDocs(aemeath.Info{Title: "My API", Version: "1.0.0"})
 ```
 
-`GET /openapi.json` (OpenAPI 3.0.3) and `GET /docs` (the Scalar UI, loaded from a CDN). Named structs become `components.schemas` entries (`$ref`; input types are named `<Type>Input`), validation rules become constraints (`minLength`, `enum`, `format`, ...), `description`/`example` struct tags are used, and every operation documents `400`/`422`/`500` (plus `401` with `aemeath.RequireAuth()`). Extra route options: `Description`, `Deprecated`, `Tags`, `Summary`, `OperationID`.
+`GET /openapi.json` (OpenAPI 3.0.3) and `GET /docs` (the Scalar UI, loaded from a CDN). Named structs reached from an output, and named structs reached *inside* an input (a shared `Address`, for example), become `components.schemas` entries (`$ref`), the latter named `<Type>Input`; the input struct of the operation itself is written into the operation rather than as a component, validation rules become constraints (`minLength`, `enum`, `format`, ...), `description`/`example` struct tags are used, and every operation documents `400`/`422`/`500` (plus `401` with `aemeath.RequireAuth()`). Extra route options: `Description`, `Deprecated`, `Tags`, `Summary`, `OperationID`.
 
 ## 📂 Static files & server
 

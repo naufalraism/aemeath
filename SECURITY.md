@@ -28,8 +28,8 @@ Out of scope: vulnerabilities in third-party dependencies (report those upstream
 
 ## Secure defaults worth knowing
 
-- `jwt.Middleware` rejects an empty secret, non-HMAC algorithms and tokens without `exp`.
+- `jwt.Middleware` needs exactly one key source and rejects a missing secret, a secret under 32 bytes, any algorithm that does not match the configured key (so an RSA public key cannot be used as an HMAC secret, and `alg: none` is refused), RSA keys under 2048 bits, and tokens without `exp` unless `AllowNoExpiry` is set.
 - WebSockets accept same-origin browser connections only.
 - Static files never list directories. `LocalStorage` strips directory parts from file names and creates files readable only by the server's user (mode 0600), but it does **not** validate file types: do that yourself.
-- `RateLimiter` keys on the connection address; behind a reverse proxy, limit at the proxy.
+- `RateLimiter` keys on the connection address (IPv6 addresses are grouped by /64). Behind a reverse proxy every request carries the proxy's address, so put `aemeath.RealIP(aemeath.PrivateNetworks...)` in front of it, or limit at the proxy.
 - `CORS` refuses to combine credentials with the `*` origin.

@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Documentation
+
+- The README's performance section now separates the one-machine timings from the allocation counts, which are measured by `BenchmarkHelloRoute` and `BenchmarkValidatedJSONPost` (16 and 46 allocations today, not the 13 and 31 it used to claim).
+- Corrected: the OpenAPI `<Type>Input` components (an operation's own input struct is inlined), the TypeScript types of nil slices and maps, the per-hook shutdown limit, what `jwt.Middleware` and `RateLimiter` actually enforce in `SECURITY.md`, and the comparison page, which still said there was no job runner and no metrics or tracing.
+- `internal/docclaims` tests the statements made in the README and `docs/` against the running framework, so a claim that stops being true fails the build.
+
 ### Changed
 
 - **Validation (breaking):** `email`, `url` and `uuid` are now defined once and used by the server, the Zod schemas and OpenAPI alike. `email` requires a dot in the domain (`a@b` and `a@[127.0.0.1]` are refused; non-ASCII addresses are still accepted). The Zod schemas no longer accept non-http(s) URLs such as `javascript:` or `ftp:`.
