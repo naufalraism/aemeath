@@ -73,7 +73,7 @@ func TestZodSchemas(t *testing.T) {
 		`nick: z.string().nullable()`,
 		`export const postSignupBodySchema = z.object({`,
 		`name: z.string().min(3).max(10)`,
-		`email: z.string().regex(new RegExp("^[^\\x00-\\x20`,
+		`email: z.string().min(1).regex(new RegExp("^[^\\x00-\\x20`, // required: "" is missing
 		`role: z.enum(["admin", "user"]).optional()`,
 		`age: z.number().int().gte(18).lt(120),`, // required pointer: not nullable, not optional
 		`level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional()`,

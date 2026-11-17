@@ -437,7 +437,7 @@ func exampleValue(t reflect.Type, raw string) any {
 
 // ruleConstraints maps `validate` rules to OpenAPI schema keywords.
 func ruleConstraints(f reflect.StructField) map[string]any {
-	_, rules := parseRules(reflect.TypeOf(struct{}{}), f)
+	required, rules := parseRules(reflect.TypeOf(struct{}{}), f)
 	out := map[string]any{}
 	class := classOf(f.Type)
 	base := f.Type
@@ -445,6 +445,17 @@ func ruleConstraints(f reflect.StructField) map[string]any {
 		base = base.Elem()
 	}
 	isMap := base.Kind() == reflect.Map
+	if required && !hasPositiveMin(rules) && !hasRule(rules, "oneof") {
+		// An empty string, list or map counts as missing (not behind a pointer).
+		switch f.Type.Kind() {
+		case reflect.String:
+			out["minLength"] = 1
+		case reflect.Slice:
+			out["minItems"] = 1
+		case reflect.Map:
+			out["minProperties"] = 1
+		}
+	}
 	for _, r := range rules {
 		switch class {
 		case kindString:

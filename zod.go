@@ -225,13 +225,23 @@ func zodRules(expr string, f reflect.StructField) string {
 	if f.Tag.Get("validate") == "" {
 		return expr
 	}
-	_, rules := parseRules(reflect.TypeOf(struct{}{}), f)
+	required, rules := parseRules(reflect.TypeOf(struct{}{}), f)
 	class := classOf(f.Type)
 	base := f.Type
 	for base.Kind() == reflect.Pointer {
 		base = base.Elem()
 	}
 	isMap := base.Kind() == reflect.Map
+	if required && !hasPositiveMin(rules) {
+		// The server reads an empty string, list or map as missing. (Behind
+		// a pointer, only null is missing: "" is a value.)
+		switch f.Type.Kind() {
+		case reflect.String, reflect.Slice:
+			expr += ".min(1)"
+		case reflect.Map:
+			expr += mapSize(">=", 1)
+		}
+	}
 	for _, r := range rules {
 		switch class {
 		case kindString:
@@ -288,7 +298,16 @@ func zodRules(expr string, f reflect.StructField) string {
 			}
 		case kindList:
 			if isMap {
-				continue // z.record has no size checks
+				// z.record has no size checks of its own.
+				switch r.name {
+				case "min":
+					expr += mapSize(">=", r.num)
+				case "max":
+					expr += mapSize("<=", r.num)
+				case "len":
+					expr += mapSize("===", r.num)
+				}
+				continue
 			}
 			switch r.name {
 			case "min":
@@ -358,4 +377,31 @@ export function createHooks(client: Client) {
 	}
 	b.WriteString("  };\n}\n")
 	return b.String()
+}
+
+// mapSize checks the number of keys of a z.record, as the server checks the
+// length of a map.
+func mapSize(op string, n float64) string {
+	word := map[string]string{">=": "at least", "<=": "at most", "===": "exactly"}[op]
+	return ".refine((v) => Object.keys(v).length " + op + " " + num(n) + ", " + jsString("must contain "+word+" "+num(n)+" items") + ")" // the server's message
+}
+
+// hasPositiveMin reports whether a min or len rule already demands at least
+// one element, which makes the check for "required" redundant.
+func hasPositiveMin(rules []rule) bool {
+	for _, r := range rules {
+		if (r.name == "min" || r.name == "len") && r.num >= 1 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasRule(rules []rule, name string) bool {
+	for _, r := range rules {
+		if r.name == name {
+			return true
+		}
+	}
+	return false
 }

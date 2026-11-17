@@ -13,7 +13,7 @@ func TestTypeScriptClient(t *testing.T) {
 		"path: { name: string }",
 		"query?: { lang?: string }",
 		"postUsers: (input: ",
-		"body: { name: string }",
+		"body: { /** @minLength 1 */ name: string }", // required: an empty string is missing
 		"export interface UserOut {",
 		"id: number;",
 		"request<UserOut>",
