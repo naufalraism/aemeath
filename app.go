@@ -244,6 +244,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !a.serving.Load() {
 		a.serving.Store(true)
 	}
+	limitBody(w, r)
 	// "*" is the request target of "OPTIONS *" (a question about the server,
 	// not a resource). ServeMux.ServeHTTP answers it 400 before routing;
 	// asking mux.Handler directly would skip that and answer 404 or 405.

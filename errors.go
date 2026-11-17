@@ -3,6 +3,7 @@ package aemeath
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -52,6 +53,10 @@ func toHTTPError(err error) *HTTPError {
 	if errors.Is(err, context.Canceled) {
 		return NewError(StatusClientClosedRequest, "client closed request")
 	}
+	var mbe *http.MaxBytesError
+	if errors.As(err, &mbe) {
+		return PayloadTooLarge(fmt.Sprintf("request body exceeds the limit of %d bytes", mbe.Limit))
+	}
 	log.Printf("aemeath: internal error: %v", err)
 	return NewError(http.StatusInternalServerError, "internal server error")
 }
@@ -69,6 +74,8 @@ func statusOf(err error) int {
 		return he.Code
 	case errors.Is(err, context.Canceled):
 		return StatusClientClosedRequest
+	case errors.As(err, new(*http.MaxBytesError)):
+		return http.StatusRequestEntityTooLarge
 	}
 	return http.StatusInternalServerError
 }

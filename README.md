@@ -53,7 +53,7 @@ Allocation counts do not depend on the machine, so they are the part worth watch
 | Route | Allocations | Memory |
 | :--- | :--- | :--- |
 | plain `GET`, no input | 16 | 1,568 B |
-| JSON `POST`, two validated fields | 35 | 7.4 KB |
+| JSON `POST`, two validated fields | 37 | 7.5 KB |
 
 Both include the cost of building the test request. To tell `{"website": ""}` from a missing key, Aemeath reads the JSON body a second time, but only when a validated value turns out to be empty; a body whose validated values are all filled in is decoded once. Measure your own routes:
 
@@ -218,7 +218,7 @@ How it behaves:
 - For **scalars** (`int`, `bool`, `float`) with `required` you **must** use a pointer so "not sent" differs from "sent as zero". Aemeath panics at **startup** for that, for `required`+`omitempty`, and for unknown or misapplied rules (`min` on a bool, `email` on a number, a bad regex, ...). A typo never becomes a silent runtime bug.
 - Nested structs, pointers to structs, slices and maps of structs are validated recursively; recursive types are supported.
 - Checks only your handler can make: `return aemeath.ValidationError(aemeath.FieldError{Field: "email", Rule: "unique", Message: "is already taken"})`.
-- Malformed input (invalid JSON, `?page=abc`) is a `400`; a body over `aemeath.DefaultMaxBodyBytes` (1 MiB) is `413`; a non-JSON `Content-Type` is `415`. With `curl -d`, add `-H 'Content-Type: application/json'`.
+- Malformed input (invalid JSON, `?page=abc`) is a `400`; a body over `aemeath.DefaultMaxBodyBytes` (1 MiB) is `413`; every other body, including one a handler reads itself from `c.R.Body`, is capped at `aemeath.DefaultMaxRequestBytes` (32 MiB by default) and returning the read error gives `413`; a non-JSON `Content-Type` is `415`. With `curl -d`, add `-H 'Content-Type: application/json'`.
 
 ---
 
@@ -261,7 +261,7 @@ app.Use(
 | `SecurityHeaders()` | `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, HSTS (only over TLS) |
 | `Gzip(min...)` | compresses JSON/text for clients that accept it; leaves streams, tiny bodies and WebSockets alone |
 | `Timeout(d)` | deadline on `c.Context()`; `504` when a handler that honors the context runs out |
-| `MaxBodySize(n)` | caps request bodies; typed routes answer `413` |
+| `MaxBodySize(n)` | sets the body limit in place of the default cap (raise it on an upload group, `-1` removes it); reading past it is `413` |
 | `RateLimiter(n, window)` | per-IP fixed window; sends `Retry-After` on `429` |
 | `RealIP(trusted...)` | behind trusted proxies, takes the client address from `X-Forwarded-For` / `X-Real-IP` |
 

@@ -1,6 +1,9 @@
 package aemeath
 
-import "net/http"
+import (
+	"io"
+	"net/http"
+)
 
 // SecurityHeaders adds HTTP headers that harden the browser-facing surface.
 func SecurityHeaders() Middleware {
@@ -31,13 +34,51 @@ func SecurityHeaders() Middleware {
 	}
 }
 
-// MaxBodySize limits the size of request bodies globally (e.g. 2 MiB).
-// Requests above the limit are rejected with 413 by typed routes.
+// MaxBodySize sets the limit for request bodies (e.g. 2 MiB), in place of the
+// default cap (see DefaultMaxRequestBytes); use it on a group or route to
+// raise the cap for large uploads. A negative value removes the cap. Reading
+// past the limit fails with *http.MaxBytesError, which becomes 413.
 func MaxBodySize(bytes int64) Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) error {
-			c.R.Body = http.MaxBytesReader(c.W, c.R.Body, bytes)
+			body := c.R.Body
+			if d, ok := body.(*defaultBodyLimit); ok {
+				body = d.orig
+			}
+			if bytes >= 0 {
+				body = http.MaxBytesReader(c.W, body, bytes)
+			}
+			c.R.Body = body
 			return next(c)
 		}
 	}
+}
+
+// DefaultMaxRequestBytes caps every request body, including the ones a
+// handler reads itself from c.R.Body, so a client cannot stream gigabytes
+// into a route that forgot a limit. 0 means the larger of DefaultMaxBodyBytes
+// and DefaultMaxMultipartBytes (32 MiB by default); a negative value turns
+// the cap off. MaxBodySize on a group or route replaces it. Typed routes keep
+// their own, smaller limits.
+var DefaultMaxRequestBytes int64
+
+// defaultBodyLimit is the default cap, marked so MaxBodySize can replace it
+// instead of nesting inside it.
+type defaultBodyLimit struct {
+	io.ReadCloser
+	orig io.ReadCloser
+}
+
+func limitBody(w http.ResponseWriter, r *http.Request) {
+	if r.Body == nil || r.Body == http.NoBody || r.ContentLength == 0 {
+		return
+	}
+	n := DefaultMaxRequestBytes
+	if n < 0 {
+		return
+	}
+	if n == 0 {
+		n = max(DefaultMaxBodyBytes, DefaultMaxMultipartBytes)
+	}
+	r.Body = &defaultBodyLimit{ReadCloser: http.MaxBytesReader(w, r.Body, n), orig: r.Body}
 }
