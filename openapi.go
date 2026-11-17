@@ -352,10 +352,10 @@ func (sb *schemaBuilder) structSchema(t reflect.Type, input bool, skipParams boo
 				continue
 			}
 		}
-		name := jsonName(f)
-		if name == "-" {
+		if jsonSkipped(f) {
 			continue
 		}
+		name := jsonName(f)
 		if jsonQuoted(f) {
 			// `json:",string"`: a number or boolean sent as a JSON string.
 			schema := withNull(map[string]any{"type": "string", "pattern": quotedPattern(f.Type)}, f.Type.Kind() == reflect.Pointer)

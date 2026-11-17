@@ -103,7 +103,7 @@ func (g *tsGen) zodInputParts(s routeSpec) map[string][]string {
 		default:
 			continue
 		}
-		if jsonName(f) == "-" && src == "" {
+		if jsonSkipped(f) && src == "" {
 			continue
 		}
 		parts[key] = append(parts[key], g.zodFieldNamed(f, name, true))
@@ -114,11 +114,10 @@ func (g *tsGen) zodInputParts(s routeSpec) map[string][]string {
 func (g *tsGen) zodFields(t reflect.Type, input bool) []string {
 	var lines []string
 	for _, f := range jsonFields(t) {
-		name := jsonName(f)
-		if name == "-" {
+		if jsonSkipped(f) {
 			continue
 		}
-		lines = append(lines, g.zodFieldNamed(f, name, input))
+		lines = append(lines, g.zodFieldNamed(f, jsonName(f), input))
 	}
 	return lines
 }

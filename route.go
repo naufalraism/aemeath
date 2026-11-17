@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 // MaxValidationErrors is the most validation errors one request reports
@@ -117,6 +118,7 @@ func (i *inputInfo) needsSent() bool {
 // A json-tagged field on a bodyless method (GET/DELETE) is never bound, so a
 // warning is logged.
 func prepareInput(t reflect.Type, method, path string) *inputInfo {
+	checkJSONNames(t, map[reflect.Type]bool{})
 	info := &inputInfo{typ: t, plan: planFor(t)}
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -171,6 +173,7 @@ func typedHandler[In, Out any](cfg routeConfig, info *inputInfo, fn func(*Ctx, I
 func Route[In, Out any](a *App, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
 	cfg := newRouteConfig(opts)
 	info := prepareInput(reflect.TypeFor[In](), method, path)
+	checkJSONNames(reflect.TypeFor[Out](), map[reflect.Type]bool{})
 	a.specs = append(a.specs, routeSpec{
 		method: method, path: path,
 		in: reflect.TypeFor[In](), out: reflect.TypeFor[Out](),
@@ -224,17 +227,53 @@ func paramSource(f reflect.StructField) (string, string) {
 
 // jsonName returns the field name from the json tag, or the Go field name if absent.
 func jsonName(f reflect.StructField) string {
-	name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
-	if name == "" {
-		return f.Name
+	if name := jsonTagName(f); name != "" {
+		return name
+	}
+	return f.Name
+}
+
+// jsonTagName is the name the json tag gives the field, as encoding/json reads
+// it: "" when there is none, or when the name has a character encoding/json
+// does not accept (a quote, a backslash, an emoji, a control character...),
+// in which case encoding/json uses the Go field name. `json:"-,"` names the
+// field "-"; only `json:"-"` leaves it out (see jsonSkipped).
+func jsonTagName(f reflect.StructField) string {
+	tag := f.Tag.Get("json")
+	if tag == "-" {
+		return ""
+	}
+	name, _, _ := strings.Cut(tag, ",")
+	if !validJSONName(name) {
+		return ""
 	}
 	return name
 }
 
-// hasJSONName reports whether the field has an explicit, non-ignored json tag.
-func hasJSONName(f reflect.StructField) bool {
-	tag := f.Tag.Get("json")
-	return tag != "" && tag != "-"
+// validJSONName is encoding/json's rule for names in tags (isValidTag).
+func validJSONName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		switch {
+		case strings.ContainsRune("!#$%&()*+-./:;<=>?@[]^_{|}~ ", c):
+			// Backslash and quote are reserved; other punctuation is allowed.
+		case !unicode.IsLetter(c) && !unicode.IsDigit(c):
+			return false
+		}
+	}
+	return true
+}
+
+// hasJSONName reports whether the json tag gives the field a name. An
+// embedded struct without one is flattened into its parent.
+func hasJSONName(f reflect.StructField) bool { return jsonTagName(f) != "" }
+
+// jsonSkipped reports whether encoding/json leaves the field out: `json:"-"`
+// on the field, or on an embedded struct it was promoted from.
+func jsonSkipped(f reflect.StructField) bool {
+	return f.Tag.Get("json") == "-" || f.Tag.Get("aemeath_json") == "skip"
 }
 
 // hasRequired reports whether the field has the `validate:"required"` tag.

@@ -102,6 +102,7 @@ func GroupRoute[In, Out any](g *Group, method, path string, fn func(*Ctx, In) (O
 	fullPath := g.fullPath(path)
 	cfg := newRouteConfig(append(append([]RouteOption(nil), g.opts...), opts...))
 	info := prepareInput(reflect.TypeFor[In](), method, fullPath)
+	checkJSONNames(reflect.TypeFor[Out](), map[reflect.Type]bool{})
 
 	g.app.specs = append(g.app.specs, routeSpec{
 		method: method, path: fullPath,

@@ -6,6 +6,8 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **JSON names follow encoding/json exactly** in OpenAPI, the TypeScript client, the Zod schemas and validation errors. A json tag name with a character encoding/json refuses (`json:"price€"`, a quote, a backslash, an emoji) used to be documented while encoding/json sends the Go field name; `json:"-,"` (a field named `-`) was left out; an embedded struct tagged `json:",omitempty"` was described as one field instead of being flattened, and one tagged `json:"-"` was described although encoding/json leaves it out (its path and query fields are still bound).
+- **Two fields with the same JSON name at the same depth** (both tagged or both untagged, for example through two embedded structs) are refused when the route is registered: encoding/json sends and reads neither, while the generators documented one.
 - **TypeScript and Zod** string literals are written as JavaScript, not Go: `strconv.Quote` wrote characters above U+FFFF that are not printable as `\U000e0067`, which JavaScript reads as `U000e0067`. A `oneof` with a subdivision flag emoji (🏴󠁧󠁢󠁳󠁣󠁴󠁿) was refused by the generated schema while the server accepted it.
 - **Groups** collapse repeated slashes in the prefix and in route paths: `app.Group("/api//")` registered its `"/"` route as the catch-all `/api/`, and `Group("//")` panicked. `"//x"` now joins as `/x`.
 - **The request target `*`** (as in `OPTIONS *`) is answered `400`, like `net/http.ServeMux`, instead of `404` or `405`.

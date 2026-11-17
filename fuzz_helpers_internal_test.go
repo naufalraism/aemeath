@@ -17,6 +17,7 @@ import (
 // echo is set and the types are the same).
 func registerRuntimeRoute(a *App, method, path string, in, out reflect.Type) {
 	info := prepareInput(in, method, path)
+	checkJSONNames(out, map[reflect.Type]bool{}) // as Route does
 	cfg := newRouteConfig(nil)
 	a.specs = append(a.specs, routeSpec{method: method, path: path, in: in, out: out, cfg: cfg})
 	a.Handle(method, path, func(c *Ctx) error {
@@ -32,6 +33,7 @@ func registerRuntimeRoute(a *App, method, path string, in, out reflect.Type) {
 	})
 }
 
+func jsonMarshalForTest(v any) ([]byte, error)   { return json.Marshal(v) }
 func jsonUnmarshalForTest(b []byte, v any) error { return json.Unmarshal(b, v) }
 
 func typeOf[T any]() reflect.Type { return reflect.TypeFor[T]() }

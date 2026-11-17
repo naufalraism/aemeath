@@ -104,7 +104,7 @@ func buildPlan(t reflect.Type) *typePlan {
 	for _, ff := range flatFields(t) {
 		f := ff.StructField
 		fp := &fieldPlan{field: f, path: ff.Path, name: fieldDisplayName(f)}
-		if _, param := paramSource(f); param == "" && formName(f) == "" && jsonName(f) != "-" {
+		if _, param := paramSource(f); param == "" && formName(f) == "" && !jsonSkipped(f) {
 			fp.jsonKey = jsonName(f)
 		}
 		fp.required, fp.rules = parseRules(t, f)

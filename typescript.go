@@ -315,7 +315,7 @@ func (g *tsGen) scanType(t reflect.Type, input bool) {
 	}
 	if t.Name() == "" {
 		for _, f := range jsonFields(t) {
-			if jsonName(f) == "-" {
+			if jsonSkipped(f) {
 				continue
 			}
 			g.scanType(f.Type, input)
@@ -340,7 +340,7 @@ func (g *tsGen) scanType(t reflect.Type, input bool) {
 		e.useOut = true
 	}
 	for _, f := range jsonFields(t) {
-		if jsonName(f) == "-" {
+		if jsonSkipped(f) {
 			continue
 		}
 		g.scanType(f.Type, input)
@@ -456,10 +456,10 @@ func (g *tsGen) field(f reflect.StructField, depth int, input bool) (string, boo
 	if !f.IsExported() {
 		return "", false
 	}
-	name := jsonName(f)
-	if name == "-" {
+	if jsonSkipped(f) {
 		return "", false
 	}
+	name := jsonName(f)
 	typ := g.fieldType(f, depth, input)
 	opt := outputOptional(f)
 	if input {

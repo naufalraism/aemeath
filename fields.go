@@ -3,7 +3,9 @@ package aemeath
 import (
 	"encoding"
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 )
 
@@ -17,7 +19,125 @@ type flatField struct {
 // flatFields returns the exported fields of t. Embedded structs without a
 // json name are flattened, exactly like encoding/json does.
 func flatFields(t reflect.Type) []flatField {
-	return flattenFields(t, nil, 0, false)
+	return dominantFields(flattenFields(t, nil, 0, false, false))
+}
+
+// jsonSkipTag marks a field promoted from an embedded struct tagged
+// `json:"-"`: encoding/json leaves the whole embedded struct out, but its
+// path, query, header, cookie and form fields are still bound.
+const jsonSkipTag = ` aemeath_json:"skip"`
+
+// dominantFields applies encoding/json's rule for fields that share a JSON
+// name: the shallowest one wins; at the same depth, the one with a json tag
+// wins; two at the same depth that are both tagged, or both untagged, cancel
+// out and neither is sent or read. jsonNameConflict reports the last case,
+// which registration refuses.
+func dominantFields(all []flatField) []flatField {
+	drop := map[int]bool{}
+	for _, group := range jsonNameGroups(all) {
+		if len(group) < 2 {
+			continue
+		}
+		if tie(all, group) {
+			for _, i := range group {
+				drop[i] = true
+			}
+			continue
+		}
+		for _, i := range group[1:] {
+			drop[i] = true
+		}
+	}
+	if len(drop) == 0 {
+		return all
+	}
+	out := make([]flatField, 0, len(all)-len(drop))
+	for i, f := range all {
+		if !drop[i] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// jsonNameGroups returns, for each JSON name used by more than zero fields,
+// the indexes of those fields in all, sorted as encoding/json sorts them:
+// shallowest first, then tagged before untagged, then in declaration order.
+func jsonNameGroups(all []flatField) [][]int {
+	byName := map[string][]int{}
+	var names []string
+	for i, f := range all {
+		if jsonSkipped(f.StructField) || !f.IsExported() {
+			continue
+		}
+		n := jsonName(f.StructField)
+		if _, ok := byName[n]; !ok {
+			names = append(names, n)
+		}
+		byName[n] = append(byName[n], i)
+	}
+	groups := make([][]int, 0, len(names))
+	for _, n := range names {
+		g := byName[n]
+		sort.SliceStable(g, func(a, b int) bool {
+			fa, fb := all[g[a]], all[g[b]]
+			if len(fa.Path) != len(fb.Path) {
+				return len(fa.Path) < len(fb.Path)
+			}
+			return hasJSONName(fa.StructField) && !hasJSONName(fb.StructField)
+		})
+		groups = append(groups, g)
+	}
+	return groups
+}
+
+func tie(all []flatField, group []int) bool {
+	a, b := all[group[0]], all[group[1]]
+	return len(a.Path) == len(b.Path) && hasJSONName(a.StructField) == hasJSONName(b.StructField)
+}
+
+// jsonNameConflict reports two fields of t that cancel each other out
+// (see dominantFields), named by their path ("Address.City").
+func jsonNameConflict(t reflect.Type) (first, second, name string, found bool) {
+	all := flattenFields(t, nil, 0, false, false)
+	for _, group := range jsonNameGroups(all) {
+		if len(group) > 1 && tie(all, group) {
+			return fieldPathName(t, all[group[0]].Path), fieldPathName(t, all[group[1]].Path), jsonName(all[group[0]].StructField), true
+		}
+	}
+	return "", "", "", false
+}
+
+func fieldPathName(t reflect.Type, path []int) string {
+	var parts []string
+	for _, i := range path {
+		for t.Kind() == reflect.Pointer {
+			t = t.Elem()
+		}
+		f := t.Field(i)
+		parts = append(parts, f.Name)
+		t = f.Type
+	}
+	return strings.Join(parts, ".")
+}
+
+// checkJSONNames refuses, at registration, a type that encoding/json cannot
+// send whole: two fields with the same JSON name at the same depth (neither
+// travels). It looks through pointers, slices, arrays, maps and fields.
+func checkJSONNames(t reflect.Type, seen map[reflect.Type]bool) {
+	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array || t.Kind() == reflect.Map {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct || seen[t] || t == timeType || isCustomJSON(t) {
+		return
+	}
+	seen[t] = true
+	if a, b, name, ok := jsonNameConflict(t); ok {
+		panic(fmt.Sprintf("aemeath: %s: fields %s and %s both have the JSON name %q at the same depth, so encoding/json sends and reads neither; rename one, or give the one that should win a json tag", t, a, b, name))
+	}
+	for _, f := range flatFields(t) {
+		checkJSONNames(f.Type, seen)
+	}
 }
 
 // viaPointerTag marks a field promoted through an embedded pointer. When that
@@ -36,7 +156,7 @@ func outputOptional(f reflect.StructField) bool {
 	return hasOmitEmpty(f) || promotedViaPointer(f)
 }
 
-func flattenFields(t reflect.Type, prefix []int, depth int, viaPtr bool) []flatField {
+func flattenFields(t reflect.Type, prefix []int, depth int, viaPtr, skipped bool) []flatField {
 	var out []flatField
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
@@ -46,8 +166,11 @@ func flattenFields(t reflect.Type, prefix []int, depth int, viaPtr bool) []flatF
 			for ft.Kind() == reflect.Pointer {
 				ft = ft.Elem()
 			}
+			// encoding/json flattens an embedded struct unless its tag names
+			// it (`json:",omitempty"` names nothing), and leaves it out
+			// entirely with `json:"-"`.
 			if ft.Kind() == reflect.Struct && !hasJSONName(f) {
-				out = append(out, flattenFields(ft, path, depth+1, viaPtr || f.Type.Kind() == reflect.Pointer)...)
+				out = append(out, flattenFields(ft, path, depth+1, viaPtr || f.Type.Kind() == reflect.Pointer, skipped || f.Tag.Get("json") == "-")...)
 				continue
 			}
 		}
@@ -56,6 +179,9 @@ func flattenFields(t reflect.Type, prefix []int, depth int, viaPtr bool) []flatF
 		}
 		if viaPtr {
 			f.Tag += viaPointerTag
+		}
+		if skipped {
+			f.Tag += jsonSkipTag
 		}
 		out = append(out, flatField{f, path})
 	}
