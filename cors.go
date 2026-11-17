@@ -53,8 +53,22 @@ func CORS(configs ...CORSConfig) Middleware {
 		}
 	}
 
+	// The answer depends on the Origin header unless the only allowed origin
+	// is "*", which every origin gets alike. Say so on every response, including those without CORS
+	// headers: otherwise a shared cache can store one of those and serve it
+	// to an allowed origin, whose browser then refuses it.
+	varies := false
+	for _, o := range cfg.AllowOrigins {
+		if o != "*" {
+			varies = true
+		}
+	}
+
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) error {
+			if varies {
+				c.W.Header().Add("Vary", "Origin")
+			}
 			origin := c.R.Header.Get("Origin")
 			if origin == "" {
 				return next(c)
@@ -77,9 +91,6 @@ func CORS(configs ...CORSConfig) Middleware {
 
 			h := c.W.Header()
 			h.Set("Access-Control-Allow-Origin", allowOrigin)
-			if allowOrigin != "*" {
-				h.Add("Vary", "Origin")
-			}
 			if cfg.AllowCredentials {
 				h.Set("Access-Control-Allow-Credentials", "true")
 			}
