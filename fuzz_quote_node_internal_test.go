@@ -17,11 +17,11 @@ type flagIn struct {
 func TestZodEnumWithFlagEmoji(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
-		t.Skip("node is not installed")
+		skipNode(t, "node is not installed")
 	}
 	zodDir, err := filepath.Abs("examples/tscheck/node_modules/zod")
 	if err != nil || !fileExistsForTest(zodDir) {
-		t.Skip("zod is not installed (npm ci in examples/tscheck)")
+		skipNode(t, "zod is not installed (npm ci in examples/tscheck)")
 	}
 	app := New()
 	registerRuntimeRoute(app, "POST", "/f", typeOf[flagIn](), typeOf[struct{}]())
@@ -58,5 +58,38 @@ func TestZodEnumWithFlagEmoji(t *testing.T) {
 	}
 	if !strings.Contains(string(out), `"🏴󠁧󠁢󠁳󠁣󠁴󠁿" true`) {
 		t.Error("the server accepts the Scottish flag, the generated Zod schema rejects it")
+	}
+}
+
+type emojiRangeIn struct {
+	Mood string `json:"mood" validate:"pattern=^[😀-😂]$"`
+}
+
+// A pattern RE2 accepts must not make the generated schemas file fail to load.
+func TestZodSchemasLoadWithNonBMPRange(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		skipNode(t, "node is not installed")
+	}
+	zodDir, _ := filepath.Abs("examples/tscheck/node_modules/zod")
+	if !fileExistsForTest(zodDir) {
+		skipNode(t, "zod is not installed (npm ci in examples/tscheck)")
+	}
+	app := New()
+	registerRuntimeRoute(app, "POST", "/m", typeOf[emojiRangeIn](), typeOf[struct{}]())
+	js := strings.Replace(app.ZodSchemas(), `import { z } from "zod";`, `const { z } = await import("`+filepath.ToSlash(zodDir)+`/index.js");`, 1)
+	js = strings.ReplaceAll(js, "export const", "const")
+	js += "\nconsole.log('loaded;', postMBodySchema.safeParse({mood: '\\u{1F601}'}).success, postMBodySchema.safeParse({mood: 'a'}).success);\n"
+	file := filepath.Join(t.TempDir(), "load.mjs")
+	if err := os.WriteFile(file, []byte(js), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(node, file).CombinedOutput()
+	t.Logf("node:\n%s", out)
+	if err != nil {
+		t.Fatalf("the schemas file does not load: %v", err)
+	}
+	if !strings.Contains(string(out), "loaded; true false") {
+		t.Error("😁 must match ^[😀-😂]$ and 'a' must not, as on the server")
 	}
 }

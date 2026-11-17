@@ -124,6 +124,12 @@ jobs:
         for i in $(seq 1 60); do (exec 3<>/dev/tcp/127.0.0.1/38123) 2>/dev/null && break; sleep 0.5; done
         npm run verify
 
+    # These tests skip without node and Zod; here both are installed.
+    - name: Server and Zod agree on 120,000 values, regex translation, string literals
+      env:
+        AEMEATH_REQUIRE_NODE: "1"
+      run: go test -count=1 -v -run 'TestZodAgreesWithTheServer|TestJSRegexpRandomPatterns|TestZodSchemasLoadWithNonBMPRange|TestZodEnumWithFlagEmoji|TestJSStringInARealEngine' .
+
   benchmarks:
     name: Benchmarks module
     runs-on: ubuntu-latest

@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"testing"
 )
 
 // registerRuntimeRoute registers a typed route whose input and output types
@@ -51,4 +52,14 @@ func doJSON(h http.Handler, method, target, body string) *httptest.ResponseRecor
 func writeJSONForTest(w http.ResponseWriter, v any) error {
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(v)
+}
+
+// skipNode skips a test that needs node (and Zod), unless
+// AEMEATH_REQUIRE_NODE is set, as in CI, where a skip would hide a failure.
+func skipNode(t *testing.T, why string) {
+	t.Helper()
+	if os.Getenv("AEMEATH_REQUIRE_NODE") != "" {
+		t.Fatal(why)
+	}
+	t.Skip(why)
 }

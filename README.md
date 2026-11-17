@@ -401,11 +401,11 @@ const { useGetUsers, usePostUsers } = createHooks(client);
 postUsersBodySchema.safeParse(formValues); // the same rules the server enforces
 ```
 
-The generated Zod schemas and the server made the same accept/reject decision for every payload in our parity check. A few details:
+The generated Zod schemas and the server make the same accept/reject decision: a test compares them on more than 120,000 values in node, and 4,000 random regular expressions on 140 strings each. A few details:
 
 - **Input**: a field is required only if it has `validate:"required"` (or is a non-pointer struct containing a required field). `oneof` becomes a literal union / `z.enum`. Constraints appear as JSDoc and Zod checks. A required pointer is not nullable.
 - **Output**: a field is required unless it has `json:",omitempty"`. Nil slices and maps are nullable (`Array<T> | null`, `Record<K, V> | null`), because Go encodes them as `null`; initialize them with `make([]T, 0)` to send `[]`. Pointers are typed `T | null`.
-- `pattern` rules are Go (RE2) expressions handed to JavaScript's `RegExp`; stick to the common syntax.
+- `pattern` rules are Go (RE2) expressions. They are translated so that JavaScript (with the `u` flag) accepts exactly the same strings: `.` is `[^\n]`, `\s` is `[\t\n\f\r ]`, `\pL` and `[[:alpha:]]` are spelled the JavaScript way, and so on. The few constructs with no faithful translation (`(?m)`, flags in the middle of a pattern, `\b` or `\p` together with `(?i)`) are left out of Zod and OpenAPI; the server still enforces them.
 - Cookie parameters are not part of the browser client (the browser manages cookies).
 - The function name comes from `aemeath.OperationID("...")`, or from the method and path (`getHelloByName`).
 

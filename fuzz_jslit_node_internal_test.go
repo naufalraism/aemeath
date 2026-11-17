@@ -35,7 +35,7 @@ func edgeStrings() []string {
 func TestJSStringInARealEngine(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
-		t.Skip("node is not installed")
+		skipNode(t, "node is not installed")
 	}
 	strs := edgeStrings()
 	var js strings.Builder

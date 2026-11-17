@@ -480,7 +480,9 @@ func ruleConstraints(f reflect.StructField) map[string]any {
 			case "pattern":
 				// OpenAPI patterns are JavaScript regular expressions without
 				// flags; leave out what cannot be expressed that way.
-				if p, flags, ok := jsRegexp(r.arg); ok && flags == "" {
+				// The pattern is meant for u-mode, which JSON Schema
+				// validators use (ajv does by default).
+				if p, flags, ok := jsRegexp(r.arg); ok && flags == "u" {
 					out["pattern"] = p
 				}
 			}

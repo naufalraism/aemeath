@@ -82,19 +82,33 @@ func TestPatternsAreTranslatedForJavaScript(t *testing.T) {
 		pattern, flags string
 		ok             bool
 	}{
-		`^[a-z]{2,3}$`:        {`^[a-z]{2,3}$`, "", true},
-		`(?i)^[a-z]+$`:        {`^[a-z]+$`, "i", true},
-		`(?is)^a.b$`:          {`^a.b$`, "is", true},
-		`(?P<year>\d{4})-\d+`: {`(?<year>\d{4})-\d+`, "", true},
-		`\Aabc\z`:             {`^abc$`, "", true},
-		`^\d+(?:px)?$`:        {`^\d+(?:px)?$`, "", true},
-		`^[\]\[]+\\A$`:        {`^[\]\[]+\\A$`, "", true}, // escapes are copied, "\\A" is a backslash and an A
-		`^[[:alpha:]]+$`:      {"", "", false},
-		`^\p{L}+$`:            {"", "", false},
-		`^\Qa.b\E$`:           {"", "", false},
-		`^a(?i)b$`:            {"", "", false},
-		`(?U)a+`:              {"", "", false},
-		`(?m)\Aabc`:           {"", "", false},
+		`^[a-z]{2,3}$`:          {`^[a-z]{2,3}$`, "u", true},
+		`(?i)^[a-z]+$`:          {`^[a-z]+$`, "ui", true},
+		`(?is)^a.b$`:            {`^a.b$`, "uis", true},
+		`(?P<year>\d{4})-\d+`:   {`(\d{4})-\d+`, "u", true}, // names are dropped: RE2 allows one twice, JavaScript does not
+		`^\b+(?P<x>a)(?<x>b)$*`: {`^(?:\b)+(a)(b)(?:$)*`, "u", true},
+		`\Aabc\z`:               {`^abc$`, "u", true},
+		`^\d+(?:px)?$`:          {`^\d+(?:px)?$`, "u", true},
+		`^[\]\[]+\\A$`:          {`^[\]\[]+\\A$`, "u", true}, // escapes are copied, "\\A" is a backslash and an A
+		`^[[:alpha:]]+$`:        {`^[A-Za-z]+$`, "u", true},
+		`^\p{L}+$`:              {`^\p{L}+$`, "u", true},
+		`^\pL\p{Greek}\PN$`:     {`^\p{L}\p{Script=Greek}\P{N}$`, "u", true},
+		`^\Qa.b\E$`:             {`^a\.b$`, "u", true},
+		`^a.c$`:                 {`^a[^\n]c$`, "u", true}, // JavaScript's "." also stops at \r, U+2028, U+2029
+		`^\s\S$`:                {`^[\t\n\f\r ][^\t\n\f\r ]$`, "u", true},
+		`^[\s\d]$`:              {`^[\t\n\f\r \d]$`, "u", true},
+		`^\#\:\_\-$`:            {`^#:_-$`, "u", true}, // u-mode refuses escaped punctuation it does not need
+		`^a{,2}}]$`:             {`^a\{,2\}\}\]$`, "u", true},
+		`^[]a]$`:                {`^[\]a]$`, "u", true},
+		`^\101\x{1F600}\a$`:     {`^\u{41}\u{1F600}\x07$`, "u", true},
+		`(?i)\bk`:               {"", "", false}, // \b differs with case folding
+		`(?i)\pL`:               {"", "", false},
+		`^[\S]$`:                {"", "", false},
+		`^[[:^alpha:]]$`:        {"", "", false},
+		`^a(?i)b$`:              {"", "", false},
+		`(?U)a+`:                {"", "", false},
+		`(?m)\Aabc`:             {"", "", false},
+		`(?m)^a$`:               {"", "", false}, // JavaScript's ^ and $ also stop at \r
 	} {
 		p, f, ok := jsRegexp(src)
 		if ok != want.ok || p != want.pattern || f != want.flags {
@@ -111,9 +125,9 @@ func TestPatternsAreTranslatedForJavaScript(t *testing.T) {
 	POST(a, "/p", func(c *Ctx, v in) (in, error) { return v, nil })
 	zod := a.ZodSchemas()
 	for _, want := range []string{
-		`a: z.string().regex(new RegExp("^[a-z]+$", "i")).optional()`,
-		`b: z.string().optional()`, // not translatable: the server enforces it
-		`c: z.string().regex(new RegExp("^abc$")).optional()`,
+		`a: z.string().regex(new RegExp("^[a-z]+$", "ui")).optional()`,
+		`b: z.string().regex(new RegExp("^[A-Za-z]+$", "u")).optional()`,
+		`c: z.string().regex(new RegExp("^abc$", "u")).optional()`,
 	} {
 		if !strings.Contains(zod, want) {
 			t.Errorf("Zod is missing %q\n%s", want, zod)

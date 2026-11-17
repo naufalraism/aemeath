@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // flatField is a struct field together with the index path that reaches it
@@ -247,12 +251,25 @@ func elemNullable(t reflect.Type) bool {
 	return false
 }
 
-// jsRegexp translates a Go (RE2) regular expression into one JavaScript
-// understands, for the Zod schemas and the OpenAPI document. It handles
-// leading flags ((?i), (?s), (?m)), named groups ((?P<n>...)) and the \A / \z
-// anchors. ok is false when the pattern uses something JavaScript reads
-// differently or rejects (POSIX classes, \Q...\E, \p{...}, flags in the
-// middle of the pattern); the server still enforces the pattern then.
+// jsRegexp translates a Go (RE2) regular expression into a JavaScript one
+// that accepts exactly the same strings, for the Zod schemas and OpenAPI.
+// flags always has "u": without it JavaScript works on UTF-16 code units,
+// so "." or "[^a]" does not match one emoji and a range such as [😀-😂] is
+// a SyntaxError that stops the whole schemas file from loading. Where the
+// two engines differ, the pattern is rewritten:
+//
+//   - "." (without (?s)) is [^\n]: JavaScript's "." also stops at \r,
+//     U+2028 and U+2029.
+//   - \s is [\t\n\f\r ]: JavaScript's also takes \v, U+00A0, U+3000...
+//   - \pL, \p{Greek}: \p{L}, \p{Script=Greek}; [[:alpha:]]: [A-Za-z].
+//   - octal \101, \x{1F600}, \a: \u{...}; \Q...\E: escaped literals.
+//   - \# \: \_ and other escaped punctuation, a literal "{" "}" "]" (as in
+//     "a{,2}"): what u-mode JavaScript accepts for the same characters.
+//
+// ok is false when no faithful translation is known: (?m) (JavaScript's ^
+// and $ also stop at \r), flags in the middle of the pattern, \b, \B or
+// \p with (?i), \S or a negated POSIX class inside brackets, \C. The
+// server still enforces the pattern then.
 func jsRegexp(src string) (pattern, flags string, ok bool) {
 	for strings.HasPrefix(src, "(?") {
 		end := strings.IndexByte(src, ')')
@@ -270,49 +287,261 @@ func jsRegexp(src string) (pattern, flags string, ok bool) {
 		}
 		src = src[end+1:]
 	}
-	var b strings.Builder
-	inClass := false
-	for i := 0; i < len(src); i++ {
-		c := src[i]
-		switch {
-		case c == '\\' && i+1 < len(src):
-			n := src[i+1]
-			switch {
-			case n == 'A' && !inClass:
-				if strings.Contains(flags, "m") {
-					return "", "", false
-				}
-				b.WriteByte('^')
-			case n == 'z' && !inClass:
-				if strings.Contains(flags, "m") {
-					return "", "", false
-				}
-				b.WriteByte('$')
-			case n == 'Q', n == 'E', n == 'C', n == 'p', n == 'P', n == 'a', n == 'x' && i+2 < len(src) && src[i+2] == '{':
-				return "", "", false
-			default:
-				b.WriteByte(c)
-				b.WriteByte(n)
-			}
-			i++
-		case c == '[' && !inClass:
-			inClass = true
-			b.WriteByte(c)
-		case c == '[' && inClass && i+1 < len(src) && src[i+1] == ':':
-			return "", "", false // POSIX class such as [[:alpha:]]
-		case c == ']' && inClass:
-			inClass = false
-			b.WriteByte(c)
-		case c == '(' && !inClass && strings.HasPrefix(src[i:], "(?P<"):
-			b.WriteString("(?<")
-			i += 3
-		case c == '(' && !inClass && strings.HasPrefix(src[i:], "(?") && !strings.HasPrefix(src[i:], "(?:"):
-			return "", "", false // flags or groups JavaScript does not have
-		default:
-			b.WriteByte(c)
-		}
+	if strings.Contains(flags, "m") {
+		return "", "", false
 	}
-	return b.String(), flags, true
+	ci, dotAll := strings.Contains(flags, "i"), strings.Contains(flags, "s")
+	var b strings.Builder
+	inClass, classStart := false, false
+	for i := 0; i < len(src); {
+		c := src[i]
+		if c == '\\' {
+			if i+1 >= len(src) {
+				return "", "", false
+			}
+			if !jsEscape(&b, src, &i, inClass, ci) {
+				return "", "", false
+			}
+			classStart = false
+			continue
+		}
+		if inClass {
+			switch {
+			case c == ']' && classStart:
+				b.WriteString(`\]`) // RE2: a "]" first in a class is a literal
+				i++
+			case c == ']':
+				b.WriteByte(']')
+				inClass = false
+				i++
+			case c == '[' && strings.HasPrefix(src[i:], "[:"):
+				end := strings.Index(src[i:], ":]")
+				if end < 0 {
+					return "", "", false
+				}
+				name := src[i+2 : i+end]
+				ranges, known := posixClasses[name]
+				if !known { // includes negated ones, [:^alpha:]
+					return "", "", false
+				}
+				b.WriteString(ranges)
+				i += end + 2
+			case c == '[':
+				b.WriteString(`\[`)
+				i++
+			default:
+				_, size := utf8.DecodeRuneInString(src[i:])
+				b.WriteString(src[i : i+size])
+				i += size
+			}
+			classStart = false
+			continue
+		}
+		switch c {
+		case '[':
+			inClass, classStart = true, true
+			b.WriteByte('[')
+			i++
+			if i < len(src) && src[i] == '^' {
+				b.WriteByte('^')
+				i++
+			}
+			continue
+		case '.':
+			if dotAll {
+				b.WriteByte('.')
+			} else {
+				b.WriteString(`[^\n]`)
+			}
+		case '{':
+			if m := repetition.FindString(src[i:]); m != "" {
+				b.WriteString(m)
+				i += len(m)
+				continue
+			}
+			b.WriteString(`\{`) // RE2 reads a "{" that starts no repetition as a literal
+		case '}', ']':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		case '^', '$':
+			writeAssertion(&b, string(c), src, i+1)
+		case '(':
+			switch {
+			case strings.HasPrefix(src[i:], "(?P<"), strings.HasPrefix(src[i:], "(?<"):
+				// A plain group: RE2 allows a name twice, JavaScript does
+				// not, and a test for a match needs no names.
+				end := strings.IndexByte(src[i:], '>')
+				if end < 0 {
+					return "", "", false
+				}
+				b.WriteByte('(')
+				i += end + 1
+				continue
+			case strings.HasPrefix(src[i:], "(?:"), !strings.HasPrefix(src[i:], "(?"):
+				b.WriteByte('(')
+			default:
+				return "", "", false // flags in the middle: JavaScript has no equivalent everywhere
+			}
+		default:
+			_, size := utf8.DecodeRuneInString(src[i:])
+			b.WriteString(src[i : i+size])
+			i += size
+			continue
+		}
+		i++
+	}
+	return b.String(), "u" + strings.ReplaceAll(flags, "m", ""), true
+}
+
+// writeAssertion writes an empty-width assertion (^ $ \\b \\B). RE2 lets a
+// quantifier follow one ("\\b+", "^*"); u-mode JavaScript does not, so then
+// it goes in a group, which means the same.
+func writeAssertion(b *strings.Builder, a, src string, next int) {
+	if next < len(src) && (strings.IndexByte("*+?", src[next]) >= 0 || repetition.MatchString(src[next:])) {
+		b.WriteString("(?:" + a + ")")
+		return
+	}
+	b.WriteString(a)
+}
+
+// repetition is RE2's {n}, {n,} or {n,m}; any other "{" is a literal.
+var repetition = regexp.MustCompile(`^\{[0-9]+(,[0-9]*)?\}`)
+
+// jsSyntax are the characters u-mode JavaScript lets you escape (plus "-"
+// in a class); escaping any other punctuation is a SyntaxError there.
+const jsSyntax = `^$\.*+?()[]{}|/`
+
+// posixClasses are RE2's ASCII classes, written for inside JavaScript brackets.
+var posixClasses = map[string]string{
+	"alnum": `0-9A-Za-z`, "alpha": `A-Za-z`, "ascii": `\x00-\x7f`, "blank": `\t `,
+	"cntrl": `\x00-\x1f\x7f`, "digit": `0-9`, "graph": `!-~`, "lower": `a-z`,
+	"print": ` -~`, "punct": "!-\\/:-@\\[-`{-~", "space": `\t\n\v\f\r `, "upper": `A-Z`,
+	"word": `0-9A-Za-z_`, "xdigit": `0-9A-Fa-f`,
+}
+
+// jsEscape writes the JavaScript form of the escape at src[*i] ("\\" and
+// what follows) and moves *i past it.
+func jsEscape(b *strings.Builder, src string, i *int, inClass, ci bool) bool {
+	n := src[*i+1]
+	start := *i
+	*i += 2
+	switch {
+	case n == 'A' || n == 'z':
+		if inClass {
+			return false
+		}
+		if n == 'A' {
+			writeAssertion(b, "^", src, *i)
+		} else {
+			writeAssertion(b, "$", src, *i)
+		}
+	case n == 'b' || n == 'B':
+		if inClass || ci { // with i and u, JavaScript counts ſ and K (Kelvin) as word characters
+			return false
+		}
+		writeAssertion(b, src[start:*i], src, *i)
+	case n == 'd' || n == 'D' || n == 'w' || n == 'W' || n == 'f' || n == 't' || n == 'n' || n == 'r' || n == 'v':
+		b.WriteString(src[start:*i])
+	case n == 's':
+		if inClass {
+			b.WriteString(`\t\n\f\r `)
+		} else {
+			b.WriteString(`[\t\n\f\r ]`)
+		}
+	case n == 'S':
+		if inClass {
+			return false
+		}
+		b.WriteString(`[^\t\n\f\r ]`)
+	case n == 'a':
+		b.WriteString(`\x07`)
+	case n == 'p' || n == 'P':
+		if ci {
+			return false // case folding of properties is not the same in both engines
+		}
+		name := ""
+		if *i < len(src) && src[*i] == '{' {
+			end := strings.IndexByte(src[*i:], '}')
+			if end < 0 {
+				return false
+			}
+			name = src[*i+1 : *i+end]
+			*i += end + 1
+		} else if *i < len(src) {
+			name = src[*i : *i+1]
+			*i++
+		}
+		neg := n == 'P'
+		if strings.HasPrefix(name, "^") {
+			neg, name = !neg, name[1:]
+		}
+		var prop string
+		switch {
+		case name == "Any":
+			prop = "Any"
+		case unicode.Categories[name] != nil:
+			prop = name
+		case unicode.Scripts[name] != nil:
+			prop = "Script=" + name
+		default:
+			return false
+		}
+		if neg {
+			b.WriteString(`\P{` + prop + `}`)
+		} else {
+			b.WriteString(`\p{` + prop + `}`)
+		}
+	case n == 'x':
+		if *i < len(src) && src[*i] == '{' {
+			end := strings.IndexByte(src[*i:], '}')
+			if end < 0 {
+				return false
+			}
+			b.WriteString(`\u{` + src[*i+1:*i+end] + `}`)
+			*i += end + 1
+		} else if *i+2 <= len(src) {
+			b.WriteString(src[start : *i+2])
+			*i += 2
+		} else {
+			return false
+		}
+	case n >= '0' && n <= '7':
+		end := *i
+		for end < len(src) && end < *i+2 && src[end] >= '0' && src[end] <= '7' {
+			end++
+		}
+		v, err := strconv.ParseUint(src[*i-1:end], 8, 32)
+		if err != nil {
+			return false
+		}
+		b.WriteString(`\u{` + strconv.FormatUint(v, 16) + `}`)
+		*i = end
+	case n == 'Q':
+		lit := src[*i:]
+		end := strings.Index(lit, `\E`)
+		if end >= 0 {
+			lit = lit[:end]
+			*i += end + 2
+		} else {
+			*i = len(src)
+		}
+		for _, r := range lit {
+			if strings.ContainsRune(jsSyntax, r) || (inClass && r == '-') {
+				b.WriteByte('\\')
+			}
+			b.WriteRune(r)
+		}
+	case n < utf8.RuneSelf && !unicode.IsLetter(rune(n)) && !unicode.IsDigit(rune(n)):
+		// Escaped punctuation: keep the backslash only where JavaScript allows it.
+		if strings.IndexByte(jsSyntax, n) >= 0 || (inClass && n == '-') {
+			b.WriteString(src[start:*i])
+		} else {
+			b.WriteByte(n)
+		}
+	default:
+		return false // \C and anything RE2 itself would refuse
+	}
+	return true
 }
 
 // isTextType reports whether encoding/json serializes t as a JSON string

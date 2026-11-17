@@ -78,7 +78,7 @@ func TestZodSchemas(t *testing.T) {
 		`age: z.number().int().gte(18).lt(120),`, // required pointer: not nullable, not optional
 		`level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional()`,
 		`tags: z.array(z.string()).max(2).nullable().optional()`,
-		`code: z.string().regex(new RegExp("^[A-Z]{3}-[0-9]+$")).optional()`,
+		`code: z.string().regex(new RegExp("^[A-Z]{3}-[0-9]+$", "u")).optional()`,
 		`address: z.lazy(() => ZAddressSchema),`, // non-pointer struct with required fields: required
 		`"Invalid http(s) URL").optional()`,
 		`export const getUsersQuerySchema = z.object({`,
