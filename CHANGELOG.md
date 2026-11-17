@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Security
 
+- **`csrf.Middleware`** refuses an unsafe request from a visitor that was never given a token before reading the body. It used to parse a form body of up to 32 MiB (spilling to temporary files) first, on any POST route, for any client.
 - **Validating a map** turns each key into text once instead of twice per comparison while sorting: a 1 MiB body with 100,000 keys took 615 ms and 118 MB, now 116 ms and 25 MB. Keys that implement `encoding.TextMarshaler` are now named in error paths the way JSON writes them.
 - **Validation** stops after `aemeath.MaxValidationErrors` errors (100 by default, `0` for no limit). A 1 MiB JSON body of empty objects used to produce 349,517 errors and a 25 MB response.
 - **`Static` and `Ctx.File`** send `X-Content-Type-Options: nosniff` on every file, and a file whose extension has no known type ("note", "report.dat") as `application/octet-stream` instead of a type guessed from its content. An uploaded file that started with `<!doctype html>` used to be served as `text/html` (stored XSS) even though `LocalStorage` renames `.html`, `.svg` and `.js` uploads.

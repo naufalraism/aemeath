@@ -83,6 +83,12 @@ func Middleware(cfg Config) aemeath.Middleware {
 			// Never create a token here: a request that arrives without one
 			// cannot carry a valid token, and creating one would store a session.
 			tok := session.From(c).String(sessionKey)
+			if tok == "" {
+				// No token was ever issued to this visitor, so nothing it sends
+				// can match: refuse before reading a form body (up to 32 MiB,
+				// spilled to temporary files) on its behalf.
+				return aemeath.Forbidden("csrf: missing or invalid token")
+			}
 			got := c.R.Header.Get(cfg.Header)
 			if got == "" {
 				v, err := formToken(c, cfg.FormField)
@@ -91,7 +97,7 @@ func Middleware(cfg Config) aemeath.Middleware {
 				}
 				got = v
 			}
-			if tok == "" || subtle.ConstantTimeCompare([]byte(got), []byte(tok)) != 1 {
+			if subtle.ConstantTimeCompare([]byte(got), []byte(tok)) != 1 {
 				return aemeath.Forbidden("csrf: missing or invalid token")
 			}
 			return next(c)
