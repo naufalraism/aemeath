@@ -2,8 +2,10 @@ package securityaudit2
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -52,5 +54,36 @@ func TestBinding_ValidationErrorsAreCapped(t *testing.T) {
 	}
 	if n > aemeath.MaxValidationErrors || rec.Body.Len() > len(body) {
 		t.Errorf("a single request makes the server build and send %d validation errors (%d bytes for a %d-byte request)", n, rec.Body.Len(), len(body))
+	}
+}
+
+// Map entries used to be sorted with fmt.Sprint inside the comparison
+// (187 MB allocated and 0.66 s for one 1 MiB request).
+func TestBinding_MapValidationIsCheap(t *testing.T) {
+	app := aemeath.New()
+	aemeath.POST(app, "/a", func(_ *aemeath.Ctx, _ ampIn) (struct{}, error) { return struct{}{}, nil })
+
+	var b strings.Builder
+	b.WriteString(`{"by_key":{`)
+	for i := 0; b.Len() < (1<<20)-32; i++ {
+		fmt.Fprintf(&b, `"%x":{},`, i)
+	}
+	body := strings.TrimSuffix(b.String(), ",") + `}}`
+
+	var ms0, ms1 runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&ms0)
+	start := time.Now()
+	rec := jsonPost(app, "/a", []byte(body))
+	took := time.Since(start)
+	runtime.ReadMemStats(&ms1)
+	mb := (ms1.TotalAlloc - ms0.TotalAlloc) >> 20
+	t.Logf("map with %d entries: status %d, response %d bytes, %v, %d MB allocated",
+		strings.Count(body, ":{}"), rec.Code, rec.Body.Len(), took, mb)
+	if rec.Body.Len() > len(body) {
+		t.Errorf("response (%d bytes) larger than the request (%d bytes)", rec.Body.Len(), len(body))
+	}
+	if mb > 100 {
+		t.Errorf("one 1 MiB request allocated %d MB", mb)
 	}
 }

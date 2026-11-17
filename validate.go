@@ -1,6 +1,7 @@
 package aemeath
 
 import (
+	"encoding"
 	"fmt"
 	"math"
 	"mime/multipart"
@@ -504,15 +505,45 @@ func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *
 		}
 	case reflect.Map:
 		entries, _ := sent.(map[string]any)
-		keys := v.MapKeys()
-		sort.Slice(keys, func(i, j int) bool { return fmt.Sprint(keys[i]) < fmt.Sprint(keys[j]) })
-		for _, k := range keys {
-			p.validateNested(v.MapIndex(k), path+"["+fmt.Sprint(k)+"]", entries[fmt.Sprint(k)], errs, needSent)
+		// Each key is turned into its text once, then sorted by that text, so
+		// errors come in a stable order. (Formatting inside the comparison cost
+		// two fmt.Sprint calls per comparison: 118 MB for a 1 MiB body.)
+		type entry struct {
+			name string
+			key  reflect.Value
+		}
+		list := make([]entry, 0, v.Len())
+		for it := v.MapRange(); it.Next(); {
+			list = append(list, entry{mapKeyName(it.Key()), it.Key()})
+		}
+		sort.Slice(list, func(i, j int) bool { return list[i].name < list[j].name })
+		for _, e := range list {
+			p.validateNested(v.MapIndex(e.key), path+"["+e.name+"]", entries[e.name], errs, needSent)
 			if (needSent != nil && *needSent) || errorsFull(*errs) {
 				return
 			}
 		}
 	}
+}
+
+// mapKeyName is a map key as encoding/json writes it: string kinds as they
+// are, then encoding.TextMarshaler, then integers in decimal.
+func mapKeyName(k reflect.Value) string {
+	if k.Kind() == reflect.String {
+		return k.String()
+	}
+	if tm, ok := k.Interface().(encoding.TextMarshaler); ok {
+		if b, err := tm.MarshalText(); err == nil {
+			return string(b)
+		}
+	}
+	switch k.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(k.Int(), 10)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return strconv.FormatUint(k.Uint(), 10)
+	}
+	return fmt.Sprint(k.Interface())
 }
 
 // hasRules reports whether the plan, or a plan nested in it, has a rule that
