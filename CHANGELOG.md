@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **TypeScript and Zod** string literals are written as JavaScript, not Go: `strconv.Quote` wrote characters above U+FFFF that are not printable as `\U000e0067`, which JavaScript reads as `U000e0067`. A `oneof` with a subdivision flag emoji (🏴󠁧󠁢󠁳󠁣󠁴󠁿) was refused by the generated schema while the server accepted it.
 - **Groups** collapse repeated slashes in the prefix and in route paths: `app.Group("/api//")` registered its `"/"` route as the catch-all `/api/`, and `Group("//")` panicked. `"//x"` now joins as `/x`.
 - **The request target `*`** (as in `OPTIONS *`) is answered `400`, like `net/http.ServeMux`, instead of `404` or `405`.
 

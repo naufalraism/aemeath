@@ -504,7 +504,7 @@ func oneofUnion(f reflect.StructField) string {
 			parts = append(parts, r.set...)
 		} else {
 			for _, s := range r.set {
-				parts = append(parts, strconv.Quote(s))
+				parts = append(parts, jsString(s))
 			}
 		}
 		return strings.Join(parts, " | ")
@@ -664,7 +664,7 @@ func (g *tsGen) operation(s routeSpec, name string) tsOp {
 		fmt.Fprintf(&b, "    /** %s */\n", doc)
 	}
 	fmt.Fprintf(&b, "    %s: (%s) =>\n", name, sig)
-	fmt.Fprintf(&b, "      request<%s>(opts, %s, %s, %s),\n", g.outType(s), strconv.Quote(s.method), strconv.Quote(openAPIPath(s.path)), arg)
+	fmt.Fprintf(&b, "      request<%s>(opts, %s, %s, %s),\n", g.outType(s), jsString(s.method), jsString(openAPIPath(s.path)), arg)
 	return tsOp{name: name, method: s.method, code: b.String(), mode: mode, spec: s}
 }
 
@@ -700,7 +700,7 @@ func tsKey(name string) string {
 	if tsKeyRe.MatchString(name) {
 		return name
 	}
-	return strconv.Quote(name)
+	return jsString(name)
 }
 
 // hasOmitEmpty reports whether the json tag contains omitempty or omitzero.

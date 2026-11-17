@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 )
@@ -32,6 +33,10 @@ func registerRuntimeRoute(a *App, method, path string, in, out reflect.Type) {
 }
 
 func jsonUnmarshalForTest(b []byte, v any) error { return json.Unmarshal(b, v) }
+
+func typeOf[T any]() reflect.Type { return reflect.TypeFor[T]() }
+
+func fileExistsForTest(p string) bool { _, err := os.Stat(p); return err == nil }
 
 func doJSON(h http.Handler, method, target, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, target, strings.NewReader(body))

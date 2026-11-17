@@ -209,7 +209,7 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 // formats.go) instead of Zod's own .email()/.url()/.uuid(), which differ from
 // the server and between Zod versions.
 func zodFormat(pattern, message string) string {
-	return ".regex(new RegExp(" + strconv.Quote(pattern) + "), " + strconv.Quote(message) + ")"
+	return ".regex(new RegExp(" + jsString(pattern) + "), " + jsString(message) + ")"
 }
 
 // zodElem is the schema of an element of a slice, array or map; see elemRef.
@@ -254,15 +254,15 @@ func zodRules(expr string, f reflect.StructField) string {
 				// cannot be translated is left to the server.
 				if p, flags, ok := jsRegexp(r.arg); ok {
 					if flags != "" {
-						expr += ".regex(new RegExp(" + strconv.Quote(p) + ", " + strconv.Quote(flags) + "))"
+						expr += ".regex(new RegExp(" + jsString(p) + ", " + jsString(flags) + "))"
 					} else {
-						expr += ".regex(new RegExp(" + strconv.Quote(p) + "))"
+						expr += ".regex(new RegExp(" + jsString(p) + "))"
 					}
 				}
 			case "oneof":
 				quoted := make([]string, len(r.set))
 				for i, v := range r.set {
-					quoted[i] = strconv.Quote(v)
+					quoted[i] = jsString(v)
 				}
 				expr = "z.enum([" + strings.Join(quoted, ", ") + "])"
 			}
@@ -342,7 +342,7 @@ export function createHooks(client: Client) {
 `)
 	for _, op := range ops {
 		hook := "use" + upperFirst(op.name)
-		q := strconv.Quote(op.name)
+		q := jsString(op.name)
 		isQuery := op.method == "GET" || op.method == "HEAD"
 		switch {
 		case isQuery && op.mode == noInput:
