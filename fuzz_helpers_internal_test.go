@@ -1,6 +1,7 @@
 package aemeath
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -30,10 +31,17 @@ func registerRuntimeRoute(a *App, method, path string, in, out reflect.Type) {
 	})
 }
 
+func jsonUnmarshalForTest(b []byte, v any) error { return json.Unmarshal(b, v) }
+
 func doJSON(h http.Handler, method, target, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
+}
+
+func writeJSONForTest(w http.ResponseWriter, v any) error {
+	w.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(v)
 }

@@ -244,18 +244,26 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !a.serving.Load() {
 		a.serving.Store(true)
 	}
-	h, pattern := a.mux.Handler(r)
-	if pattern != "" {
-		a.mux.ServeHTTP(w, r)
-		return
-	}
+	// "*" is the request target of "OPTIONS *" (a question about the server,
+	// not a resource). ServeMux.ServeHTTP answers it 400 before routing;
+	// asking mux.Handler directly would skip that and answer 404 or 405.
+	star := r.RequestURI == "*"
+	var allow string
+	var known bool
+	if !star {
+		h, pattern := a.mux.Handler(r)
+		if pattern != "" {
+			a.mux.ServeHTTP(w, r)
+			return
+		}
 
-	// Nothing matched. Let the standard mux tell us whether this is a
-	// 404 (unknown path) or a 405 (known path, wrong method).
-	probe := &probeWriter{header: http.Header{}, code: http.StatusNotFound}
-	h.ServeHTTP(probe, r)
-	allow := probe.header.Get("Allow")
-	known := probe.code == http.StatusMethodNotAllowed
+		// Nothing matched. Let the standard mux tell us whether this is a
+		// 404 (unknown path) or a 405 (known path, wrong method).
+		probe := &probeWriter{header: http.Header{}, code: http.StatusNotFound}
+		h.ServeHTTP(probe, r)
+		allow = probe.header.Get("Allow")
+		known = probe.code == http.StatusMethodNotAllowed
+	}
 
 	// Unmatched requests still pass through the global middlewares, so they
 	// are logged, rate limited, and carry CORS and security headers.
@@ -265,6 +273,8 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	wrapped := a.wrap(func(c *Ctx) error {
 		switch {
+		case star:
+			return BadRequest("request target * is not supported")
 		case r.Method == http.MethodOptions && known:
 			// Plain OPTIONS on a known path (CORS preflights are answered by the CORS middleware).
 			c.W.WriteHeader(http.StatusNoContent)
