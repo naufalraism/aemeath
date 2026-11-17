@@ -48,6 +48,7 @@ type Session struct {
 	dirty   bool
 	destroy bool
 	renewed bool
+	full    *fullLog // shared by the requests of one Middleware
 	mu      sync.Mutex
 }
 
@@ -71,6 +72,7 @@ func Middleware(cfg Config) aemeath.Middleware {
 	if cfg.Store == nil {
 		panic("session: Config.Store is required")
 	}
+	full := &fullLog{}
 	if cfg.CookieName == "" {
 		cfg.CookieName = "aemeath_session"
 	}
@@ -85,7 +87,7 @@ func Middleware(cfg Config) aemeath.Middleware {
 	}
 	return func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
 		return func(c *aemeath.Ctx) error {
-			s := &Session{cfg: cfg, data: map[string]any{}}
+			s := &Session{cfg: cfg, data: map[string]any{}, full: full}
 			if ck, err := c.R.Cookie(cfg.CookieName); err == nil && validID(ck.Value) {
 				data, ok, err := cfg.Store.Load(c.Context(), ck.Value)
 				if err != nil {
@@ -202,11 +204,38 @@ func (s *Session) commit(c *aemeath.Ctx) error {
 		s.id = newID()
 	}
 	if err := s.cfg.Store.Save(ctx, s.id, s.data, s.cfg.TTL); err != nil {
+		if errors.Is(err, ErrStoreFull) {
+			// A capacity limit, not a failure: the visitor gets no session
+			// and the response stays as the handler wrote it. (Answering 500
+			// made clients retry requests whose work was already done.)
+			s.id = ""
+			s.full.note()
+			return nil
+		}
 		log.Printf("aemeath/session: saving the session failed: %v", err)
 		return err
 	}
 	http.SetCookie(c.W, s.cookie(s.id, int(s.cfg.TTL.Seconds())))
 	return nil
+}
+
+// fullLog counts the visitors refused a session by a full store, so that a
+// flood of them logs one line a minute instead of one per request.
+type fullLog struct {
+	mu      sync.Mutex
+	last    time.Time
+	dropped int
+}
+
+func (f *fullLog) note() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.dropped++
+	if !f.last.IsZero() && time.Since(f.last) < time.Minute {
+		return
+	}
+	log.Printf("aemeath/session: the memory store is full: %d new visitor(s) got no session since the last message (raise WithMaxSessions, or use a shared store such as Redis)", f.dropped)
+	f.last, f.dropped = time.Now(), 0
 }
 
 // From returns the request's session; it panics if Middleware is not installed.
@@ -287,7 +316,9 @@ func (s *Session) Destroy() { s.mu.Lock(); defer s.mu.Unlock(); s.destroy = true
 
 // ErrStoreFull is returned by MemoryStore.Save when the store holds MaxSessions
 // live sessions and the id is new. The middleware then sends no cookie, so the
-// visitor simply gets no session until older ones expire.
+// visitor simply gets no session until older ones expire; the response is
+// the handler's, and a line is logged at most once a minute. Existing
+// sessions keep working (a Renew during that time loses its session).
 var ErrStoreFull = errors.New("session: memory store is full")
 
 const (

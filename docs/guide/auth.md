@@ -36,7 +36,11 @@ aemeath.POST(app, "/logout", func(c *aemeath.Ctx, _ struct{}) (struct{}, error) 
 })
 ```
 
-`MemoryStore` sweeps expired sessions by itself and keeps at most 100,000 live sessions (`WithMaxSessions(n)` changes it). When it is full, new visitors get no session until older ones expire; existing sessions keep working. It lives in one process and is lost on restart, so use the Redis store when you run more than one instance.
+`MemoryStore` sweeps expired sessions by itself and keeps at most 100,000 live sessions (`WithMaxSessions(n)` changes it). When it is full, new visitors get no session until older ones expire: they receive the handler's response without a session cookie (not an error, so clients do not repeat work that was already done), and one line a minute is logged. Existing sessions keep working; a `Renew` in that time loses its session. It lives in one process and is lost on restart, so use the Redis store when you run more than one instance.
+
+If saving fails for another reason (Redis is down), the request is answered `500`, because a "logged in" response without a stored session would be a lie. The handler has run by then: write handlers whose work may be repeated safely, or check the store before work that must not.
+
+**Requests of one session that run at the same time** each load the session, change their copy and save it; the last one to finish wins. Two tabs adding to a counter at the same moment can lose an increment (in a test, 200 parallel increments gave 133). This is how most session stores behave; keep values that many parallel requests update (counters, carts with heavy traffic) in your database, where an update can be atomic.
 
 
 Safety properties, each covered by a test:
