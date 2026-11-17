@@ -48,3 +48,19 @@ func TestStopIsIdempotentAndClosesStopping(t *testing.T) {
 		t.Fatal("Stopping is not closed after Stop")
 	}
 }
+
+// The file logger's file was never closed: Close existed but nothing called it.
+func TestFileLoggerIsClosedAtShutdown(t *testing.T) {
+	p, err := NewFileLogger(t.TempDir() + "/app.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := New()
+	if err := a.RegisterPlugin(p); err != nil {
+		t.Fatal(err)
+	}
+	a.runShutdownHooks()
+	if _, err := p.File.WriteString("x"); err == nil {
+		t.Fatal("the log file is still open after the shutdown hooks ran")
+	}
+}
