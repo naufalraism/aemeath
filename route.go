@@ -15,6 +15,26 @@ import (
 	"sync"
 )
 
+// MaxValidationErrors is the most validation errors one request reports
+// (100). Validation stops once it is reached: without a limit, a 1 MiB body of
+// 349,517 empty objects made the server build and send 349,517 errors, a 25 MB
+// response. Set it to 0 for no limit. Change it before the server starts.
+var MaxValidationErrors = 100
+
+// errorsFull reports whether no more validation errors should be collected.
+func errorsFull(errs []FieldError) bool {
+	return MaxValidationErrors > 0 && len(errs) >= MaxValidationErrors
+}
+
+// capErrors trims errs to MaxValidationErrors (a field with several failing
+// rules can add more than one past the check).
+func capErrors(errs []FieldError) []FieldError {
+	if MaxValidationErrors > 0 && len(errs) > MaxValidationErrors {
+		return errs[:MaxValidationErrors]
+	}
+	return errs
+}
+
 // DefaultMaxBodyBytes is the default limit for JSON request bodies (1 MiB).
 // It can be changed before the server starts.
 var DefaultMaxBodyBytes int64 = 1 << 20
@@ -304,7 +324,7 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 		errs = nil
 		info.plan.validate(v, "", decodeSent(body), &errs, nil)
 	}
-	if len(errs) > 0 {
+	if errs = capErrors(errs); len(errs) > 0 {
 		return ValidationError(errs...)
 	}
 	return nil

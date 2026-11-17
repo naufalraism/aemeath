@@ -431,6 +431,9 @@ func (r rule) checkNumber(x float64) string {
 func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]FieldError, needSent *bool) {
 	keys, _ := sent.(map[string]any)
 	for _, fp := range p.fields {
+		if errorsFull(*errs) {
+			return // MaxValidationErrors reached: the rest is not looked at
+		}
 		path := fp.name
 		if prefix != "" {
 			path = prefix + "." + fp.name
@@ -495,7 +498,7 @@ func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *
 				item = items[i]
 			}
 			p.validateNested(v.Index(i), path+"["+strconv.Itoa(i)+"]", item, errs, needSent)
-			if needSent != nil && *needSent {
+			if (needSent != nil && *needSent) || errorsFull(*errs) {
 				return
 			}
 		}
@@ -505,7 +508,7 @@ func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *
 		sort.Slice(keys, func(i, j int) bool { return fmt.Sprint(keys[i]) < fmt.Sprint(keys[j]) })
 		for _, k := range keys {
 			p.validateNested(v.MapIndex(k), path+"["+fmt.Sprint(k)+"]", entries[fmt.Sprint(k)], errs, needSent)
-			if needSent != nil && *needSent {
+			if (needSent != nil && *needSent) || errorsFull(*errs) {
 				return
 			}
 		}

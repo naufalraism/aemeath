@@ -20,7 +20,7 @@ Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeM
 ## ✨ Features
 
 - **Type-safe routes**: define request/response structs once; binding and validation are automatic.
-- **Rich validation**: `required`, `min`, `max`, `len`, `gt/gte/lt/lte`, `oneof`, `email`, `url`, `uuid`, `pattern`. Every failure is reported at once as a `422` with per-field errors.
+- **Rich validation**: `required`, `min`, `max`, `len`, `gt/gte/lt/lte`, `oneof`, `email`, `url`, `uuid`, `pattern`. Every failure (up to 100 per request) is reported at once as a `422` with per-field errors.
 - **One source of truth**: the same tags drive the server, the OpenAPI document (`$ref` components, constraints, security, error schemas), the TypeScript client, the Zod schemas and the React Query hooks.
 - **Binding** from path, query (including repeated keys), headers, cookies, JSON, and **forms and file uploads** (`form:` tag, type detected from the file's bytes, size limits); embedded structs; `time.Time`, UUIDs and any `encoding.TextUnmarshaler`.
 - **Typed dependencies**: `aemeath.Get[*gorm.DB](c)` instead of `c.State["db"].(*gorm.DB)`.

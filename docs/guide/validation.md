@@ -23,7 +23,7 @@ type CreateUserIn struct {
 
 ## The response
 
-Every failure is reported at once, with status `422`:
+Every failure is reported at once, with status `422`, up to 100 per request:
 
 ```json
 {
@@ -35,7 +35,9 @@ Every failure is reported at once, with status `422`:
 }
 ```
 
-Nested fields are named `address.city`, `items[1].qty` or `extra[home].city`. The Go client returns it as `*aemeath.HTTPError` with `Errors`, and the generated TypeScript `ApiError` has an `errors` array.
+Nested fields are named `address.city`, `items[1].qty` or `extra[home].city`.
+
+Validation stops after `aemeath.MaxValidationErrors` errors (100), and only those are listed, in the order of the fields. Without a limit, a 1 MiB body of empty objects made the server build a 25 MB response. Set it to `0` for no limit, before the server starts. The Go client returns it as `*aemeath.HTTPError` with `Errors`, and the generated TypeScript `ApiError` has an `errors` array.
 
 ## Rules to know
 
