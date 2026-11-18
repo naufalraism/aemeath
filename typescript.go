@@ -239,7 +239,7 @@ async function request<T>(opts: ClientOptions, method: string, path: string, inp
   const res = await f(opts.baseUrl.replace(/\/$/, "") + url + (q ? "?" + q : ""), {
     method,
     headers: { ...contentType, ...extra, ...own },
-    body: payload,
+    body: payload ?? null,
   });
   const text = await res.text();
   let data: any;
@@ -690,7 +690,13 @@ func optMark(opt bool) string {
 	return ""
 }
 
+// tsField writes one property. An optional one is "T | undefined" too, which
+// is what Zod's .optional() produces, so the types also compile with
+// exactOptionalPropertyTypes (z.ZodType<T> annotations check them).
 func tsField(name, typ string, opt bool) string {
+	if opt && typ != "unknown" && typ != "any" {
+		typ += " | undefined"
+	}
 	return tsKey(name) + optMark(opt) + ": " + typ
 }
 

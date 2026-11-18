@@ -39,7 +39,7 @@ func TestGeneratorsFollowTheWireFormat(t *testing.T) {
 	doc := string(spec)
 
 	for _, want := range []string{
-		"note?: string;",
+		"note?: string | undefined;",
 		"money: unknown;",
 		"raw: unknown;",
 		"ptrs: Array<WireChild | null> | null;",

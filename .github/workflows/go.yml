@@ -117,6 +117,10 @@ jobs:
       working-directory: examples/tscheck
       run: npm run typecheck
 
+    - name: Type-check the generated code (exactOptionalPropertyTypes and the other strictest options)
+      working-directory: examples/tscheck
+      run: npm run typecheck:strictest
+
     - name: Generated Zod schemas agree with the server
       working-directory: examples/tscheck
       run: |

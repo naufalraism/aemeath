@@ -11,7 +11,7 @@ func TestTypeScriptClient(t *testing.T) {
 		"export function createClient",
 		"getHelloByName: (input: ",
 		"path: { name: string }",
-		"query?: { lang?: string }",
+		"query?: { lang?: string | undefined }",
 		"postUsers: (input: ",
 		"body: { /** @minLength 1 */ name: string }", // required: an empty string is missing
 		"export interface UserOut {",
