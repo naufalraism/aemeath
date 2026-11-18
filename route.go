@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"unicode"
 )
 
 // MaxValidationErrors is the most validation errors one request reports
@@ -234,36 +233,16 @@ func jsonName(f reflect.StructField) string {
 }
 
 // jsonTagName is the name the json tag gives the field, as encoding/json reads
-// it: "" when there is none, or when the name has a character encoding/json
-// does not accept (a quote, a backslash, an emoji, a control character...),
-// in which case encoding/json uses the Go field name. `json:"-,"` names the
-// field "-"; only `json:"-"` leaves it out (see jsonSkipped).
+// it: "" when there is none or encoding/json ignores it and uses the Go field
+// name. Which names it accepts depends on the Go version (tagJSONName).
+// `json:"-,"` names the field "-"; only `json:"-"` leaves it out (see
+// jsonSkipped).
 func jsonTagName(f reflect.StructField) string {
 	tag := f.Tag.Get("json")
 	if tag == "-" {
 		return ""
 	}
-	name, _, _ := strings.Cut(tag, ",")
-	if !validJSONName(name) {
-		return ""
-	}
-	return name
-}
-
-// validJSONName is encoding/json's rule for names in tags (isValidTag).
-func validJSONName(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, c := range s {
-		switch {
-		case strings.ContainsRune("!#$%&()*+-./:;<=>?@[]^_{|}~ ", c):
-			// Backslash and quote are reserved; other punctuation is allowed.
-		case !unicode.IsLetter(c) && !unicode.IsDigit(c):
-			return false
-		}
-	}
-	return true
+	return tagJSONName(tag)
 }
 
 // hasJSONName reports whether the json tag gives the field a name. An

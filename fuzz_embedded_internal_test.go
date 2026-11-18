@@ -185,9 +185,10 @@ func fillUnexported(v reflect.Value) {
 	}
 }
 
-// badTagIn has a json name encoding/json refuses ("price€", so it uses
-// "Price") and a field named "-". Built at run time: staticcheck flags the
-// first tag, which is the point.
+// badTagIn has a json name the classic encoding/json refuses ("price€", so
+// it uses "Price") but encoding/json on v2 (Go 1.27's default) accepts, and
+// a field named "-". Built at run time: staticcheck flags the first tag,
+// which is the point.
 var badTagIn = reflect.StructOf([]reflect.StructField{
 	{Name: "Price", Type: reflect.TypeFor[*int](), Tag: `json:"price€" validate:"required"`},
 	{Name: "Dash", Type: reflect.TypeFor[int](), Tag: `json:"-,"`},
@@ -197,20 +198,26 @@ var badTagIn = reflect.StructOf([]reflect.StructField{
 func TestJSONNamesEndToEnd(t *testing.T) {
 	app := New()
 	registerRuntimeRoute(app, "POST", "/p", badTagIn, badTagIn)
+	price, zodPrice := "Price", "Price: z.number()"
+	if jsonV2 {
+		price, zodPrice = "price€", `"price€": z.number()`
+	}
+	t.Logf("encoding/json on v2: %v, so the price field is %q", jsonV2, price)
 	zod := app.ZodSchemas()
-	for _, want := range []string{"Price: z.number()", `"-": z.number()`} {
+	for _, want := range []string{zodPrice, `"-": z.number()`} {
 		if !strings.Contains(zod, want) {
 			t.Errorf("schemas.ts has no %q:\n%s", want, zod)
 		}
 	}
-	rec := doJSON(app, "POST", "/p", `{"Price":5,"-":7}`)
-	t.Logf(`POST {"Price":5,"-":7} -> %d %s`, rec.Code, strings.TrimSpace(rec.Body.String()))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"Price":5`) || !strings.Contains(rec.Body.String(), `"-":7`) {
+	body := `{"` + price + `":5,"-":7}`
+	rec := doJSON(app, "POST", "/p", body)
+	t.Logf(`POST %s -> %d %s`, body, rec.Code, strings.TrimSpace(rec.Body.String()))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"`+price+`":5`) || !strings.Contains(rec.Body.String(), `"-":7`) {
 		t.Error("the names in the schema are not the ones the server reads and writes")
 	}
 	rec = doJSON(app, "POST", "/p", `{}`)
 	t.Logf("POST {} -> %d %s", rec.Code, strings.TrimSpace(rec.Body.String()))
-	if !strings.Contains(rec.Body.String(), `"field":"Price"`) {
+	if !strings.Contains(rec.Body.String(), `"field":"`+price+`"`) {
 		t.Error("the validation error must name the key the client sends")
 	}
 }
