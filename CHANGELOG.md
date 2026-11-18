@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-18
+
 ### Fixed
 
 - **A full `session.MemoryStore`** gives new visitors no session, as documented, instead of answering `500`: the handler's response is sent without a session cookie, and one line a minute is logged instead of one per request. Under a flood of one-time visitors, the `500` made clients retry requests whose work (a queued job, a database write) was already done.
