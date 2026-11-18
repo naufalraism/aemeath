@@ -3,6 +3,7 @@ package aemeath
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
@@ -136,8 +137,9 @@ func (g *tsGen) zodFieldNamed(f reflect.StructField, name string, input bool) st
 	quoted := jsonQuoted(f)
 	if quoted {
 		// `json:",string"`: the value travels as a JSON string. Numeric rules
-		// are enforced by the server; here only the format is checked.
-		expr = "z.string().regex(/" + quotedPattern(f.Type) + "/)"
+		// are enforced by the server; here the format and, for integers, the
+		// range of the Go type are checked, as encoding/json does.
+		expr = quotedZod(f.Type, input)
 	}
 	if input && !isFileType(f.Type) && !quoted {
 		expr = zodRules(expr, f)
@@ -429,4 +431,33 @@ func jsNum(f float64) string {
 		return strconv.FormatFloat(f, 'g', -1, 64)
 	}
 	return num(f)
+}
+
+// quotedZod is the schema of a `json:",string"` field. Output is what
+// encoding/json writes; input is what it reads, which for integers is wider
+// (encoding/json on v2 accepts a leading "+") and bounded by the Go type: an
+// int64 of "9223372036854775808" is refused with 400, so the schema refuses it.
+func quotedZod(t reflect.Type, input bool) string {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if !input {
+		return "z.string().regex(/" + quotedPattern(t) + "/)"
+	}
+	var lo, hi string
+	pattern := quotedPattern(t)
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		bits := t.Bits()
+		lo, hi = "-"+new(big.Int).Lsh(big.NewInt(1), uint(bits-1)).String(), new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), uint(bits-1)), big.NewInt(1)).String()
+		if jsonV2 {
+			pattern = `^[-+]?\d+$`
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		lo, hi = "0", new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), uint(t.Bits())), big.NewInt(1)).String()
+	default:
+		return "z.string().regex(/" + pattern + "/)"
+	}
+	return "z.string().regex(/" + pattern + "/).refine((s) => { if (!/" + pattern + "/.test(s)) return true; const n = BigInt(s); return n >= " + lo + "n && n <= " + hi +
+		"n; }, \"must be between " + lo + " and " + hi + "\")"
 }
