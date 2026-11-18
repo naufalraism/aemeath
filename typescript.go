@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -301,7 +302,7 @@ func (g *tsGen) scanType(t reflect.Type, input bool) {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if isTextType(t) {
+	if isCustomJSON(t) || isTextType(t) {
 		return
 	}
 	switch t.Kind() {
@@ -314,7 +315,7 @@ func (g *tsGen) scanType(t reflect.Type, input bool) {
 	}
 	if t.Name() == "" {
 		for _, f := range jsonFields(t) {
-			if jsonName(f) == "-" {
+			if jsonSkipped(f) {
 				continue
 			}
 			g.scanType(f.Type, input)
@@ -339,7 +340,7 @@ func (g *tsGen) scanType(t reflect.Type, input bool) {
 		e.useOut = true
 	}
 	for _, f := range jsonFields(t) {
-		if jsonName(f) == "-" {
+		if jsonSkipped(f) {
 			continue
 		}
 		g.scanType(f.Type, input)
@@ -394,6 +395,9 @@ func (g *tsGen) typeRef(t reflect.Type, depth int, input bool) string {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
+	if isCustomJSON(t) {
+		return "unknown" // MarshalJSON / json.RawMessage: any JSON value
+	}
 	if isTextType(t) {
 		return "string"
 	}
@@ -410,11 +414,11 @@ func (g *tsGen) typeRef(t reflect.Type, depth int, input bool) string {
 		if t.Elem().Kind() == reflect.Uint8 {
 			return "string"
 		}
-		return "Array<" + g.typeRef(t.Elem(), depth+1, input) + ">"
+		return "Array<" + g.elemRef(t.Elem(), depth+1, input) + ">"
 	case reflect.Array:
-		return "Array<" + g.typeRef(t.Elem(), depth+1, input) + ">"
+		return "Array<" + g.elemRef(t.Elem(), depth+1, input) + ">"
 	case reflect.Map:
-		return "Record<string, " + g.typeRef(t.Elem(), depth+1, input) + ">"
+		return "Record<string, " + g.elemRef(t.Elem(), depth+1, input) + ">"
 	case reflect.Struct:
 		if t.Name() != "" {
 			return g.register(t, input)
@@ -426,6 +430,16 @@ func (g *tsGen) typeRef(t reflect.Type, depth int, input bool) string {
 		return "{ " + strings.Join(lines, "; ") + " }"
 	}
 	return "unknown"
+}
+
+// elemRef is the type of an element of a slice, array or map. In a response,
+// a nil pointer, slice or map inside a collection is JSON null.
+func (g *tsGen) elemRef(t reflect.Type, depth int, input bool) string {
+	ref := g.typeRef(t, depth, input)
+	if !input && elemNullable(t) && ref != "unknown" {
+		ref += " | null"
+	}
+	return ref
 }
 
 func (g *tsGen) fields(t reflect.Type, depth int, input bool) []string {
@@ -442,12 +456,12 @@ func (g *tsGen) field(f reflect.StructField, depth int, input bool) (string, boo
 	if !f.IsExported() {
 		return "", false
 	}
-	name := jsonName(f)
-	if name == "-" {
+	if jsonSkipped(f) {
 		return "", false
 	}
+	name := jsonName(f)
 	typ := g.fieldType(f, depth, input)
-	opt := hasOmitEmpty(f)
+	opt := outputOptional(f)
 	if input {
 		opt = !inputRequired(f)
 	}
@@ -463,10 +477,13 @@ func (g *tsGen) fieldType(f reflect.StructField, depth int, input bool) string {
 	}
 	if typ == "" {
 		typ = g.typeRef(f.Type, depth, input)
+		if jsonQuoted(f) {
+			typ = "string" // `json:",string"`: the number travels as a JSON string
+		}
 	}
 	// A nil pointer, slice, or map is encoded as JSON null in responses. In a
 	// request, null is only accepted where the field is optional.
-	if (f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type)) {
+	if typ != "unknown" && acceptsNull(f, input) {
 		typ += " | null"
 	}
 	return typ
@@ -483,16 +500,31 @@ func oneofUnion(f reflect.StructField) string {
 			continue
 		}
 		var parts []string
-		if classOf(f.Type) == kindNumber {
+		if classOf(f.Type) == kindNumber && !jsonQuoted(f) {
 			parts = append(parts, r.set...)
 		} else {
 			for _, s := range r.set {
-				parts = append(parts, strconv.Quote(s))
+				parts = append(parts, jsString(s))
 			}
 		}
 		return strings.Join(parts, " | ")
 	}
 	return ""
+}
+
+// wide64 reports whether the field is an int64 or uint64 sent as a JSON
+// number. JavaScript numbers are exact only up to 2^53, so a large value (a
+// snowflake id, a random 64-bit number) silently changes in the browser.
+// time.Duration is left out: its precision only matters beyond 104 days.
+func wide64(f reflect.StructField) bool {
+	t := f.Type
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if jsonQuoted(f) || t == reflect.TypeFor[time.Duration]() || isCustomJSON(t) || isTextType(t) {
+		return false
+	}
+	return t.Kind() == reflect.Int64 || t.Kind() == reflect.Uint64
 }
 
 // tsDoc builds a JSDoc comment from the description tag and the input constraints.
@@ -504,6 +536,9 @@ func tsDoc(f reflect.StructField, input bool) string {
 	if input {
 		c := ruleConstraints(f)
 		for _, k := range []string{"minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "minProperties", "maxProperties", "format", "pattern"} {
+			if _, isFormat := c["format"]; k == "pattern" && isFormat {
+				continue // email, url, uuid: the format says it; skip the long pattern
+			}
 			if v, ok := c[k]; ok {
 				parts = append(parts, fmt.Sprintf("@%s %v", k, v))
 			}
@@ -517,6 +552,9 @@ func tsDoc(f reflect.StructField, input bool) string {
 	}
 	if ex := f.Tag.Get("example"); ex != "" {
 		parts = append(parts, "@example "+ex)
+	}
+	if wide64(f) {
+		parts = append(parts, "("+f.Type.String()+": above 2^53 a JavaScript number loses precision; tag the Go field `json:\",string\"` to send it as a string)")
 	}
 	if len(parts) == 0 {
 		return ""
@@ -626,7 +664,7 @@ func (g *tsGen) operation(s routeSpec, name string) tsOp {
 		fmt.Fprintf(&b, "    /** %s */\n", doc)
 	}
 	fmt.Fprintf(&b, "    %s: (%s) =>\n", name, sig)
-	fmt.Fprintf(&b, "      request<%s>(opts, %s, %s, %s),\n", g.outType(s), strconv.Quote(s.method), strconv.Quote(openAPIPath(s.path)), arg)
+	fmt.Fprintf(&b, "      request<%s>(opts, %s, %s, %s),\n", g.outType(s), jsString(s.method), jsString(openAPIPath(s.path)), arg)
 	return tsOp{name: name, method: s.method, code: b.String(), mode: mode, spec: s}
 }
 
@@ -662,10 +700,53 @@ func tsKey(name string) string {
 	if tsKeyRe.MatchString(name) {
 		return name
 	}
-	return strconv.Quote(name)
+	return jsString(name)
 }
 
 // hasOmitEmpty reports whether the json tag contains omitempty or omitzero.
+// jsonQuoted reports whether encoding/json sends the field as a JSON string
+// because of the `,string` option, which applies to numbers and booleans
+// (directly or through one unnamed pointer).
+func jsonQuoted(f reflect.StructField) bool {
+	_, opts, _ := strings.Cut(f.Tag.Get("json"), ",")
+	found := false
+	for _, o := range strings.Split(opts, ",") {
+		if o == "string" {
+			found = true
+		}
+	}
+	if !found {
+		return false
+	}
+	t := f.Type
+	if t.Kind() == reflect.Pointer && t.Name() == "" {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return true
+	}
+	return false
+}
+
+// quotedPattern is the format of a `,string` number or boolean on the wire.
+func quotedPattern(t reflect.Type) string {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.Bool:
+		return `^(true|false)$`
+	case reflect.Float32, reflect.Float64:
+		return `^-?\d+(\.\d+)?([eE][-+]?\d+)?$`
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return `^\d+$`
+	}
+	return `^-?\d+$`
+}
+
 func hasOmitEmpty(f reflect.StructField) bool {
 	_, opts, _ := strings.Cut(f.Tag.Get("json"), ",")
 	for _, o := range strings.Split(opts, ",") {
@@ -733,6 +814,16 @@ func tsIdent(s string) string {
 
 // nilable reports whether a nil value of t is encoded as JSON null
 // (a nil slice or map, which is easy to forget to initialize).
+// acceptsNull reports whether the field can be JSON null. In a response, a
+// nil pointer, slice or map is null. In a request, null means "not provided",
+// so it is accepted for those types unless the field is required.
+func acceptsNull(f reflect.StructField, input bool) bool {
+	if f.Type.Kind() != reflect.Pointer && !nilable(f.Type) {
+		return false
+	}
+	return !input || !hasRequired(f)
+}
+
 func nilable(t reflect.Type) bool {
 	return t.Kind() == reflect.Slice || t.Kind() == reflect.Map
 }

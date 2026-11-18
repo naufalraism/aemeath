@@ -18,12 +18,12 @@ type CreateUserIn struct {
 | `len=N` | string, slice, map | exactly N |
 | `gt`, `gte`, `lt`, `lte` | numbers | comparisons |
 | `oneof=a b c` | string, number | one of the values |
-| `email`, `url`, `uuid` | string | formats |
-| `pattern=REGEX` | string | regular expression (no commas) |
+| `email`, `url`, `uuid` | string | `email`: `local@domain.tld` (non-ASCII letters allowed; `a@b` is refused). `url`: absolute http/https. `uuid`: 8-4-4-4-12 hex, any version. The Zod schemas and OpenAPI use the same patterns as the server |
+| `pattern=REGEX` | string | regular expression (RE2). It takes the rest of the tag, so write it last: `validate:"required,pattern=^\d{1,3}$"`. The Zod schemas carry a translation that matches the same strings in JavaScript; `(?m)` and the few other constructs without one are checked by the server only |
 
 ## The response
 
-Every failure is reported at once, with status `422`:
+Every failure is reported at once, with status `422`, up to 100 per request:
 
 ```json
 {
@@ -35,11 +35,16 @@ Every failure is reported at once, with status `422`:
 }
 ```
 
-Nested fields are named `address.city`, `items[1].qty` or `extra[home].city`. The Go client returns it as `*aemeath.HTTPError` with `Errors`, and the generated TypeScript `ApiError` has an `errors` array.
+Nested fields are named `address.city`, `items[1].qty` or `extra[home].city`.
+
+Validation stops after `aemeath.MaxValidationErrors` errors (100), and only those are listed, in the order of the fields. Without a limit, a 1 MiB body of empty objects made the server build a 25 MB response. Set it to `0` for no limit, before the server starts. The Go client returns it as `*aemeath.HTTPError` with `Errors`, and the generated TypeScript `ApiError` has an `errors` array.
 
 ## Rules to know
 
 - Rules other than `required` only run when a value was provided.
+  - In a **JSON body**, a key that is present is provided, even when it is empty: `{"website": ""}` fails `url`, `{"tags": []}` fails `min=1`, `{"kind": 0}` fails `oneof=1 2`. Leave the key out, or send `null`, for "no value".
+  - In **forms and query strings**, an empty value counts as not sent, because an HTML form always submits its empty inputs.
+  - The generated Zod schemas follow the JSON rule, so the browser and the server agree.
 - A scalar (`int`, `bool`, `float`) with `required` must be a pointer, so "not sent" differs from "sent as zero". Aemeath **panics at startup** otherwise, and for unknown or misapplied rules (`min` on a bool, a bad regex, ...).
 - For checks only your handler can make: `return aemeath.ValidationError(aemeath.FieldError{Field: "email", Rule: "unique", Message: "is already taken"})`.
 

@@ -34,7 +34,7 @@ aemeath.POST(app, "/signup", func(c *aemeath.Ctx, in SignupIn) (User, error) {
 
 ## Retries and failures
 
-A job that returns an error, or panics, is retried. The defaults are 2 extra attempts with exponential backoff (1 s, 2 s, ...), capped at one minute. The final failure is logged with `slog` and counted in `runner.Stats()`.
+A job that returns an error, or panics, is retried. The defaults are 2 extra attempts with exponential backoff (1 s, 2 s, ...), capped at one minute. The final failure is logged with `slog` and counted in `runner.Stats()`. While a job waits for its next attempt its worker is free for other jobs.
 
 ```go
 jobs.New(
@@ -43,8 +43,19 @@ jobs.New(
 	jobs.WithRetries(5),
 	jobs.WithBackoff(jobs.Exponential(500*time.Millisecond)),
 	jobs.WithLogger(myLogger),
+	jobs.WithJobTimeout(2*time.Minute), // per attempt; no limit by default
 )
 ```
+
+## Time limits
+
+`WithJobTimeout(d)` cancels the job's `ctx` when an attempt takes longer than `d`. The attempt then counts as failed (`timed out after ...` in the log) and is retried like any other error. A job can set its own limit by implementing `Timeout() time.Duration`:
+
+```go
+func (j *ResizeImage) Timeout() time.Duration { return 30 * time.Second }
+```
+
+Go cannot stop a function from outside, so the limit only frees the worker when the job watches its context: pass `ctx` to database queries (`db.From(c).WithContext(ctx)`, or `gormDB.WithContext(ctx)` outside a handler) and HTTP requests (`http.NewRequestWithContext`).
 
 ## Periodic jobs
 

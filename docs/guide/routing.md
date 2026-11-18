@@ -44,13 +44,13 @@ aemeath.POST(app, "/users", handler, aemeath.Status(201))
 return User{}, aemeath.NotFound("user not found")
 ```
 
-Errors are sent as `{"error": "message"}`. Any error that is not an `*aemeath.HTTPError` becomes a generic `500`. Validation failures are `422`, see [Validation](/guide/validation).
+Errors are sent as `{"error": "message"}`. Any error that is not an `*aemeath.HTTPError` becomes a generic `500`, and is logged as `aemeath: internal error: ...`. The exception is an error that wraps `context.Canceled`, which a handler gets (for example from a database call) when the client went away before the response was ready: it is recorded as `499` (`aemeath.StatusClientClosedRequest`), is not logged as an internal error, and is counted as a 4xx by the Logger, metrics and tracing. `context.DeadlineExceeded` is a server-side timeout and stays a `500`. Validation failures are `422`, see [Validation](/guide/validation).
 
 ## Groups
 
 ```go
 admin := app.Group("/admin", authMiddleware)
-admin.Options(aemeath.Tags("admin"), aemeath.RequireAuth())
+admin.Options(aemeath.Tags("admin"), aemeath.RequireAuth()) // 401 unless authMiddleware authenticated the caller
 
 aemeath.GroupGET(admin, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 	return map[string]string{"status": "ok"}, nil

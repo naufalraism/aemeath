@@ -33,6 +33,13 @@ type Job interface {
 	Run(ctx context.Context) error
 }
 
+// Timeouter is implemented by a job that needs its own time limit per
+// attempt, overriding WithJobTimeout. Return 0 for no limit, or a negative
+// value to use the runner's limit.
+type Timeouter interface {
+	Timeout() time.Duration
+}
+
 // Func adapts a function to a Job.
 type Func func(ctx context.Context) error
 
@@ -72,6 +79,14 @@ func WithBackoff(fn func(attempt int) time.Duration) Option {
 	return func(r *Runner) { r.backoff = fn }
 }
 
+// WithJobTimeout limits each attempt of a job to d (default: no limit). When
+// the time is up the job's context is cancelled and the attempt counts as
+// failed, so it is retried like any other error. Go cannot stop a goroutine
+// from outside: a job must watch ctx (pass it to database and HTTP calls) for
+// the limit to free its worker. A job can set its own limit by implementing
+// Timeouter.
+func WithJobTimeout(d time.Duration) Option { return func(r *Runner) { r.jobTimeout = d } }
+
 // WithLogger sets the logger (default slog.Default()).
 func WithLogger(l *slog.Logger) Option { return func(r *Runner) { r.logger = l } }
 
@@ -92,15 +107,26 @@ func Exponential(base time.Duration) func(attempt int) time.Duration {
 	}
 }
 
-type task struct{ job Job }
+type task struct {
+	job     Job
+	attempt int    // 1 for the first try
+	done    func() // called once, when the job has succeeded, failed for good or been dropped
+}
+
+func (t *task) finish() {
+	if t.done != nil {
+		t.done()
+	}
+}
 
 // Runner is a queue with a pool of workers. Use New.
 type Runner struct {
-	workers   int
-	queueSize int
-	retries   int
-	backoff   func(attempt int) time.Duration
-	logger    *slog.Logger
+	workers    int
+	queueSize  int
+	retries    int
+	jobTimeout time.Duration
+	backoff    func(attempt int) time.Duration
+	logger     *slog.Logger
 
 	queue   chan *task
 	baseCtx context.Context
@@ -113,6 +139,7 @@ type Runner struct {
 	shutdownOnce sync.Once
 	workersWG    sync.WaitGroup
 	tickersWG    sync.WaitGroup
+	retryWG      sync.WaitGroup // jobs waiting for their next attempt
 
 	enqueued, succeeded, failed, retried atomic.Int64
 }
@@ -123,8 +150,8 @@ func New(opts ...Option) *Runner {
 	for _, o := range opts {
 		o(r)
 	}
-	if r.workers < 1 || r.queueSize < 1 || r.retries < 0 || r.backoff == nil {
-		panic("aemeath/jobs: WithWorkers and WithQueueSize need a value of at least 1, WithRetries cannot be negative, and WithBackoff cannot be nil")
+	if r.workers < 1 || r.queueSize < 1 || r.retries < 0 || r.backoff == nil || r.jobTimeout < 0 {
+		panic("aemeath/jobs: WithWorkers and WithQueueSize need a value of at least 1, WithRetries and WithJobTimeout cannot be negative, and WithBackoff cannot be nil")
 	}
 	if r.logger == nil {
 		r.logger = slog.Default()
@@ -151,13 +178,17 @@ func (r *Runner) Enqueue(j Job) error {
 	if j == nil {
 		return errors.New("jobs: cannot enqueue a nil job")
 	}
+	return r.enqueue(&task{job: j, attempt: 1})
+}
+
+func (r *Runner) enqueue(t *task) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if r.closed {
 		return ErrClosed
 	}
 	select {
-	case r.queue <- &task{job: j}:
+	case r.queue <- t:
 		r.enqueued.Add(1)
 		return nil
 	default:
@@ -165,19 +196,9 @@ func (r *Runner) Enqueue(j Job) error {
 	}
 }
 
-// scheduled makes sure a periodic job never piles up behind itself.
-type scheduled struct {
-	job  Job
-	busy *atomic.Bool
-}
-
-func (s *scheduled) Run(ctx context.Context) error {
-	defer s.busy.Store(false)
-	return s.job.Run(ctx)
-}
-
 // Every enqueues j once per interval, starting one interval from now. If the
-// previous run has not finished when the next tick arrives, that tick is skipped.
+// previous run has not finished when the next tick arrives (it is still
+// running, or waiting for a retry), that tick is skipped.
 func (r *Runner) Every(interval time.Duration, j Job) error {
 	if interval <= 0 || j == nil {
 		panic("aemeath/jobs: Every needs a positive interval and a job")
@@ -201,7 +222,7 @@ func (r *Runner) Every(interval time.Duration, j Job) error {
 				if !busy.CompareAndSwap(false, true) {
 					continue
 				}
-				if err := r.Enqueue(&scheduled{job: j, busy: busy}); err != nil {
+				if err := r.enqueue(&task{job: j, attempt: 1, done: func() { busy.Store(false) }}); err != nil {
 					busy.Store(false)
 					r.logger.Warn("periodic job skipped", "job", fmt.Sprintf("%T", j), "error", err)
 				}
@@ -220,49 +241,92 @@ func (r *Runner) worker() {
 	}
 }
 
+// execute runs one attempt of a job. A failed attempt with retries left is
+// scheduled again after its backoff without keeping the worker: the worker
+// takes the next job meanwhile.
 func (r *Runner) execute(t *task) {
 	name := fmt.Sprintf("%T", t.job)
-	attempts := r.retries + 1
-	for attempt := 1; ; attempt++ {
-		err := r.runSafely(t.job)
-		if err == nil {
-			r.succeeded.Add(1)
-			return
-		}
-		if attempt >= attempts {
-			r.failed.Add(1)
-			r.logger.Error("job failed", "job", name, "attempts", attempt, "error", err)
-			return
-		}
-		delay := r.backoff(attempt)
-		r.logger.Warn("job failed, will retry", "job", name, "attempt", attempt, "retry_in", delay, "error", err)
+	err := r.runSafely(t.job)
+	if err == nil {
+		r.succeeded.Add(1)
+		t.finish()
+		return
+	}
+	if t.attempt >= r.retries+1 {
+		r.failed.Add(1)
+		r.logger.Error("job failed", "job", name, "attempts", t.attempt, "error", err)
+		t.finish()
+		return
+	}
+	drop := func() {
+		r.failed.Add(1)
+		r.logger.Error("job dropped at shutdown while waiting to retry", "job", name, "attempts", t.attempt, "error", err)
+		t.finish()
+	}
+	delay := r.backoff(t.attempt)
 
+	r.mu.RLock()
+	if r.closed { // Shutdown has begun: it no longer waits for new retries
+		r.mu.RUnlock()
+		drop()
+		return
+	}
+	r.retryWG.Add(1)
+	r.mu.RUnlock()
+	r.logger.Warn("job failed, will retry", "job", name, "attempt", t.attempt, "retry_in", delay, "error", err)
+
+	go func() {
+		defer r.retryWG.Done()
 		timer := time.NewTimer(delay)
+		defer timer.Stop()
 		select {
 		case <-timer.C:
-			r.retried.Add(1)
 		case <-r.stopCh:
-			timer.Stop()
-			r.failed.Add(1)
-			r.logger.Error("job dropped at shutdown while waiting to retry", "job", name, "attempts", attempt, "error", err)
-			return
-		case <-r.baseCtx.Done():
-			timer.Stop()
-			r.failed.Add(1)
-			r.logger.Error("job dropped at shutdown while waiting to retry", "job", name, "attempts", attempt, "error", err)
+			drop()
 			return
 		}
-	}
+		t.attempt++
+		select {
+		case r.queue <- t: // Shutdown closes the queue only after retryWG is done
+			r.retried.Add(1)
+		case <-r.stopCh:
+			drop()
+		}
+	}()
 }
 
-// runSafely turns a panic into an error so one bad job cannot kill a worker.
+// timeoutFor returns the time limit of one attempt of j (0: none).
+func (r *Runner) timeoutFor(j Job) time.Duration {
+	if t, ok := j.(Timeouter); ok {
+		if d := t.Timeout(); d >= 0 {
+			return d
+		}
+	}
+	return r.jobTimeout
+}
+
+// runSafely turns a panic into an error so one bad job cannot kill a worker,
+// and applies the attempt's time limit.
 func (r *Runner) runSafely(j Job) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("panic: %v", p)
 		}
 	}()
-	return j.Run(r.baseCtx)
+	ctx := r.baseCtx
+	if d := r.timeoutFor(j); d > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, d)
+		defer cancel()
+		defer func() {
+			// A job that still finished counts as a success; one that gave up
+			// because of the limit gets an error that says so.
+			if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) && r.baseCtx.Err() == nil {
+				err = fmt.Errorf("timed out after %v: %w", d, err)
+			}
+		}()
+	}
+	return j.Run(ctx)
 }
 
 // Shutdown stops accepting jobs and periodic ticks, lets the running and
@@ -279,6 +343,7 @@ func (r *Runner) Shutdown(ctx context.Context) error {
 		r.mu.Unlock()
 
 		r.tickersWG.Wait()
+		r.retryWG.Wait() // waiting retries see stopCh and are dropped
 
 		r.mu.Lock()
 		close(r.queue) // nobody can send any more: Enqueue sees closed first

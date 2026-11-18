@@ -36,7 +36,11 @@ aemeath.POST(app, "/logout", func(c *aemeath.Ctx, _ struct{}) (struct{}, error) 
 })
 ```
 
-`MemoryStore` sweeps expired sessions by itself and keeps at most 100,000 live sessions (`WithMaxSessions(n)` changes it). When it is full, new visitors get no session until older ones expire; existing sessions keep working. It lives in one process and is lost on restart, so use the Redis store when you run more than one instance.
+`MemoryStore` sweeps expired sessions by itself and keeps at most 100,000 live sessions (`WithMaxSessions(n)` changes it). When it is full, new visitors get no session until older ones expire: they receive the handler's response without a session cookie (not an error, so clients do not repeat work that was already done), and one line a minute is logged. Existing sessions keep working; a `Renew` in that time loses its session. It lives in one process and is lost on restart, so use the Redis store when you run more than one instance.
+
+If saving fails for another reason (Redis is down), the request is answered `500`, because a "logged in" response without a stored session would be a lie. The handler has run by then: write handlers whose work may be repeated safely, or check the store before work that must not.
+
+**Requests of one session that run at the same time** each load the session, change their copy and save it; the last one to finish wins. Two tabs adding to a counter at the same moment can lose an increment (in a test, 200 parallel increments gave 133). This is how most session stores behave; keep values that many parallel requests update (counters, carts with heavy traffic) in your database, where an update can be atomic.
 
 
 Safety properties, each covered by a test:
@@ -72,7 +76,18 @@ aemeath.GET(app, "/api/csrf", func(c *aemeath.Ctx, _ struct{}) (map[string]strin
 
 The front end fetches the token once and sends it as `X-CSRF-Token` on every `POST`, `PUT`, `PATCH` and `DELETE`. Requests with a missing or wrong token get 403. If the request has an `Origin` header, it must be same-origin or listed in `TrustedOrigins`. Fetch a new token after login, because the session id (and token) change.
 
-Set `Cookie: "XSRF-TOKEN"` to also publish the token in a readable cookie for front-end libraries that read it automatically.
+For a plain HTML form, which cannot send headers, put the token in a hidden field named `csrf_token` (change it with `FormField`). Both `application/x-www-form-urlencoded` and `multipart/form-data` bodies work, and the route still binds the rest of the form:
+
+```html
+<form method="post" action="/notes">
+  <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+  <input name="title">
+</form>
+```
+
+The token is only created when something asks for it (`csrf.Token`), so visitors who never do, such as crawlers, get no session.
+
+Set `Cookie: "XSRF-TOKEN"` to also publish the token in a readable cookie for front-end libraries that read it automatically. That creates a session for every visitor who loads a page, so use a store that can hold them (Redis) rather than `MemoryStore`.
 
 CSRF only matters for cookie authentication. Pure Bearer-token APIs do not need it.
 
@@ -82,6 +97,7 @@ CSRF only matters for cookie authentication. Pure Bearer-token APIs do not need 
 import "github.com/naufalraism/aemeath/jwt"
 
 // 1. A shared secret (HS256/384/512). Fine when one server issues and verifies.
+//    At least 32 random bytes, e.g. `openssl rand -base64 32`; shorter panics at startup.
 app.Use(jwt.Middleware(jwt.Config{SecretKey: os.Getenv("JWT_SECRET")}))
 
 // 2. A public key (RS256, ES256, EdDSA...). The verifier cannot mint tokens.

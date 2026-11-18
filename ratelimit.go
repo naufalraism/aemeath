@@ -2,6 +2,7 @@ package aemeath
 
 import (
 	"net"
+	"net/netip"
 	"strconv"
 	"sync"
 	"time"
@@ -50,10 +51,12 @@ func (rl *rateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 
 // RateLimiter limits each client IP to `limit` requests per `window`
 // (fixed window, anchored at the client's first request in the window).
+// IPv6 clients are grouped by /64, the block one subscriber or machine gets,
+// because a single client can use any of its 2^64 addresses.
 //
 // The client IP is taken from the connection (RemoteAddr). Behind a reverse
-// proxy every request shares the proxy's address, so terminate the limit at
-// the proxy or restore the real client address before this middleware runs.
+// proxy every request shares the proxy's address: install RealIP before this
+// middleware so the limit applies to each client.
 func RateLimiter(limit int, window time.Duration) Middleware {
 	if limit <= 0 || window <= 0 {
 		panic("aemeath: RateLimiter requires limit > 0 and window > 0")
@@ -66,13 +69,7 @@ func RateLimiter(limit int, window time.Duration) Middleware {
 
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) error {
-			// Use the IP only; the port changes on every connection.
-			ip, _, err := net.SplitHostPort(c.R.RemoteAddr)
-			if err != nil {
-				ip = c.R.RemoteAddr
-			}
-
-			ok, retry := rl.allow(ip, time.Now())
+			ok, retry := rl.allow(clientKey(c.R.RemoteAddr), time.Now())
 			if !ok {
 				secs := int((retry + time.Second - 1) / time.Second)
 				c.W.Header().Set("Retry-After", strconv.Itoa(secs))
@@ -81,4 +78,23 @@ func RateLimiter(limit int, window time.Duration) Middleware {
 			return next(c)
 		}
 	}
+}
+
+// clientKey turns a RemoteAddr into a rate-limit key: the IPv4 address, or
+// the /64 prefix of an IPv6 address (the port changes on every connection).
+func clientKey(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	a, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	a = a.Unmap()
+	if a.Is6() {
+		p, _ := a.Prefix(64)
+		return p.String()
+	}
+	return a.String()
 }

@@ -65,8 +65,11 @@ type Tracer struct {
 	done    chan struct{}
 	wg      sync.WaitGroup
 	dropped atomic.Uint64
-	closed  atomic.Bool
 	flushCh chan chan struct{}
+
+	mu      sync.Mutex // guards started and closed
+	started bool       // the exporter goroutine runs
+	closed  bool
 }
 
 // New creates a Tracer and starts its exporter goroutine.
@@ -92,10 +95,9 @@ func New(cfg Config) *Tracer {
 	if cfg.Client == nil {
 		cfg.Client = &http.Client{Timeout: 5 * time.Second}
 	}
-	t := &Tracer{cfg: cfg, queue: make(chan *Span, cfg.QueueSize), done: make(chan struct{}), flushCh: make(chan chan struct{})}
-	t.wg.Add(1)
-	go t.loop()
-	return t
+	// The exporter goroutine starts with the first span to export, so a
+	// Tracer that is created but never used, or has no Endpoint, costs nothing.
+	return &Tracer{cfg: cfg, queue: make(chan *Span, cfg.QueueSize), done: make(chan struct{}), flushCh: make(chan chan struct{})}
 }
 
 // Name implements aemeath.Plugin.
@@ -292,7 +294,7 @@ func (w *statusCapture) Flush() {
 }
 
 func (t *Tracer) enqueue(s *Span) {
-	if !s.Sampled || t.cfg.Endpoint == "" || t.closed.Load() {
+	if !s.Sampled || t.cfg.Endpoint == "" || !t.start() {
 		return
 	}
 	select {
@@ -300,6 +302,21 @@ func (t *Tracer) enqueue(s *Span) {
 	default:
 		t.dropped.Add(1) // never block a request on the exporter
 	}
+}
+
+// start launches the exporter goroutine once. It reports false after Shutdown.
+func (t *Tracer) start() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return false
+	}
+	if !t.started {
+		t.started = true
+		t.wg.Add(1)
+		go t.loop()
+	}
+	return true
 }
 
 func (t *Tracer) loop() {
@@ -348,11 +365,21 @@ func (t *Tracer) loop() {
 	}
 }
 
-// Flush exports everything queued so far and waits for it (or ctx).
+// Flush exports everything queued so far and waits for it (or ctx). After
+// Shutdown, or when nothing was ever queued, there is nothing to flush and it
+// returns at once.
 func (t *Tracer) Flush(ctx context.Context) error {
+	t.mu.Lock()
+	idle := !t.started || t.closed
+	t.mu.Unlock()
+	if idle {
+		return nil
+	}
 	ack := make(chan struct{})
 	select {
 	case t.flushCh <- ack:
+	case <-t.done: // Shutdown began meanwhile; it flushes
+		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -366,10 +393,18 @@ func (t *Tracer) Flush(ctx context.Context) error {
 
 // Shutdown flushes pending spans and stops the exporter.
 func (t *Tracer) Shutdown(ctx context.Context) error {
-	if !t.closed.CompareAndSwap(false, true) {
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
 		return nil
 	}
+	t.closed = true
+	started := t.started
+	t.mu.Unlock()
 	close(t.done)
+	if !started {
+		return nil
+	}
 	fin := make(chan struct{})
 	go func() { t.wg.Wait(); close(fin) }()
 	select {
@@ -432,10 +467,14 @@ func sortStrings(s []string) {
 func (t *Tracer) export(spans []*Span) {
 	body, err := t.payload(spans)
 	if err != nil {
+		log.Printf("aemeath/tracing: encoding %d spans failed: %v", len(spans), err)
+		t.dropped.Add(uint64(len(spans)))
 		return
 	}
 	req, err := http.NewRequest(http.MethodPost, t.cfg.Endpoint, bytes.NewReader(body))
 	if err != nil {
+		log.Printf("aemeath/tracing: cannot build the export request for %q: %v", t.cfg.Endpoint, err)
+		t.dropped.Add(uint64(len(spans)))
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")

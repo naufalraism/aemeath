@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"math"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -100,14 +101,21 @@ func (a *App) EnableDocs(info Info) {
 	})
 }
 
-// docsHTML loads Scalar from a CDN at a pinned version, so a new upstream release
-// cannot change what runs in your visitors' browsers. Bump it deliberately.
+// docsHTML loads Scalar from a CDN at a pinned version, with a Subresource
+// Integrity hash: the browser refuses to run the file if the CDN serves
+// anything else, so neither a new upstream release nor a compromised CDN can
+// change what runs on your origin. To bump the version, update both the URL
+// and the hash (it is the sha384 of dist/browser/standalone.js in the npm
+// package):
+//
+//	npm pack @scalar/api-reference@VERSION && tar xzf scalar-api-reference-VERSION.tgz
+//	echo "sha384-$(openssl dgst -sha384 -binary package/dist/browser/standalone.js | openssl base64 -A)"
 const docsHTML = `<!doctype html>
 <html><head><meta charset="utf-8"><title>%s</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body>
 <script id="api-reference" data-url="/openapi.json"></script>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4/dist/browser/standalone.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4/dist/browser/standalone.js" integrity="sha384-hwB9WroDTpZaI38gr+u9CXA6ksz5gUYgD2GxXazKl/agT1L2GWUiRFWGJYNiFu4Q" crossorigin="anonymous"></script>
 </body></html>`
 
 var pathParamRe = regexp.MustCompile(`\{([^}.$]+)(?:\.\.\.)?\}`)
@@ -293,6 +301,8 @@ func (sb *schemaBuilder) schemaOf(t reflect.Type, input bool) map[string]any {
 	switch {
 	case t == timeType:
 		s = map[string]any{"type": "string", "format": "date-time"}
+	case isCustomJSON(t):
+		return map[string]any{} // MarshalJSON / json.RawMessage: any JSON value
 	case isTextType(t):
 		s = map[string]any{"type": "string"}
 		if t.Name() == "UUID" {
@@ -315,9 +325,9 @@ func (sb *schemaBuilder) kindSchema(t reflect.Type, input bool) map[string]any {
 		return map[string]any{"type": "boolean"}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return map[string]any{"type": "integer"}
+		return withRange(map[string]any{"type": "integer"}, t.Kind())
 	case reflect.Float32, reflect.Float64:
-		return map[string]any{"type": "number"}
+		return withRange(map[string]any{"type": "number"}, t.Kind())
 	case reflect.Slice, reflect.Array:
 		if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
 			return map[string]any{"type": "string", "format": "byte"}
@@ -343,11 +353,21 @@ func (sb *schemaBuilder) structSchema(t reflect.Type, input bool, skipParams boo
 				continue
 			}
 		}
-		name := jsonName(f)
-		if name == "-" {
+		if jsonSkipped(f) {
 			continue
 		}
-		props[name] = sb.annotate(sb.schemaOf(f.Type, input), f, input)
+		name := jsonName(f)
+		if jsonQuoted(f) {
+			// `json:",string"`: a number or boolean sent as a JSON string.
+			schema := withNull(map[string]any{"type": "string", "pattern": quotedPattern(f.Type)}, f.Type.Kind() == reflect.Pointer)
+			props[name] = sb.annotate(schema, f, false)
+		} else {
+			schema := sb.schemaOf(f.Type, input)
+			if input && acceptsNull(f, true) && !isFileType(f.Type) {
+				schema = withNull(schema, true) // null means "not provided"
+			}
+			props[name] = sb.annotate(schema, f, input)
+		}
 
 		// Requiredness depends on direction: input uses `validate:"required"`,
 		// output uses the absence of `omitempty`.
@@ -355,7 +375,7 @@ func (sb *schemaBuilder) structSchema(t reflect.Type, input bool, skipParams boo
 			if inputRequired(f) {
 				required = append(required, name)
 			}
-		} else if !hasOmitEmpty(f) {
+		} else if !outputOptional(f) {
 			required = append(required, name)
 		}
 	}
@@ -377,7 +397,9 @@ func (sb *schemaBuilder) annotate(schema map[string]any, f reflect.StructField, 
 		extras["example"] = exampleValue(f.Type, ex)
 	}
 	if input {
-		for k, v := range ruleConstraints(f) {
+		rc := ruleConstraints(f)
+		keepTighter(rc, schema)
+		for k, v := range rc {
 			extras[k] = v
 		}
 	}
@@ -418,7 +440,7 @@ func exampleValue(t reflect.Type, raw string) any {
 
 // ruleConstraints maps `validate` rules to OpenAPI schema keywords.
 func ruleConstraints(f reflect.StructField) map[string]any {
-	_, rules := parseRules(reflect.TypeOf(struct{}{}), f)
+	required, rules := parseRules(reflect.TypeOf(struct{}{}), f)
 	out := map[string]any{}
 	class := classOf(f.Type)
 	base := f.Type
@@ -426,6 +448,17 @@ func ruleConstraints(f reflect.StructField) map[string]any {
 		base = base.Elem()
 	}
 	isMap := base.Kind() == reflect.Map
+	if required && !hasPositiveMin(rules) && !hasRule(rules, "oneof") {
+		// An empty string, list or map counts as missing (not behind a pointer).
+		switch f.Type.Kind() {
+		case reflect.String:
+			out["minLength"] = 1
+		case reflect.Slice:
+			out["minItems"] = 1
+		case reflect.Map:
+			out["minProperties"] = 1
+		}
+	}
 	for _, r := range rules {
 		switch class {
 		case kindString:
@@ -439,13 +472,19 @@ func ruleConstraints(f reflect.StructField) map[string]any {
 			case "oneof":
 				out["enum"] = r.set
 			case "email":
-				out["format"] = "email"
+				out["format"], out["pattern"] = "email", emailPattern
 			case "url":
-				out["format"] = "uri"
+				out["format"], out["pattern"] = "uri", urlPattern
 			case "uuid":
-				out["format"] = "uuid"
+				out["format"], out["pattern"] = "uuid", uuidPattern
 			case "pattern":
-				out["pattern"] = r.arg
+				// OpenAPI patterns are JavaScript regular expressions without
+				// flags; leave out what cannot be expressed that way.
+				// The pattern is meant for u-mode, which JSON Schema
+				// validators use (ajv does by default).
+				if p, flags, ok := jsRegexp(r.arg); ok && flags == "u" {
+					out["pattern"] = p
+				}
 			}
 		case kindNumber:
 			switch r.name {
@@ -547,4 +586,64 @@ func (sb *schemaBuilder) formBody(t reflect.Type) map[string]any {
 		s["required"] = required
 	}
 	return s
+}
+
+// maxFloat32JSON is the largest number encoding/json reads into a float32:
+// 2^128 - 2^103, halfway between MaxFloat32 and the next power of two.
+// Anything larger overflows and the request is refused.
+const maxFloat32JSON = 3.4028235677973366e38
+
+// numberRange is the range of values encoding/json accepts for a Go number
+// type, when it is narrower than JavaScript's safe integers. hi is 0 when
+// only the lower bound applies (uint, uint64).
+func numberRange(k reflect.Kind) (lo, hi float64, ok bool) {
+	switch k {
+	case reflect.Int8:
+		return math.MinInt8, math.MaxInt8, true
+	case reflect.Int16:
+		return math.MinInt16, math.MaxInt16, true
+	case reflect.Int32:
+		return math.MinInt32, math.MaxInt32, true
+	case reflect.Uint8:
+		return 0, math.MaxUint8, true
+	case reflect.Uint16:
+		return 0, math.MaxUint16, true
+	case reflect.Uint32:
+		return 0, math.MaxUint32, true
+	case reflect.Uint, reflect.Uint64, reflect.Uintptr:
+		return 0, 0, true
+	case reflect.Float32:
+		return -maxFloat32JSON, maxFloat32JSON, true
+	}
+	return 0, 0, false
+}
+
+// withRange adds the type's range to a number schema.
+func withRange(s map[string]any, k reflect.Kind) map[string]any {
+	if lo, hi, ok := numberRange(k); ok {
+		s["minimum"] = lo
+		if hi != 0 {
+			s["maximum"] = hi
+		}
+	}
+	return s
+}
+
+// keepTighter drops a rule's bound when the type's own range is already
+// narrower (a "gte=-1" rule on a uint must not document minimum -1).
+func keepTighter(rules, schema map[string]any) {
+	for _, b := range []struct {
+		key, excl string
+		lower     bool
+	}{{"minimum", "exclusiveMinimum", true}, {"maximum", "exclusiveMaximum", false}} {
+		rv, ok1 := rules[b.key].(float64)
+		tv, ok2 := schema[b.key].(float64)
+		if !ok1 || !ok2 {
+			continue
+		}
+		if (b.lower && rv < tv) || (!b.lower && rv > tv) {
+			delete(rules, b.key)
+			delete(rules, b.excl)
+		}
+	}
 }

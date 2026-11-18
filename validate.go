@@ -1,11 +1,10 @@
 package aemeath
 
 import (
+	"encoding"
 	"fmt"
 	"math"
 	"mime/multipart"
-	"net/mail"
-	"net/url"
 	"reflect"
 	"regexp"
 	"sort"
@@ -56,6 +55,7 @@ type fieldPlan struct {
 	field    reflect.StructField
 	path     []int
 	name     string
+	jsonKey  string // key in a JSON body; "" for path, query, header, cookie and form fields
 	required bool
 	rules    []rule
 	nested   *typePlan
@@ -90,12 +90,23 @@ func buildPlan(t reflect.Type) *typePlan {
 	}
 	p := &typePlan{}
 	plans[t] = p // registered before the fields so recursive types terminate
+	defer func() {
+		// An invalid tag panics below. Forget the half-built plan, so a
+		// recovered panic cannot leave a type that is silently not validated.
+		if r := recover(); r != nil {
+			delete(plans, t)
+			panic(r)
+		}
+	}()
 	if t == timeType {
 		return p
 	}
 	for _, ff := range flatFields(t) {
 		f := ff.StructField
 		fp := &fieldPlan{field: f, path: ff.Path, name: fieldDisplayName(f)}
+		if _, param := paramSource(f); param == "" && formName(f) == "" && !jsonSkipped(f) {
+			fp.jsonKey = jsonName(f)
+		}
 		fp.required, fp.rules = parseRules(t, f)
 		if fp.required && hasOmitEmpty(f) {
 			panic(fmt.Sprintf("aemeath: field %s.%s has both `required` and `omitempty`, which contradict each other", t.Name(), f.Name))
@@ -158,21 +169,38 @@ func classOf(t reflect.Type) kindClass {
 	return kindOther
 }
 
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
-
 // parseRules parses the `validate` tag of a field. A rule that makes no sense
 // for the field's type panics (startup), it is never ignored silently.
+// splitRules splits a `validate` tag into its rules at the commas. A regular
+// expression may contain commas itself ({1,3}), so pattern= takes everything
+// up to the end of the tag and must be the last rule.
+func splitRules(tag string) []string {
+	var parts []string
+	for tag != "" {
+		if rest := strings.TrimLeft(tag, " "); strings.HasPrefix(rest, "pattern=") {
+			parts = append(parts, rest)
+			break
+		}
+		part, rest, _ := strings.Cut(tag, ",")
+		tag = rest
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
+// ruleAfterComma finds a rule written after the pattern, as tags written
+// before pattern took the rest of the tag did ("pattern=^a$,max=5").
+var ruleAfterComma = regexp.MustCompile(`,\s*(required|omitempty|email|url|uuid|(min|max|len|gt|gte|lt|lte|oneof)=[^,]*)\s*$`)
+
 func parseRules(owner reflect.Type, f reflect.StructField) (required bool, rules []rule) {
 	tag := f.Tag.Get("validate")
 	if tag == "" || tag == "-" {
 		return false, nil
 	}
 	class := classOf(f.Type)
-	for _, part := range strings.Split(tag, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
+	for _, part := range splitRules(tag) {
 		name, arg, hasArg := strings.Cut(part, "=")
 		fail := func(msg string) {
 			panic(fmt.Sprintf("aemeath: field %s.%s: validate:%q: %s", owner.Name(), f.Name, part, msg))
@@ -243,6 +271,9 @@ func parseRules(owner reflect.Type, f reflect.StructField) (required bool, rules
 		case "pattern":
 			needArg()
 			onlyFor(class == kindString, "strings")
+			if m := ruleAfterComma.FindString(arg); m != "" {
+				fail("pattern takes the rest of the tag, so it must be the last rule; move " + strings.TrimLeft(m, ", ") + " before it")
+			}
 			re, err := regexp.Compile(arg)
 			if err != nil {
 				fail("invalid regular expression: " + err.Error())
@@ -308,15 +339,15 @@ func (r rule) check(v reflect.Value) string {
 			}
 			return "must be one of: " + strings.Join(r.set, ", ")
 		case "email":
-			if a, err := mail.ParseAddress(s); err != nil || a.Address != s {
+			if !validEmail(s) {
 				return "must be a valid email address"
 			}
 		case "url":
-			if u, err := url.Parse(s); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			if !validURL(s) {
 				return "must be a valid http(s) URL"
 			}
 		case "uuid":
-			if !uuidRe.MatchString(s) {
+			if !validUUID(s) {
 				return "must be a valid UUID"
 			}
 		case "pattern":
@@ -379,9 +410,31 @@ func (r rule) checkNumber(x float64) string {
 	return ""
 }
 
-// validate checks v (a struct value) against the plan and appends every failure to errs.
-func (p *typePlan) validate(v reflect.Value, prefix string, errs *[]FieldError) {
+// validate checks v (a struct value) against the plan and appends every
+// failure to errs.
+//
+// sent is the decoded JSON body at this level (a map[string]any), or nil when
+// the value did not come from JSON (forms, query strings). Rules run when a
+// value was provided:
+//
+//   - in JSON, a key that is present with a non-null value is provided, even
+//     when it is empty: {"website": ""} fails `url`, {"tags": []} fails
+//     `min=1`. A missing key or null is not provided.
+//   - elsewhere (forms, query, headers), an empty value counts as not sent,
+//     because an HTML form always submits its empty inputs.
+//
+// Decoding the body a second time to learn its keys costs as much as the first
+// decode, so the caller may pass sent as nil together with a non-nil needSent.
+// Validation then runs without that knowledge and sets *needSent as soon as a
+// rule is skipped only because the keys are unknown; most bodies never reach
+// that point, and the caller decodes and validates again only when it happens.
+// In the second run needSent is nil, so there is no third run.
+func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]FieldError, needSent *bool) {
+	keys, _ := sent.(map[string]any)
 	for _, fp := range p.fields {
+		if errorsFull(*errs) {
+			return // MaxValidationErrors reached: the rest is not looked at
+		}
 		path := fp.name
 		if prefix != "" {
 			path = prefix + "." + fp.name
@@ -393,12 +446,19 @@ func (p *typePlan) validate(v reflect.Value, prefix string, errs *[]FieldError) 
 			}
 			continue
 		}
-		absent := isAbsent(fv)
-		if fp.required && absent {
+		var sentValue any
+		if keys != nil && fp.jsonKey != "" {
+			sentValue = keys[fp.jsonKey]
+		}
+		if needSent != nil && *needSent {
+			return // the caller is going to decode the body and start over
+		}
+		empty := isAbsent(fv)
+		if fp.required && empty {
 			*errs = append(*errs, FieldError{Field: path, Rule: "required", Message: "is required"})
 			continue
 		}
-		if !absent {
+		if !empty || sentValue != nil {
 			if target := deref(fv); target.IsValid() {
 				for _, r := range fp.rules {
 					if msg := r.check(target); msg != "" {
@@ -406,33 +466,100 @@ func (p *typePlan) validate(v reflect.Value, prefix string, errs *[]FieldError) 
 					}
 				}
 			}
+		} else if needSent != nil && len(fp.rules) > 0 && fp.jsonKey != "" {
+			// The value is empty: whether these rules apply depends on whether
+			// the key was sent, which this run does not know.
+			*needSent = true
+			return
 		}
 		if fp.nested != nil {
-			fp.nested.validateNested(fv, path, errs)
+			fp.nested.validateNested(fv, path, sentValue, errs, needSent)
+			if needSent != nil && *needSent {
+				return
+			}
 		}
 	}
 }
 
-// validateNested descends into structs reached through pointers, slices and maps.
-func (p *typePlan) validateNested(v reflect.Value, path string, errs *[]FieldError) {
+// validateNested descends into structs reached through pointers, slices and
+// maps, keeping the matching part of the JSON body alongside.
+func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *[]FieldError, needSent *bool) {
 	v = deref(v)
 	if !v.IsValid() {
 		return
 	}
 	switch v.Kind() {
 	case reflect.Struct:
-		p.validate(v, path, errs)
+		p.validate(v, path, sent, errs, needSent)
 	case reflect.Slice, reflect.Array:
+		items, _ := sent.([]any)
 		for i := 0; i < v.Len(); i++ {
-			p.validateNested(v.Index(i), path+"["+strconv.Itoa(i)+"]", errs)
+			var item any
+			if i < len(items) {
+				item = items[i]
+			}
+			p.validateNested(v.Index(i), path+"["+strconv.Itoa(i)+"]", item, errs, needSent)
+			if (needSent != nil && *needSent) || errorsFull(*errs) {
+				return
+			}
 		}
 	case reflect.Map:
-		keys := v.MapKeys()
-		sort.Slice(keys, func(i, j int) bool { return fmt.Sprint(keys[i]) < fmt.Sprint(keys[j]) })
-		for _, k := range keys {
-			p.validateNested(v.MapIndex(k), path+"["+fmt.Sprint(k)+"]", errs)
+		entries, _ := sent.(map[string]any)
+		// Each key is turned into its text once, then sorted by that text, so
+		// errors come in a stable order. (Formatting inside the comparison cost
+		// two fmt.Sprint calls per comparison: 118 MB for a 1 MiB body.)
+		type entry struct {
+			name string
+			key  reflect.Value
+		}
+		list := make([]entry, 0, v.Len())
+		for it := v.MapRange(); it.Next(); {
+			list = append(list, entry{mapKeyName(it.Key()), it.Key()})
+		}
+		sort.Slice(list, func(i, j int) bool { return list[i].name < list[j].name })
+		for _, e := range list {
+			p.validateNested(v.MapIndex(e.key), path+"["+e.name+"]", entries[e.name], errs, needSent)
+			if (needSent != nil && *needSent) || errorsFull(*errs) {
+				return
+			}
 		}
 	}
+}
+
+// mapKeyName is a map key as encoding/json writes it: string kinds as they
+// are, then encoding.TextMarshaler, then integers in decimal.
+func mapKeyName(k reflect.Value) string {
+	if k.Kind() == reflect.String {
+		return k.String()
+	}
+	if tm, ok := k.Interface().(encoding.TextMarshaler); ok {
+		if b, err := tm.MarshalText(); err == nil {
+			return string(b)
+		}
+	}
+	switch k.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(k.Int(), 10)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return strconv.FormatUint(k.Uint(), 10)
+	}
+	return fmt.Sprint(k.Interface())
+}
+
+// hasRules reports whether the plan, or a plan nested in it, has a rule that
+// depends on whether a value was sent. Only then is the body decoded a second
+// time to learn which keys it has.
+func (p *typePlan) hasRules(seen map[*typePlan]bool) bool {
+	if p == nil || seen[p] {
+		return false
+	}
+	seen[p] = true
+	for _, fp := range p.fields {
+		if len(fp.rules) > 0 || fp.nested.hasRules(seen) {
+			return true
+		}
+	}
+	return false
 }
 
 // requiredNeedsPointer reports whether a non-pointer field of this type

@@ -12,7 +12,7 @@ aemeath ts --out web/src/api        # build, write the three files, exit
 aemeath dev --ts-out web/src/api    # hot reload that also rewrites them after every successful build
 ```
 
-The CLI builds your program and runs it with `AEMEATH_TS_OUT=<dir>`. `app.Listen` notices the variable, writes the files and returns without starting the server, so `main.go` needs no change (but code that runs before `Listen`, such as opening a database, does run). Unchanged files are not rewritten, so Vite and webpack do not reload for nothing. If a build fails, `dev` keeps the previous files and the previous server.
+The CLI builds your program and runs it with `AEMEATH_TS_OUT=<dir>`. `app.Listen` notices the variable, writes the files and returns without starting the server, so `main.go` needs no change. Code that runs before `Listen` does run, but the database plugin notices the variable too: `db.Open`, `postgres.Open` and `mysql.Open` then use an in-memory SQLite database in dry-run mode, so no database server is needed, your SQLite file is not touched and no migration runs. For other startup work that talks to the outside world, check `aemeath.GeneratingTypeScript()` and skip it. Unchanged files are not rewritten, so Vite and webpack do not reload for nothing. If a build fails, `dev` keeps the previous files and the previous server.
 
 Do not write `log.Fatal(app.Listen(...))`: when `Listen` returns `nil`, `log.Fatal(nil)` exits with status 1. Use `if err := app.Listen(addr); err != nil { log.Fatal(err) }`.
 
@@ -54,3 +54,13 @@ create.mutate({ body: { name: "Ana", email: "ana@example.com" } });
 - Nil slices and maps are `null` in JSON, so output slices/maps are typed `T[] | null`. Use `make([]T, 0)` to send `[]`.
 - `oneof` becomes a literal union (`"admin" | "user"`).
 - Cookie parameters are not part of the browser client.
+
+## Large integers
+
+A JavaScript number is exact only up to 2^53 (about 9 × 10^15). An `int64` or `uint64` above that, such as a snowflake id, silently changes in the browser. The generated types carry a note on such fields. If a field can hold values that large, send it as a string:
+
+```go
+ID uint64 `json:"id,string"`
+```
+
+The client, the Zod schemas and OpenAPI then type it as a string.

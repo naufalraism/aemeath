@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -217,4 +218,52 @@ func TestBadConfigPanics(t *testing.T) {
 			tracing.New(cfg)
 		}()
 	}
+}
+
+// tracing.New used to start its exporter goroutine at once, also without an
+// Endpoint; a Tracer that was never shut down kept it for ever.
+func TestNoGoroutineUntilTheFirstSpan(t *testing.T) {
+	before := runtime.NumGoroutine()
+	for i := 0; i < 50; i++ {
+		tr := tracing.New(tracing.Config{ServiceName: "x"}) // no Endpoint
+		_, s := tr.Start(context.Background(), "op")
+		s.End()
+		_ = tracing.New(tracing.Config{ServiceName: "x", Endpoint: "http://127.0.0.1:1/v1/traces"}) // never used
+	}
+	time.Sleep(50 * time.Millisecond)
+	if after := runtime.NumGoroutine(); after > before+2 {
+		t.Fatalf("goroutines grew from %d to %d", before, after)
+	}
+}
+
+// Flush after Shutdown waited for an exporter that had already exited: with
+// context.Background() it never returned.
+func TestFlushAndShutdownNeverHang(t *testing.T) {
+	check := func(name string, fn func() error) {
+		done := make(chan error, 1)
+		go func() { done <- fn() }()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("%s: %v", name, err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Errorf("%s did not return", name)
+		}
+	}
+	bg := context.Background()
+
+	idle := tracing.New(tracing.Config{ServiceName: "x", Endpoint: "http://127.0.0.1:1/v1/traces"})
+	check("Flush on a tracer that never had a span", func() error { return idle.Flush(bg) })
+	check("Shutdown on a tracer that never had a span", func() error { return idle.Shutdown(bg) })
+	check("Flush after Shutdown", func() error { return idle.Flush(bg) })
+	check("second Shutdown", func() error { return idle.Shutdown(bg) })
+
+	used := tracing.New(tracing.Config{ServiceName: "x", Endpoint: "http://127.0.0.1:1/v1/traces"})
+	_, s := used.Start(bg, "op")
+	s.End()
+	check("Shutdown with a queued span", func() error { return used.Shutdown(bg) })
+	check("Flush after Shutdown (used tracer)", func() error { return used.Flush(bg) })
+	_, s = used.Start(bg, "late")
+	s.End() // after Shutdown: ignored, must not start the exporter again
 }

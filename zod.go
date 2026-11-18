@@ -2,6 +2,7 @@ package aemeath
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -103,7 +104,7 @@ func (g *tsGen) zodInputParts(s routeSpec) map[string][]string {
 		default:
 			continue
 		}
-		if jsonName(f) == "-" && src == "" {
+		if jsonSkipped(f) && src == "" {
 			continue
 		}
 		parts[key] = append(parts[key], g.zodFieldNamed(f, name, true))
@@ -114,11 +115,10 @@ func (g *tsGen) zodInputParts(s routeSpec) map[string][]string {
 func (g *tsGen) zodFields(t reflect.Type, input bool) []string {
 	var lines []string
 	for _, f := range jsonFields(t) {
-		name := jsonName(f)
-		if name == "-" {
+		if jsonSkipped(f) {
 			continue
 		}
-		lines = append(lines, g.zodFieldNamed(f, name, input))
+		lines = append(lines, g.zodFieldNamed(f, jsonName(f), input))
 	}
 	return lines
 }
@@ -133,13 +133,19 @@ func (g *tsGen) zodFieldNamed(f reflect.StructField, name string, input bool) st
 	default:
 		expr = g.zodType(f.Type, input)
 	}
-	if input && !isFileType(f.Type) {
+	quoted := jsonQuoted(f)
+	if quoted {
+		// `json:",string"`: the value travels as a JSON string. Numeric rules
+		// are enforced by the server; here only the format is checked.
+		expr = "z.string().regex(/" + quotedPattern(f.Type) + "/)"
+	}
+	if input && !isFileType(f.Type) && !quoted {
 		expr = zodRules(expr, f)
 	}
-	if (f.Type.Kind() == reflect.Pointer && (!input || !hasRequired(f))) || (!input && nilable(f.Type)) {
+	if acceptsNull(f, input) && expr != "z.unknown()" {
 		expr += ".nullable()"
 	}
-	optional := hasOmitEmpty(f)
+	optional := outputOptional(f)
 	if input {
 		optional = !inputRequired(f)
 	}
@@ -159,9 +165,12 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 	if t == timeType {
 		return `z.string().datetime({ offset: true })`
 	}
+	if isCustomJSON(t) {
+		return "z.unknown()" // MarshalJSON / json.RawMessage: any JSON value
+	}
 	if isTextType(t) {
 		if t.Name() == "UUID" {
-			return "z.string().uuid()"
+			return "z.string()" + zodFormat(uuidPattern, "Invalid UUID")
 		}
 		return "z.string()"
 	}
@@ -172,16 +181,16 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 		return "z.boolean()"
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return "z.number().int()"
+		return "z.number().int()" + zodRange(t.Kind())
 	case reflect.Float32, reflect.Float64:
-		return "z.number()"
+		return "z.number()" + zodRange(t.Kind())
 	case reflect.Slice, reflect.Array:
 		if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
 			return "z.string()"
 		}
-		return "z.array(" + g.zodType(t.Elem(), input) + ")"
+		return "z.array(" + g.zodElem(t.Elem(), input) + ")"
 	case reflect.Map:
-		return "z.record(z.string(), " + g.zodType(t.Elem(), input) + ")"
+		return "z.record(z.string(), " + g.zodElem(t.Elem(), input) + ")"
 	case reflect.Struct:
 		if t.Name() != "" {
 			name := g.register(t, input)
@@ -196,18 +205,44 @@ func (g *tsGen) zodType(t reflect.Type, input bool) string {
 	return "z.unknown()"
 }
 
+// zodFormat checks a string against one of the shared format patterns (see
+// formats.go) instead of Zod's own .email()/.url()/.uuid(), which differ from
+// the server and between Zod versions.
+func zodFormat(pattern, message string) string {
+	return ".regex(new RegExp(" + jsString(pattern) + "), " + jsString(message) + ")"
+}
+
+// zodElem is the schema of an element of a slice, array or map; see elemRef.
+func (g *tsGen) zodElem(t reflect.Type, input bool) string {
+	expr := g.zodType(t, input)
+	if !input && elemNullable(t) && expr != "z.unknown()" {
+		expr += ".nullable()"
+	}
+	return expr
+}
+
 // zodRules appends the Zod checks that correspond to the `validate` rules of f.
 func zodRules(expr string, f reflect.StructField) string {
 	if f.Tag.Get("validate") == "" {
 		return expr
 	}
-	_, rules := parseRules(reflect.TypeOf(struct{}{}), f)
+	required, rules := parseRules(reflect.TypeOf(struct{}{}), f)
 	class := classOf(f.Type)
 	base := f.Type
 	for base.Kind() == reflect.Pointer {
 		base = base.Elem()
 	}
 	isMap := base.Kind() == reflect.Map
+	if required && !hasPositiveMin(rules) {
+		// The server reads an empty string, list or map as missing. (Behind
+		// a pointer, only null is missing: "" is a value.)
+		switch f.Type.Kind() {
+		case reflect.String, reflect.Slice:
+			expr += ".min(1)"
+		case reflect.Map:
+			expr += mapSize(">=", 1)
+		}
+	}
 	for _, r := range rules {
 		switch class {
 		case kindString:
@@ -219,17 +254,25 @@ func zodRules(expr string, f reflect.StructField) string {
 			case "len":
 				expr += ".length(" + num(r.num) + ")"
 			case "email":
-				expr += ".email()"
+				expr += zodFormat(emailPattern, "Invalid email address")
 			case "url":
-				expr += ".url()"
+				expr += zodFormat(urlPattern, "Invalid http(s) URL")
 			case "uuid":
-				expr += ".uuid()"
+				expr += zodFormat(uuidPattern, "Invalid UUID")
 			case "pattern":
-				expr += ".regex(new RegExp(" + strconv.Quote(r.arg) + "))"
+				// Go and JavaScript regular expressions differ; a pattern that
+				// cannot be translated is left to the server.
+				if p, flags, ok := jsRegexp(r.arg); ok {
+					if flags != "" {
+						expr += ".regex(new RegExp(" + jsString(p) + ", " + jsString(flags) + "))"
+					} else {
+						expr += ".regex(new RegExp(" + jsString(p) + "))"
+					}
+				}
 			case "oneof":
 				quoted := make([]string, len(r.set))
 				for i, v := range r.set {
-					quoted[i] = strconv.Quote(v)
+					quoted[i] = jsString(v)
 				}
 				expr = "z.enum([" + strings.Join(quoted, ", ") + "])"
 			}
@@ -256,7 +299,16 @@ func zodRules(expr string, f reflect.StructField) string {
 			}
 		case kindList:
 			if isMap {
-				continue // z.record has no size checks
+				// z.record has no size checks of its own.
+				switch r.name {
+				case "min":
+					expr += mapSize(">=", r.num)
+				case "max":
+					expr += mapSize("<=", r.num)
+				case "len":
+					expr += mapSize("===", r.num)
+				}
+				continue
 			}
 			switch r.name {
 			case "min":
@@ -309,7 +361,7 @@ export function createHooks(client: Client) {
 `)
 	for _, op := range ops {
 		hook := "use" + upperFirst(op.name)
-		q := strconv.Quote(op.name)
+		q := jsString(op.name)
 		isQuery := op.method == "GET" || op.method == "HEAD"
 		switch {
 		case isQuery && op.mode == noInput:
@@ -326,4 +378,55 @@ export function createHooks(client: Client) {
 	}
 	b.WriteString("  };\n}\n")
 	return b.String()
+}
+
+// mapSize checks the number of keys of a z.record, as the server checks the
+// length of a map.
+func mapSize(op string, n float64) string {
+	word := map[string]string{">=": "at least", "<=": "at most", "===": "exactly"}[op]
+	return ".refine((v) => Object.keys(v).length " + op + " " + num(n) + ", " + jsString("must contain "+word+" "+num(n)+" items") + ")" // the server's message
+}
+
+// hasPositiveMin reports whether a min or len rule already demands at least
+// one element, which makes the check for "required" redundant.
+func hasPositiveMin(rules []rule) bool {
+	for _, r := range rules {
+		if (r.name == "min" || r.name == "len") && r.num >= 1 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasRule(rules []rule, name string) bool {
+	for _, r := range rules {
+		if r.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// zodRange is the range of a Go number type, which encoding/json enforces:
+// 128 does not fit an int8 and -1 does not fit a uint, so the server answers
+// 400. (int and int64 are left to Zod's own safe-integer range; see the
+// documentation on large integers.)
+func zodRange(k reflect.Kind) string {
+	lo, hi, ok := numberRange(k)
+	if !ok {
+		return ""
+	}
+	out := ".gte(" + jsNum(lo) + ")"
+	if hi != 0 {
+		out += ".lte(" + jsNum(hi) + ")"
+	}
+	return out
+}
+
+// jsNum writes a number for JavaScript, with an exponent when it is large.
+func jsNum(f float64) string {
+	if math.Abs(f) >= 1e21 {
+		return strconv.FormatFloat(f, 'g', -1, 64)
+	}
+	return num(f)
 }

@@ -21,8 +21,8 @@ You get `http_requests_total{method,route,status}`, `http_request_duration_secon
 Custom metrics:
 
 ```go
-jobs := reg.Counter("jobs_total", "Jobs processed.", "kind")
-jobs.Inc("email")
+processed := reg.Counter("jobs_total", "Jobs processed.", "kind")
+processed.Inc("email")
 depth := reg.Gauge("queue_depth", "Jobs waiting.")
 depth.Set(12)
 lat := reg.Histogram("job_seconds", "Job time.", []float64{.1, .5, 1, 5})

@@ -2,6 +2,57 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **A full `session.MemoryStore`** gives new visitors no session, as documented, instead of answering `500`: the handler's response is sent without a session cookie, and one line a minute is logged instead of one per request. Under a flood of one-time visitors, the `500` made clients retry requests whose work (a queued job, a database write) was already done.
+- **`pattern` in the generated schemas** matches the same strings as on the server. The JavaScript regular expressions had no `u` flag, so a pattern with a range of emoji (`[😀-😂]`) made schemas.ts throw a SyntaxError when imported, breaking every schema, and `.`, `[^a]`, `\s`, `\S`, `(?m)` and `(?i)` matched other strings than Go (`"\r"`, an emoji, U+3000, the Kelvin sign...). Patterns are now translated for u-mode JavaScript, including `\pL`, `\p{Greek}`, POSIX classes, `\Q...\E`, octal and `\x{...}` escapes, escaped punctuation and literal braces; the few without a faithful translation are left to the server.
+- **Number ranges in the generated schemas**: Zod and OpenAPI now carry the range of `int8`, `int16`, `int32`, the unsigned types and `float32`, which encoding/json enforces. `128` for an `int8` or `-1` for a `uint` passed the Zod schema and came back 400.
+- **`required` in the generated schemas** now means what it means on the server: a non-empty string, list or map (`.min(1)` in Zod, `minLength`/`minItems`/`minProperties: 1` in OpenAPI). Zod accepted `""`, `[]` and `{}`, which the server refuses with 422. `min`, `max` and `len` on maps are now checked by Zod too.
+- **JSON names follow encoding/json exactly** in OpenAPI, the TypeScript client, the Zod schemas and validation errors. A json tag name with a character encoding/json refuses (`json:"price€"`, a quote, a backslash, an emoji) used to be documented while encoding/json sends the Go field name; `json:"-,"` (a field named `-`) was left out; an embedded struct tagged `json:",omitempty"` was described as one field instead of being flattened, and one tagged `json:"-"` was described although encoding/json leaves it out (its path and query fields are still bound).
+- **Two fields with the same JSON name at the same depth** (both tagged or both untagged, for example through two embedded structs) are refused when the route is registered: encoding/json sends and reads neither, while the generators documented one.
+- **TypeScript and Zod** string literals are written as JavaScript, not Go: `strconv.Quote` wrote characters above U+FFFF that are not printable as `\U000e0067`, which JavaScript reads as `U000e0067`. A `oneof` with a subdivision flag emoji (🏴󠁧󠁢󠁳󠁣󠁴󠁿) was refused by the generated schema while the server accepted it.
+- **Groups** collapse repeated slashes in the prefix and in route paths: `app.Group("/api//")` registered its `"/"` route as the catch-all `/api/`, and `Group("//")` panicked. `"//x"` now joins as `/x`.
+- **The request target `*`** (as in `OPTIONS *`) is answered `400`, like `net/http.ServeMux`, instead of `404` or `405`.
+- **A client that leaves before the response** is recorded as `499` (`aemeath.StatusClientClosedRequest`), not as a `500` with "internal error: context canceled" in the log: a handler that returns an error wrapping `context.Canceled` is no longer counted as a server error by the Logger, metrics and tracing. `context.DeadlineExceeded` stays a `500`.
+- **JSON names on Go 1.27:** encoding/json now runs on encoding/json/v2 by default and reads names in json tags differently (`json:"price€"` is used as is; `json:"we\"ird"` is `we`). The TypeScript client, the Zod schemas, OpenAPI and validation errors follow the rule of the Go version in use (`GOEXPERIMENT=nojsonv2` keeps the old one).
+- **Tests on Windows:** the Node tests import zod by `file://` URL, and the `0600` file-mode check of `LocalStorage` runs on Linux and macOS only.
+- **CI and the README** fuzz exactly `FuzzBind` (`-fuzz '^FuzzBind$'`); the old pattern also matched `FuzzBindMatchesEncodingJSON`, and `go test` refuses to fuzz two targets.
+
+### Security
+
+- **`LocalStorage.Save`** replaces control characters and invisible formatting characters (newline, tab, NUL, right-to-left override, zero-width space) in the stored name with `_`. `evil\u202Egnp.exe` displayed as `evilexe.png`, and a newline in a name forged lines in logs that print it. Ordinary letters in any script are kept.
+- **`CORS`** sends `Vary: Origin` on every response unless `*` is the only allowed origin, also on responses to origins it does not allow and to requests without an Origin header. A shared cache could store one of those and serve it, without CORS headers, to the allowed front end.
+- **`ws.Upgrade`** pings every 30 seconds and closes a connection whose client has not answered for 60 (`ws.DefaultIdleTimeout`, `0` to turn it off). net/http's timeouts end when a WebSocket takes the connection over, so a silent client used to hold a connection and a goroutine forever. Browsers answer pings by themselves; if you set your own `PongHandler`, extend the read deadline in it.
+- **`csrf.Middleware`** refuses an unsafe request from a visitor that was never given a token before reading the body. It used to parse a form body of up to 32 MiB (spilling to temporary files) first, on any POST route, for any client.
+- **Validating a map** turns each key into text once instead of twice per comparison while sorting: a 1 MiB body with 100,000 keys took 615 ms and 118 MB, now 116 ms and 25 MB. Keys that implement `encoding.TextMarshaler` are now named in error paths the way JSON writes them.
+- **Validation** stops after `aemeath.MaxValidationErrors` errors (100 by default, `0` for no limit). A 1 MiB JSON body of empty objects used to produce 349,517 errors and a 25 MB response.
+- **`Static` and `Ctx.File`** send `X-Content-Type-Options: nosniff` on every file, and a file whose extension has no known type ("note", "report.dat") as `application/octet-stream` instead of a type guessed from its content. An uploaded file that started with `<!doctype html>` used to be served as `text/html` (stored XSS) even though `LocalStorage` renames `.html`, `.svg` and `.js` uploads.
+- **Server-Sent Events** get a write timeout per event (`aemeath.DefaultSSEWriteTimeout`, 10 seconds; `SSE.SetWriteTimeout` changes it, `0` turns it off). A client that stopped reading but kept the connection open used to block the handler in `Send` forever.
+- **Request bodies are capped by default (breaking):** every body, including one a handler reads itself from `c.R.Body`, stops at `aemeath.DefaultMaxRequestBytes` (by default the larger of the JSON and multipart limits, 32 MiB), and returning the read error answers `413`. A raw handler used to read any amount (300 MB in the test). For larger uploads put `MaxBodySize(n)` on the group; it now replaces the default cap instead of nesting inside it, and `MaxBodySize(-1)` removes it.
+- **Request headers are limited to 64 KiB (breaking)** by `NewServer` (`aemeath.DefaultMaxHeaderBytes`; net/http's default is 1 MiB). Larger headers get `431`. 200 clients sending 1000 KB of headers each took the heap from 51-86 MB down to 7-15 MB.
+
+### Documentation
+
+- The README's performance section now separates the one-machine timings from the allocation counts, which are measured by `BenchmarkHelloRoute` and `BenchmarkValidatedJSONPost` (16 and 32 allocations with Go 1.27, the version in `go.mod`; the test that checks them is skipped on other Go versions, whose counts differ).
+- Corrected: the OpenAPI `<Type>Input` components (an operation's own input struct is inlined), the TypeScript types of nil slices and maps, the per-hook shutdown limit, what `jwt.Middleware` and `RateLimiter` actually enforce in `SECURITY.md`, and the comparison page, which still said there was no job runner and no metrics or tracing.
+- The README has a section on behaviour under pressure (shutdown, slow clients, no connection limit, `Timeout` and handlers that ignore their context), each point tested in `internal/hostile`.
+- `internal/docclaims` tests the statements made in the README and `docs/` against the running framework, so a claim that stops being true fails the build.
+
+### Performance
+
+- A JSON body is decoded a second time (to learn which keys were sent) only when a validated value is empty, instead of on every request with validation rules. A body whose validated values are filled in costs 35 allocations instead of 46 for two fields (measured with Go 1.24), and a 200-item list about 40% less time and memory. Validation results are unchanged; a test and a fuzz target compare both ways.
+
+### Added
+
+- `App.SetShutdownTimeout(d)`: how long requests in flight get to finish after SIGINT/SIGTERM (`aemeath.DefaultShutdownTimeout`, 10 seconds, which used to be fixed). When it runs out their connections are closed and their clients get no response.
+
+### Changed
+
+- **Validation (breaking):** `email`, `url` and `uuid` are now defined once and used by the server, the Zod schemas and OpenAPI alike. `email` requires a dot in the domain (`a@b` and `a@[127.0.0.1]` are refused; non-ASCII addresses are still accepted). The Zod schemas no longer accept non-http(s) URLs such as `javascript:` or `ftp:`.
+- **Validation (breaking):** in a JSON body, a key that is present is now validated even when its value is empty. `{"website": ""}` fails `url`, `{"tags": []}` fails `min=1` and `{"kind": 0}` fails `oneof=1 2`; before, rules were skipped for every empty value. Leave the key out or send `null` for "no value". Forms and query strings are unchanged (an empty value is not sent). This matches the generated Zod schemas.
+
 ## [0.3.1] - 2026-11-14
 
 ### Fixed

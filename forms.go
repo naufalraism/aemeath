@@ -281,8 +281,10 @@ func bindWithForm(c *Ctx, in any, info *inputInfo) error {
 		return err
 	}
 	errs := formErrs
-	info.plan.validate(v, "", &errs)
-	if len(errs) > 0 {
+	if !errorsFull(errs) {
+		info.plan.validate(v, "", nil, &errs, nil) // a form always submits its empty inputs: presence adds nothing
+	}
+	if errs = capErrors(errs); len(errs) > 0 {
 		return ValidationError(errs...)
 	}
 	return nil

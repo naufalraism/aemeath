@@ -1,6 +1,7 @@
 package aemeath
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -35,6 +36,8 @@ func (p *FileLoggerPlugin) Name() string { return "file_logger" }
 
 // Apply registers the logging middleware.
 func (p *FileLoggerPlugin) Apply(app *App) error {
+	// Close the log file when the server stops, so the last lines are on disk.
+	app.OnShutdown(func(context.Context) error { return p.Close() })
 	app.Use(func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) (err error) {
 			start := time.Now()

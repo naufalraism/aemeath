@@ -19,6 +19,7 @@
 | Validation | built-in rules (`min`, `max`, `oneof`, `email`, `pattern`, ...); 422 with per-field errors | built-in via struct tags and JSON Schema | `go-playground/validator` | `go-playground/validator` (Gin) or manual |
 | Typed TypeScript client | built-in | via the OpenAPI document and a generator | via the OpenAPI document and a generator | via a generator, if you document your API |
 | Zod schemas, React Query hooks | built-in, same rules as the server | not built-in as far as we know | not built-in as far as we know | no |
+| Background jobs, metrics, tracing | built-in packages (`jobs`, `metrics`, `tracing`) | no | no | third-party |
 | Errors | `{"error", "errors"[]}` (replaceable) | RFC 9457 `problem+json` | JSON | your choice |
 | Content negotiation | JSON only | JSON, CBOR | JSON, XML, ... | your choice |
 | In-process test client | `aetest` | `humatest` | via `httptest` | via `httptest` |
@@ -31,7 +32,7 @@
 - **One router.** Aemeath is `net/http` `ServeMux`; you cannot plug it into an existing chi/Gin app the way Huma and Fuego can.
 - **OpenAPI 3.0.3 only**, no content negotiation, no per-operation request size limits.
 - **A smaller validation rule set** than `go-playground/validator`, by design: every rule has to work in Go, OpenAPI and Zod.
-- No OpenTelemetry/Prometheus integration, no job runner, and no typed SSE in the TypeScript client yet.
+- **No typed SSE in the TypeScript client** yet, and no OpenTelemetry SDK: `aemeath/tracing` exports OTLP/HTTP itself and `aemeath/metrics` serves Prometheus metrics, so auto-instrumentation of other libraries needs the official SDK alongside them.
 
 ## Where Aemeath aims to win
 

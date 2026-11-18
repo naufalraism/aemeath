@@ -156,7 +156,8 @@ func (a *App) AddReadyCheck(name string, fn HealthCheck) {
 //
 //	GET /healthz   liveness: 200 as long as the process can answer
 //	GET /readyz    readiness: 200 when every check from AddReadyCheck passes
-//	               (each runs with a 5 second limit), otherwise 503
+//	               (each runs with a 5 second limit), otherwise 503; also 503
+//	               once a stop signal arrived (see SetShutdownDelay)
 //
 // The checks' error details are logged, not sent to the client.
 func (a *App) EnableHealth() {
@@ -164,6 +165,9 @@ func (a *App) EnableHealth() {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 	a.Handle("GET", "/readyz", func(c *Ctx) error {
+		if a.ShuttingDown() {
+			return c.JSON(http.StatusServiceUnavailable, map[string]any{"status": "shutting down"})
+		}
 		a.readyMu.Lock()
 		checks := append([]namedCheck(nil), a.readyChecks...)
 		a.readyMu.Unlock()

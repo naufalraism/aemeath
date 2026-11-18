@@ -3,6 +3,7 @@ package jwt_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,8 +52,8 @@ func TestRejectsEmptySecret(t *testing.T) {
 }
 
 func TestValidToken(t *testing.T) {
-	app := build(jwt.Config{SecretKey: "s3cret"})
-	tok := sign(t, "s3cret", gojwt.MapClaims{"sub": "user-1", "role": "admin", "exp": time.Now().Add(time.Hour).Unix()}, gojwt.SigningMethodHS256)
+	app := build(jwt.Config{SecretKey: "s3cret-0123456789-abcdefghijklmnop"})
+	tok := sign(t, "s3cret-0123456789-abcdefghijklmnop", gojwt.MapClaims{"sub": "user-1", "role": "admin", "exp": time.Now().Add(time.Hour).Unix()}, gojwt.SigningMethodHS256)
 
 	rec := call(app, "Bearer "+tok)
 	if rec.Code != 200 || rec.Body.String() != "{\"role\":\"admin\",\"user\":\"user-1\"}\n" {
@@ -64,15 +65,15 @@ func TestValidToken(t *testing.T) {
 }
 
 func TestNumericSubject(t *testing.T) {
-	app := build(jwt.Config{SecretKey: "s3cret"})
-	tok := sign(t, "s3cret", gojwt.MapClaims{"sub": 42, "exp": time.Now().Add(time.Hour).Unix()}, gojwt.SigningMethodHS256)
+	app := build(jwt.Config{SecretKey: "s3cret-0123456789-abcdefghijklmnop"})
+	tok := sign(t, "s3cret-0123456789-abcdefghijklmnop", gojwt.MapClaims{"sub": 42, "exp": time.Now().Add(time.Hour).Unix()}, gojwt.SigningMethodHS256)
 	if rec := call(app, "Bearer "+tok); rec.Body.String() != "{\"role\":null,\"user\":\"42\"}\n" {
 		t.Fatalf("body = %q", rec.Body)
 	}
 }
 
 func TestRejections(t *testing.T) {
-	app := build(jwt.Config{SecretKey: "s3cret"})
+	app := build(jwt.Config{SecretKey: "s3cret-0123456789-abcdefghijklmnop"})
 	exp := time.Now().Add(time.Hour).Unix()
 	for name, header := range map[string]string{
 		"no header":        "",
@@ -80,8 +81,8 @@ func TestRejections(t *testing.T) {
 		"no token":         "Bearer ",
 		"garbage":          "Bearer not.a.jwt",
 		"wrong secret":     "Bearer " + sign(t, "other", gojwt.MapClaims{"exp": exp}, gojwt.SigningMethodHS256),
-		"expired":          "Bearer " + sign(t, "s3cret", gojwt.MapClaims{"exp": time.Now().Add(-time.Hour).Unix()}, gojwt.SigningMethodHS256),
-		"no exp (default)": "Bearer " + sign(t, "s3cret", gojwt.MapClaims{"sub": "u"}, gojwt.SigningMethodHS256),
+		"expired":          "Bearer " + sign(t, "s3cret-0123456789-abcdefghijklmnop", gojwt.MapClaims{"exp": time.Now().Add(-time.Hour).Unix()}, gojwt.SigningMethodHS256),
+		"no exp (default)": "Bearer " + sign(t, "s3cret-0123456789-abcdefghijklmnop", gojwt.MapClaims{"sub": "u"}, gojwt.SigningMethodHS256),
 	} {
 		rec := call(app, header)
 		if rec.Code != 401 || rec.Header().Get("WWW-Authenticate") != "Bearer" {
@@ -91,7 +92,7 @@ func TestRejections(t *testing.T) {
 }
 
 func TestAlgorithmNoneIsRejected(t *testing.T) {
-	app := build(jwt.Config{SecretKey: "s3cret"})
+	app := build(jwt.Config{SecretKey: "s3cret-0123456789-abcdefghijklmnop"})
 	tok, err := gojwt.NewWithClaims(gojwt.SigningMethodNone, gojwt.MapClaims{"sub": "attacker", "exp": time.Now().Add(time.Hour).Unix()}).SignedString(gojwt.UnsafeAllowNoneSignatureType)
 	if err != nil {
 		t.Fatal(err)
@@ -102,8 +103,46 @@ func TestAlgorithmNoneIsRejected(t *testing.T) {
 }
 
 func TestAllowNoExpiry(t *testing.T) {
-	tok := sign(t, "s3cret", gojwt.MapClaims{"sub": "u"}, gojwt.SigningMethodHS256)
-	if rec := call(build(jwt.Config{SecretKey: "s3cret", AllowNoExpiry: true}), "Bearer "+tok); rec.Code != 200 {
+	tok := sign(t, "s3cret-0123456789-abcdefghijklmnop", gojwt.MapClaims{"sub": "u"}, gojwt.SigningMethodHS256)
+	if rec := call(build(jwt.Config{SecretKey: "s3cret-0123456789-abcdefghijklmnop", AllowNoExpiry: true}), "Bearer "+tok); rec.Code != 200 {
 		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+// An HS256 secret such as "secret" can be brute-forced offline from any one
+// token; it used to be accepted without a word.
+func TestShortSecretsAreRejected(t *testing.T) {
+	for _, s := range []string{"secret", "changeme", strings.Repeat("x", jwt.MinSecretBytes-1)} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("Middleware accepted a %d-byte secret", len(s))
+				}
+			}()
+			jwt.Middleware(jwt.Config{SecretKey: s})
+		}()
+		if _, err := jwt.Issue("HS256", []byte(s), jwt.IssueOptions{TTL: time.Minute}); err == nil {
+			t.Errorf("Issue accepted a %d-byte secret", len(s))
+		}
+	}
+	jwt.Middleware(jwt.Config{SecretKey: strings.Repeat("x", jwt.MinSecretBytes)}) // must not panic
+}
+
+// A valid token marks the request, so routes with RequireAuth accept it.
+func TestMiddlewareSatisfiesRequireAuth(t *testing.T) {
+	const secret = "s3cret-0123456789-abcdefghijklmnop"
+	app := aemeath.New()
+	g := app.Group("/api", jwt.Middleware(jwt.Config{SecretKey: secret}))
+	g.Options(aemeath.RequireAuth())
+	aemeath.GroupGET(g, "/me", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+		return map[string]string{"user": jwt.UserID(c)}, nil
+	})
+	tok := sign(t, secret, gojwt.MapClaims{"sub": "u1", "exp": time.Now().Add(time.Hour).Unix()}, gojwt.SigningMethodHS256)
+	r := httptest.NewRequest("GET", "/api/me", nil)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, r)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "u1") {
+		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 }

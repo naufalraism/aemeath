@@ -20,7 +20,7 @@ Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeM
 ## ✨ Features
 
 - **Type-safe routes**: define request/response structs once; binding and validation are automatic.
-- **Rich validation**: `required`, `min`, `max`, `len`, `gt/gte/lt/lte`, `oneof`, `email`, `url`, `uuid`, `pattern`. Every failure is reported at once as a `422` with per-field errors.
+- **Rich validation**: `required`, `min`, `max`, `len`, `gt/gte/lt/lte`, `oneof`, `email`, `url`, `uuid`, `pattern`. Every failure (up to 100 per request) is reported at once as a `422` with per-field errors.
 - **One source of truth**: the same tags drive the server, the OpenAPI document (`$ref` components, constraints, security, error schemas), the TypeScript client, the Zod schemas and the React Query hooks.
 - **Binding** from path, query (including repeated keys), headers, cookies, JSON, and **forms and file uploads** (`form:` tag, type detected from the file's bytes, size limits); embedded structs; `time.Time`, UUIDs and any `encoding.TextUnmarshaler`.
 - **Typed dependencies**: `aemeath.Get[*gorm.DB](c)` instead of `c.State["db"].(*gorm.DB)`.
@@ -38,7 +38,7 @@ Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeM
 
 Aemeath adds typed binding and validation on top of `net/http` for a small fixed cost per request.
 
-*Microbenchmark of a single JSON route using `httptest`, on an Intel i7-10750H with Go 1.27 (lower is better).*
+*Microbenchmark of a single JSON route using `httptest` (lower is better).*
 
 | Framework | Time (ns/op) | Memory (B/op) | Allocations |
 | :--- | :--- | :--- | :--- |
@@ -46,7 +46,16 @@ Aemeath adds typed binding and validation on top of `net/http` for a small fixed
 | **Aemeath** | **2,120** | **1,152 B** | **13** |
 | Gin | 2,280 | 1,433 B | 16 |
 
-This is a microbenchmark, not a load test: numbers vary by machine and say nothing about real-world throughput, where your handlers and database dominate. The table shows the median of five runs (`go test -bench . -benchmem -count 5 -benchtime 2s`) on Windows. A plain `GET` costs 13 allocations (about 1.1 KB), and a JSON `POST` with two validated fields costs about 31 allocations (7.3 KB), including the cost of building the test request. Measure your own routes:
+That table is one run of `go test -bench . -benchmem -count 5 -benchtime 2s` (median of five) on an Intel i7-10750H on Windows with Go 1.27, against the release of Aemeath current at the time. It is useful for the order of magnitude and for the comparison with Gin, and for nothing more: times vary by machine and Go version, and a microbenchmark says nothing about real-world throughput, where your handlers and database dominate.
+
+Allocation counts do not depend on the machine (they do depend on the Go version), so they are the part worth watching, and they have grown since that run. On the current code with Go 1.27, measured with the commands below:
+
+| Route | Allocations | Memory |
+| :--- | :--- | :--- |
+| plain `GET`, no input | 16 | 1,528 B |
+| JSON `POST`, two validated fields | 32 | 7.3 KB |
+
+Both include the cost of building the test request. To tell `{"website": ""}` from a missing key, Aemeath reads the JSON body a second time, but only when a validated value turns out to be empty; a body whose validated values are all filled in is decoded once. Measure your own routes:
 
 ```bash
 go test -run '^$' -bench . -benchmem .      # Aemeath alone
@@ -170,9 +179,11 @@ aemeath.GET(app, "/old", func(c *aemeath.Ctx, _ struct{}) (aemeath.Handled, erro
 `Ctx` also has `SetCookie`, `File`, `Text`, and `SSE()` for Server-Sent Events:
 
 ```go
-sse, err := c.SSE()          // disables the write timeout for this stream
+sse, err := c.SSE()          // no overall write timeout; c.Context() ends on disconnect and at shutdown
 sse.Send("tick", map[string]int{"n": 1})
 ```
+
+Each `Send` must reach the client within 10 seconds (`sse.SetWriteTimeout` changes it, 0 turns it off). A client that stops reading but keeps the connection open gets an error from `Send` instead of holding the handler forever; a stream that is only quiet between events is not affected.
 
 ---
 
@@ -196,18 +207,18 @@ type CreateUserIn struct {
 | `len=N` | string, slice, map | exactly N |
 | `gt`, `gte`, `lt`, `lte` | numbers | comparisons |
 | `oneof=a b c` | string, number | one of the space separated values |
-| `email`, `url`, `uuid` | string | formats (`url` must be absolute http/https) |
-| `pattern=REGEX` | string | regular expression (RE2); no commas |
+| `email`, `url`, `uuid` | string | `email`: `local@domain.tld` (non-ASCII letters allowed; `a@b` is refused). `url`: absolute http/https. `uuid`: 8-4-4-4-12 hex, any version. The generated Zod schemas and OpenAPI use the same patterns as the server |
+| `pattern=REGEX` | string | regular expression (RE2); must be the last rule (it may contain commas) |
 
 How it behaves:
 
 - **All** failures are collected and returned together as `422`:
   `{"error":"validation failed","errors":[{"field":"age","rule":"gte","message":"must be at least 18"}]}`. Nested fields are named `address.city`, `items[1].qty`, `extra[home].city`.
-- Rules other than `required` only run when a value was provided, so an optional field can still be constrained.
+- Rules other than `required` only run when a value was provided, so an optional field can still be constrained. In a **JSON body**, a key that is present is provided, even when it is empty: `{"website": ""}` fails `url` and `{"tags": []}` fails `min=1`; leave the key out (or send `null`) for "no value". In **forms and query strings** an empty value counts as not sent, because an HTML form always submits its empty inputs. The generated Zod schemas follow the JSON rule.
 - For **scalars** (`int`, `bool`, `float`) with `required` you **must** use a pointer so "not sent" differs from "sent as zero". Aemeath panics at **startup** for that, for `required`+`omitempty`, and for unknown or misapplied rules (`min` on a bool, `email` on a number, a bad regex, ...). A typo never becomes a silent runtime bug.
 - Nested structs, pointers to structs, slices and maps of structs are validated recursively; recursive types are supported.
 - Checks only your handler can make: `return aemeath.ValidationError(aemeath.FieldError{Field: "email", Rule: "unique", Message: "is already taken"})`.
-- Malformed input (invalid JSON, `?page=abc`) is a `400`; a body over `aemeath.DefaultMaxBodyBytes` (1 MiB) is `413`; a non-JSON `Content-Type` is `415`. With `curl -d`, add `-H 'Content-Type: application/json'`.
+- Malformed input (invalid JSON, `?page=abc`) is a `400`; a body over `aemeath.DefaultMaxBodyBytes` (1 MiB) is `413`; every other body, including one a handler reads itself from `c.R.Body`, is capped at `aemeath.DefaultMaxRequestBytes` (32 MiB by default) and returning the read error gives `413`; a non-JSON `Content-Type` is `415`. With `curl -d`, add `-H 'Content-Type: application/json'`.
 
 ---
 
@@ -250,14 +261,17 @@ app.Use(
 | `SecurityHeaders()` | `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, HSTS (only over TLS) |
 | `Gzip(min...)` | compresses JSON/text for clients that accept it; leaves streams, tiny bodies and WebSockets alone |
 | `Timeout(d)` | deadline on `c.Context()`; `504` when a handler that honors the context runs out |
-| `MaxBodySize(n)` | caps request bodies; typed routes answer `413` |
+| `MaxBodySize(n)` | sets the body limit in place of the default cap (raise it on an upload group, `-1` removes it); reading past it is `413` |
 | `RateLimiter(n, window)` | per-IP fixed window; sends `Retry-After` on `429` |
+| `RealIP(trusted...)` | behind trusted proxies, takes the client address from `X-Forwarded-For` / `X-Real-IP` |
 
-> **Behind a reverse proxy**, `RateLimiter` sees the proxy's address for every request (it uses `RemoteAddr`). Limit at the proxy or restore the real client IP first.
+> **Behind a reverse proxy** (Railway, Fly.io, Render, a Kubernetes ingress), every request comes from the proxy's address. Put `aemeath.RealIP(aemeath.PrivateNetworks...)` before `RateLimiter` and the loggers so they see the real client. Headers from any other address are ignored, so clients cannot spoof them; only use `PrivateNetworks` when the app is not reachable directly from the internet.
 
 ### Health checks
 
 `app.EnableHealth()` adds `GET /healthz` (liveness) and `GET /readyz` (readiness: `200`, or `503` when a check added with `app.AddReadyCheck(name, fn)` fails). The database and cache plugins register their own checks.
+
+On Kubernetes or behind another load balancer, add `app.SetShutdownDelay(10 * time.Second)`: after SIGTERM, `/readyz` answers `503` at once while the server keeps serving for that long, so traffic is moved away before connections are refused. The default is `0`.
 
 ---
 
@@ -304,7 +318,7 @@ JWT:
 
 ```go
 group := app.Group("/api", jwt.Middleware(jwt.Config{SecretKey: os.Getenv("JWT_SECRET")}))
-group.Options(aemeath.RequireAuth()) // documents the Bearer scheme and a 401 in /docs
+group.Options(aemeath.RequireAuth()) // 401 unless a middleware authenticated the caller; also documented in /docs
 // in a handler: jwt.UserID(c), jwt.Claims(c)
 ```
 
@@ -328,10 +342,10 @@ app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore()}), csr
 
 Other notes:
 
-- `db` and `cache` close their connection when the server shuts down; register your own cleanup with `app.OnShutdown(func(ctx context.Context) error { ... })` (hooks run in reverse order, within 10 seconds).
-- `LocalStorage.Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part; it does **not** check file types. Call `IsAllowedFile` yourself. Files are private to the server's user (mode `0600`); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
+- `db` and `cache` close their connection when the server shuts down; register your own cleanup with `app.OnShutdown(func(ctx context.Context) error { ... })` (hooks run in reverse order, each with 10 seconds of its own).
+- `LocalStorage.Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part, replaces control and invisible formatting characters with `_`, and appends `.txt` to names a browser would render or run (`.html`, `.svg`, `.js`, ...). `Static` sends every file with `X-Content-Type-Options: nosniff` and a file of unknown type as `application/octet-stream`, so a served upload folder cannot become stored XSS. It does **not** reject file types: use the `accept` tag or `IsAllowedFile`. Files are private to the server's user (mode `0600` on Linux and macOS; on Windows, access follows the folder's permissions); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
 - For OAuth2, make the `state` with `oauth2.GenerateState()`, keep it in a cookie, and compare it in the callback. See `examples/basic`.
-- WebSockets only accept **same-origin** browser connections by default. To allow others, set `ws.Upgrader.CheckOrigin`.
+- WebSockets only accept **same-origin** browser connections by default. To allow others, set `ws.Upgrader.CheckOrigin`. Messages are limited to 1 MiB (`ws.DefaultReadLimit`), and a connection whose client stops answering pings is closed after 60 seconds (`ws.DefaultIdleTimeout`; the server pings every 30 seconds, and browsers answer by themselves).
 
 ---
 
@@ -389,11 +403,11 @@ const { useGetUsers, usePostUsers } = createHooks(client);
 postUsersBodySchema.safeParse(formValues); // the same rules the server enforces
 ```
 
-The generated Zod schemas and the server made the same accept/reject decision for every payload in our parity check. A few details:
+The generated Zod schemas and the server make the same accept/reject decision: a test compares them on more than 120,000 values in node, and 4,000 random regular expressions on 140 strings each. A few details:
 
 - **Input**: a field is required only if it has `validate:"required"` (or is a non-pointer struct containing a required field). `oneof` becomes a literal union / `z.enum`. Constraints appear as JSDoc and Zod checks. A required pointer is not nullable.
-- **Output**: a field is required unless it has `json:",omitempty"`. Nil slices and maps are typed `T[] | null` (Go encodes them as `null`); initialize them with `make([]T, 0)` to send `[]`. Pointers are typed `T | null`.
-- `pattern` rules are Go (RE2) expressions handed to JavaScript's `RegExp`; stick to the common syntax.
+- **Output**: a field is required unless it has `json:",omitempty"`. Nil slices and maps are nullable (`Array<T> | null`, `Record<K, V> | null`), because Go encodes them as `null`; initialize them with `make([]T, 0)` to send `[]`. Pointers are typed `T | null`.
+- `pattern` rules are Go (RE2) expressions. They are translated so that JavaScript (with the `u` flag) accepts exactly the same strings: `.` is `[^\n]`, `\s` is `[\t\n\f\r ]`, `\pL` and `[[:alpha:]]` are spelled the JavaScript way, and so on. The few constructs with no faithful translation (`(?m)`, flags in the middle of a pattern, `\b` or `\p` together with `(?i)`) are left out of Zod and OpenAPI; the server still enforces them.
 - Cookie parameters are not part of the browser client (the browser manages cookies).
 - The function name comes from `aemeath.OperationID("...")`, or from the method and path (`getHelloByName`).
 
@@ -419,20 +433,28 @@ Responses with status ≥ 400 are returned as `*aemeath.HTTPError`, with `Errors
 app.EnableDocs(aemeath.Info{Title: "My API", Version: "1.0.0"})
 ```
 
-`GET /openapi.json` (OpenAPI 3.0.3) and `GET /docs` (the Scalar UI, loaded from a CDN). Named structs become `components.schemas` entries (`$ref`; input types are named `<Type>Input`), validation rules become constraints (`minLength`, `enum`, `format`, ...), `description`/`example` struct tags are used, and every operation documents `400`/`422`/`500` (plus `401` with `aemeath.RequireAuth()`). Extra route options: `Description`, `Deprecated`, `Tags`, `Summary`, `OperationID`.
+`GET /openapi.json` (OpenAPI 3.0.3) and `GET /docs` (the Scalar UI, loaded from a CDN). Named structs reached from an output, and named structs reached *inside* an input (a shared `Address`, for example), become `components.schemas` entries (`$ref`), the latter named `<Type>Input`; the input struct of the operation itself is written into the operation rather than as a component, validation rules become constraints (`minLength`, `enum`, `format`, ...), `description`/`example` struct tags are used, and every operation documents `400`/`422`/`500` (plus `401` with `aemeath.RequireAuth()`). Extra route options: `Description`, `Deprecated`, `Tags`, `Summary`, `OperationID`.
 
 ## 📂 Static files & server
 
 ```go
 app.Static("/public", "./public") // no directory listings; global middlewares apply
-if err := app.Listen(":3000"); err != nil { // read header 5 s, read 15 s, write 15 s, idle 60 s
+if err := app.Listen(":3000"); err != nil { // read header 5 s, read 15 s, write 15 s, idle 60 s, headers 64 KiB
 	log.Fatal(err)
 }
 ```
 
 `Listen` returns `nil` after a graceful shutdown (Ctrl+C, `SIGTERM`), so do not write `log.Fatal(app.Listen(...))`: `log.Fatal(nil)` prints `<nil>` and exits with status 1, which makes a clean shutdown look like a crash to Docker, Kubernetes and CI. Check the error instead, as above.
 
-For custom timeouts or TLS: `srv := app.NewServer(":3000"); srv.WriteTimeout = 0; app.Serve(srv)`, or `app.ListenTLS(addr, cert, key)`.
+For custom timeouts, limits or TLS: `srv := app.NewServer(":3000"); srv.WriteTimeout = 0; app.Serve(srv)`, or `app.ListenTLS(addr, cert, key)`. Requests whose headers exceed 64 KiB (`aemeath.DefaultMaxHeaderBytes`; net/http alone allows 1 MiB) get `431`; raise `srv.MaxHeaderBytes` if your clients send very large cookies.
+
+What the server does under pressure (each point is tested in `internal/hostile`):
+
+- **Shutdown**: after SIGINT/SIGTERM new connections are refused, streams and WebSockets end at once, and requests in flight get 10 seconds (`app.SetShutdownTimeout(d)` changes it). After that their connections are closed: the client gets no response. Keep `SetShutdownDelay` plus this timeout below the platform's grace period.
+- **Slow clients** are closed by the timeouts above: headers after 5 s, a body after 15 s, a response the client does not read after 15 s, an idle keep-alive after 60 s.
+- **No limit on the number of connections**: a thousand slow clients cost a thousand goroutines until the timeouts close them. On the open internet, put a reverse proxy or load balancer (nginx, Caddy, a cloud load balancer) in front to cap connections per client.
+- **`Timeout(d)`** cancels `c.Context()` and answers `504`, but cannot stop a handler that ignores its context: such a handler runs to the end and its response is discarded. Pass `c.Context()` to database and HTTP calls.
+- **A client that leaves** cancels `c.Context()`; the request is recorded as `499`, not as a server error. `c.Context()` is also cancelled once the response is sent, so background work must use `context.WithoutCancel(c.Context())` or the `jobs` package.
 
 ## 🔄 Upgrading from the first versions
 
@@ -454,7 +476,7 @@ Validation failures are now `422` with a list of field errors (they were `400` w
 
 ```bash
 go test -race ./...
-go test -run '^$' -fuzz FuzzBind -fuzztime 30s .   # fuzz the request binder
+go test -run '^$' -fuzz '^FuzzBind$' -fuzztime 30s .   # fuzz the request binder
 ```
 
 ## 📝 Technical Notes

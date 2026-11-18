@@ -12,7 +12,28 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 )
+
+// MaxValidationErrors is the most validation errors one request reports
+// (100). Validation stops once it is reached: without a limit, a 1 MiB body of
+// 349,517 empty objects made the server build and send 349,517 errors, a 25 MB
+// response. Set it to 0 for no limit. Change it before the server starts.
+var MaxValidationErrors = 100
+
+// errorsFull reports whether no more validation errors should be collected.
+func errorsFull(errs []FieldError) bool {
+	return MaxValidationErrors > 0 && len(errs) >= MaxValidationErrors
+}
+
+// capErrors trims errs to MaxValidationErrors (a field with several failing
+// rules can add more than one past the check).
+func capErrors(errs []FieldError) []FieldError {
+	if MaxValidationErrors > 0 && len(errs) > MaxValidationErrors {
+		return errs[:MaxValidationErrors]
+	}
+	return errs
+}
 
 // DefaultMaxBodyBytes is the default limit for JSON request bodies (1 MiB).
 // It can be changed before the server starts.
@@ -49,9 +70,13 @@ func Status(code int) RouteOption { return func(c *routeConfig) { c.status = cod
 // Deprecated marks the route as deprecated in the OpenAPI docs.
 func Deprecated() RouteOption { return func(c *routeConfig) { c.deprecated = true } }
 
-// RequireAuth documents the route as protected by a Bearer token (JWT) in the
-// OpenAPI docs, and adds a 401 response. It only documents; enforcing it is
-// the job of a middleware such as jwt.Middleware.
+// RequireAuth makes the route answer 401 unless a middleware authenticated
+// the caller (see Ctx.MarkAuthenticated; jwt.Middleware does it for you). It
+// also documents the route as protected by a Bearer token in the OpenAPI
+// docs, with a 401 response.
+//
+// It is a safety net, not the authentication itself: a route with RequireAuth
+// and no authentication middleware in front of it refuses every request.
 func RequireAuth() RouteOption { return func(c *routeConfig) { c.secure = true } }
 
 func newRouteConfig(opts []RouteOption) routeConfig {
@@ -68,6 +93,17 @@ type inputInfo struct {
 	plan   *typePlan
 	params []flatField // fields bound from path, query, header or cookie
 	forms  []flatField // fields bound from an urlencoded or multipart form body
+
+	sentOnce sync.Once
+	wantSent bool
+}
+
+// needsSent reports whether validation needs to know which keys the JSON body
+// has (see typePlan.validate). It is false for inputs without rules, which
+// then pay nothing for it.
+func (i *inputInfo) needsSent() bool {
+	i.sentOnce.Do(func() { i.wantSent = i.plan.hasRules(map[*typePlan]bool{}) })
+	return i.wantSent
 }
 
 // prepareInput analyses the input type of a route. It panics at startup for
@@ -81,6 +117,7 @@ type inputInfo struct {
 // A json-tagged field on a bodyless method (GET/DELETE) is never bound, so a
 // warning is logged.
 func prepareInput(t reflect.Type, method, path string) *inputInfo {
+	checkJSONNames(t, map[reflect.Type]bool{})
 	info := &inputInfo{typ: t, plan: planFor(t)}
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -111,6 +148,9 @@ func prepareInput(t reflect.Type, method, path string) *inputInfo {
 func typedHandler[In, Out any](cfg routeConfig, info *inputInfo, fn func(*Ctx, In) (Out, error)) HandlerFunc {
 	handled := reflect.TypeFor[Out]() == reflect.TypeFor[Handled]()
 	return func(c *Ctx) error {
+		if cfg.secure && !c.authed {
+			return Unauthorized("authentication required")
+		}
 		var in In
 		defer c.runCleanups()
 		if err := bind(c, &in, info); err != nil {
@@ -132,6 +172,7 @@ func typedHandler[In, Out any](cfg routeConfig, info *inputInfo, fn func(*Ctx, I
 func Route[In, Out any](a *App, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
 	cfg := newRouteConfig(opts)
 	info := prepareInput(reflect.TypeFor[In](), method, path)
+	checkJSONNames(reflect.TypeFor[Out](), map[reflect.Type]bool{})
 	a.specs = append(a.specs, routeSpec{
 		method: method, path: path,
 		in: reflect.TypeFor[In](), out: reflect.TypeFor[Out](),
@@ -185,23 +226,39 @@ func paramSource(f reflect.StructField) (string, string) {
 
 // jsonName returns the field name from the json tag, or the Go field name if absent.
 func jsonName(f reflect.StructField) string {
-	name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
-	if name == "" {
-		return f.Name
+	if name := jsonTagName(f); name != "" {
+		return name
 	}
-	return name
+	return f.Name
 }
 
-// hasJSONName reports whether the field has an explicit, non-ignored json tag.
-func hasJSONName(f reflect.StructField) bool {
+// jsonTagName is the name the json tag gives the field, as encoding/json reads
+// it: "" when there is none or encoding/json ignores it and uses the Go field
+// name. Which names it accepts depends on the Go version (tagJSONName).
+// `json:"-,"` names the field "-"; only `json:"-"` leaves it out (see
+// jsonSkipped).
+func jsonTagName(f reflect.StructField) string {
 	tag := f.Tag.Get("json")
-	return tag != "" && tag != "-"
+	if tag == "-" {
+		return ""
+	}
+	return tagJSONName(tag)
+}
+
+// hasJSONName reports whether the json tag gives the field a name. An
+// embedded struct without one is flattened into its parent.
+func hasJSONName(f reflect.StructField) bool { return jsonTagName(f) != "" }
+
+// jsonSkipped reports whether encoding/json leaves the field out: `json:"-"`
+// on the field, or on an embedded struct it was promoted from.
+func jsonSkipped(f reflect.StructField) bool {
+	return f.Tag.Get("json") == "-" || f.Tag.Get("aemeath_json") == "skip"
 }
 
 // hasRequired reports whether the field has the `validate:"required"` tag.
 func hasRequired(f reflect.StructField) bool {
-	for _, p := range strings.Split(f.Tag.Get("validate"), ",") {
-		if strings.TrimSpace(p) == "required" {
+	for _, p := range splitRules(f.Tag.Get("validate")) {
+		if p == "required" {
 			return true
 		}
 	}
@@ -235,8 +292,9 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 	if info.hasForm() {
 		return bindWithForm(c, in, info)
 	}
+	var body []byte // the JSON body as sent, to tell "" from a missing key
 	if bodyMethod(c.R.Method) && c.R.Body != nil {
-		body, err := io.ReadAll(io.LimitReader(c.R.Body, DefaultMaxBodyBytes+1))
+		read, err := io.ReadAll(io.LimitReader(c.R.Body, DefaultMaxBodyBytes+1))
 		if err != nil {
 			var mbe *http.MaxBytesError
 			if errors.As(err, &mbe) {
@@ -244,9 +302,10 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 			}
 			return BadRequest("failed to read request body")
 		}
-		if int64(len(body)) > DefaultMaxBodyBytes {
+		if int64(len(read)) > DefaultMaxBodyBytes {
 			return PayloadTooLarge(fmt.Sprintf("request body exceeds the limit of %d bytes", DefaultMaxBodyBytes))
 		}
+		body = read
 		if len(body) > 0 {
 			if ct := c.R.Header.Get("Content-Type"); ct != "" && !isJSONContentType(ct) {
 				return UnsupportedMediaType("Content-Type must be application/json")
@@ -271,11 +330,32 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 		return err
 	}
 	var errs []FieldError
-	info.plan.validate(v, "", &errs)
-	if len(errs) > 0 {
+	var needSent bool
+	var ask *bool // nil unless there is a body to decode a second time
+	if len(body) > 0 && info.needsSent() {
+		ask = &needSent
+	}
+	info.plan.validate(v, "", nil, &errs, ask)
+	if needSent {
+		// A rule depends on whether a key was sent: decode the body once more
+		// and validate again, now knowing the keys.
+		errs = nil
+		info.plan.validate(v, "", decodeSent(body), &errs, nil)
+	}
+	if errs = capErrors(errs); len(errs) > 0 {
 		return ValidationError(errs...)
 	}
 	return nil
+}
+
+// decodeSent decodes the body a second time, generically, so validation can
+// see which keys were sent. It costs about as much as the first decode, so it
+// runs only when a rule's outcome actually depends on it (see typePlan.validate).
+// The body is valid JSON: it decoded once already.
+func decodeSent(body []byte) any {
+	var sent any
+	_ = json.Unmarshal(body, &sent)
+	return sent
 }
 
 // bindParams binds path, query, header and cookie values into the struct.

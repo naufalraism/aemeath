@@ -347,3 +347,145 @@ func TestRunnerAsAPlugin(t *testing.T) {
 	}
 	shutdown(t, r)
 }
+
+// A job stuck on a slow call used to hold its worker until shutdown.
+func TestJobTimeoutCancelsTheAttemptAndRetries(t *testing.T) {
+	logger, logs := quietLogger()
+	r := jobs.New(jobs.WithWorkers(1), jobs.WithRetries(1), jobs.WithJobTimeout(50*time.Millisecond),
+		jobs.WithBackoff(func(int) time.Duration { return time.Millisecond }), jobs.WithLogger(logger))
+	r.Start()
+	defer func() { _ = r.Shutdown(context.Background()) }()
+
+	var attempts atomic.Int32
+	stuck := jobs.Func(func(ctx context.Context) error {
+		attempts.Add(1)
+		<-ctx.Done() // a slow call that honors its context
+		return ctx.Err()
+	})
+	quick := make(chan struct{})
+	if err := r.Enqueue(stuck); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Enqueue(jobs.Func(func(context.Context) error { close(quick); return nil })); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-quick: // the time limit freed the single worker
+	case <-time.After(3 * time.Second):
+		t.Fatal("the worker stayed blocked by the stuck job")
+	}
+	waitUntil(t, "the job to be counted as failed", func() bool { return r.Stats().Failed == 1 })
+	if n := attempts.Load(); n != 2 {
+		t.Fatalf("attempts = %d, want 2 (first try + 1 retry)", n)
+	}
+	if !strings.Contains(logs.String(), "timed out after 50ms") {
+		t.Fatalf("the log does not say the job timed out:\n%s", logs.String())
+	}
+}
+
+type ownLimit struct{ got chan time.Duration }
+
+func (j ownLimit) Timeout() time.Duration { return 30 * time.Millisecond }
+func (j ownLimit) Run(ctx context.Context) error {
+	dl, _ := ctx.Deadline()
+	j.got <- time.Until(dl)
+	return nil
+}
+
+func TestJobCanSetItsOwnTimeout(t *testing.T) {
+	r := jobs.New(jobs.WithWorkers(1), jobs.WithJobTimeout(time.Hour))
+	r.Start()
+	defer func() { _ = r.Shutdown(context.Background()) }()
+	j := ownLimit{got: make(chan time.Duration, 1)}
+	_ = r.Enqueue(j)
+	if left := <-j.got; left <= 0 || left > 30*time.Millisecond {
+		t.Fatalf("time left = %v, want at most the job's own 30ms", left)
+	}
+}
+
+func TestNoTimeoutByDefault(t *testing.T) {
+	r := jobs.New(jobs.WithWorkers(1))
+	r.Start()
+	defer func() { _ = r.Shutdown(context.Background()) }()
+	got := make(chan bool, 1)
+	_ = r.Enqueue(jobs.Func(func(ctx context.Context) error {
+		_, has := ctx.Deadline()
+		got <- has
+		return nil
+	}))
+	if <-got {
+		t.Fatal("a job got a deadline although no timeout was configured")
+	}
+}
+
+// A job waiting for its retry used to keep its worker asleep: with one
+// worker, a quick job waited the whole backoff behind it.
+func TestRetryBackoffDoesNotHoldTheWorker(t *testing.T) {
+	logger, _ := quietLogger()
+	r := jobs.New(jobs.WithWorkers(1), jobs.WithRetries(1), jobs.WithLogger(logger),
+		jobs.WithBackoff(func(int) time.Duration { return 2 * time.Second }))
+	r.Start()
+	defer func() { _ = r.Shutdown(context.Background()) }()
+
+	_ = r.Enqueue(jobs.Func(func(context.Context) error { return errors.New("fails once") }))
+	ran := make(chan struct{})
+	start := time.Now()
+	_ = r.Enqueue(jobs.Func(func(context.Context) error { close(ran); return nil }))
+	select {
+	case <-ran:
+		if took := time.Since(start); took > time.Second {
+			t.Fatalf("the quick job waited %v behind a job that was only waiting to retry", took)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the quick job never ran")
+	}
+}
+
+// A periodic job that failed and was waiting to retry used to count as
+// finished, so the next tick started a second run alongside its retry.
+func TestPeriodicJobDoesNotOverlapItsRetries(t *testing.T) {
+	logger, _ := quietLogger()
+	r := jobs.New(jobs.WithWorkers(4), jobs.WithRetries(3), jobs.WithLogger(logger),
+		jobs.WithBackoff(func(int) time.Duration { return 60 * time.Millisecond }))
+	r.Start()
+	defer func() { _ = r.Shutdown(context.Background()) }()
+
+	var running, maxRunning, runs atomic.Int32
+	_ = r.Every(40*time.Millisecond, jobs.Func(func(context.Context) error {
+		cur := running.Add(1)
+		for {
+			m := maxRunning.Load()
+			if cur <= m || maxRunning.CompareAndSwap(m, cur) {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+		running.Add(-1)
+		runs.Add(1)
+		return errors.New("always fails")
+	}))
+	waitUntil(t, "several runs", func() bool { return runs.Load() >= 6 })
+	if m := maxRunning.Load(); m != 1 {
+		t.Fatalf("the same periodic job ran %d times at once", m)
+	}
+}
+
+// Retries waiting at shutdown are dropped and counted, and Shutdown returns.
+func TestShutdownDropsWaitingRetries(t *testing.T) {
+	logger, logs := quietLogger()
+	r := jobs.New(jobs.WithWorkers(2), jobs.WithRetries(5), jobs.WithLogger(logger),
+		jobs.WithBackoff(func(int) time.Duration { return time.Hour }))
+	r.Start()
+	for i := 0; i < 5; i++ {
+		_ = r.Enqueue(jobs.Func(func(context.Context) error { return errors.New("fail") }))
+	}
+	waitUntil(t, "all first attempts", func() bool { return strings.Count(logs.String(), "will retry") == 5 })
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := r.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if s := r.Stats(); s.Failed != 5 || s.Retried != 0 {
+		t.Fatalf("stats after shutdown: %+v, want 5 failed", s)
+	}
+}
