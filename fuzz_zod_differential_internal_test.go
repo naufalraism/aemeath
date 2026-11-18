@@ -136,7 +136,7 @@ func TestZodAgreesWithTheServer(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	js := strings.Replace(schemas, `import { z } from "zod";`, `const { z } = await import("`+filepath.ToSlash(zodDir)+`/index.js");`, 1)
+	js := strings.Replace(schemas, `import { z } from "zod";`, `const { z } = await import("`+fileURL(filepath.Join(zodDir, "index.js"))+`");`, 1)
 	js = strings.ReplaceAll(js, "export const", "const")
 	var names strings.Builder
 	names.WriteString("\nconst schemaOf = {\n")

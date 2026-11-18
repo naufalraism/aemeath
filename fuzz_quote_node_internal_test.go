@@ -35,7 +35,7 @@ func TestZodEnumWithFlagEmoji(t *testing.T) {
 	t.Logf("generated: %s", line)
 
 	dir := t.TempDir()
-	ts := strings.Replace(schemas, `from "zod"`, `from "`+filepath.ToSlash(zodDir)+`/index.js"`, 1)
+	ts := strings.Replace(schemas, `from "zod"`, `from "`+fileURL(filepath.Join(zodDir, "index.js"))+`"`, 1)
 	js := strings.ReplaceAll(ts, "export const", "const") // plain JavaScript: the schemas file has no type syntax except "export"
 	js = strings.Replace(js, `import { z } from`, `const { z } = await import(`, 1)
 	js = strings.Replace(js, `/index.js";`, `/index.js");`, 1)
@@ -77,7 +77,7 @@ func TestZodSchemasLoadWithNonBMPRange(t *testing.T) {
 	}
 	app := New()
 	registerRuntimeRoute(app, "POST", "/m", typeOf[emojiRangeIn](), typeOf[struct{}]())
-	js := strings.Replace(app.ZodSchemas(), `import { z } from "zod";`, `const { z } = await import("`+filepath.ToSlash(zodDir)+`/index.js");`, 1)
+	js := strings.Replace(app.ZodSchemas(), `import { z } from "zod";`, `const { z } = await import("`+fileURL(filepath.Join(zodDir, "index.js"))+`");`, 1)
 	js = strings.ReplaceAll(js, "export const", "const")
 	js += "\nconsole.log('loaded;', postMBodySchema.safeParse({mood: '\\u{1F601}'}).success, postMBodySchema.safeParse({mood: 'a'}).success);\n"
 	file := filepath.Join(t.TempDir(), "load.mjs")

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -62,4 +64,25 @@ func skipNode(t *testing.T, why string) {
 		t.Fatal(why)
 	}
 	t.Skip(why)
+}
+
+// fileURL turns an absolute path into the file:// URL Node's import()
+// needs: on Windows a bare "C:/..." is read as a URL with the scheme "c:".
+func fileURL(path string) string {
+	p := filepath.ToSlash(path)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p // C:/x -> /C:/x
+	}
+	return (&url.URL{Scheme: "file", Path: p}).String()
+}
+
+func TestFileURL(t *testing.T) {
+	for in, want := range map[string]string{
+		"/home/a b/zod/index.js":                        "file:///home/a%20b/zod/index.js",
+		"C:/Users/LENOVO/Downloads/Aemeath Go/index.js": "file:///C:/Users/LENOVO/Downloads/Aemeath%20Go/index.js",
+	} {
+		if got := fileURL(in); got != want {
+			t.Errorf("fileURL(%q) = %q, want %q", in, got, want)
+		}
+	}
 }
