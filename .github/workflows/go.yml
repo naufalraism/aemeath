@@ -50,7 +50,7 @@ jobs:
 
     - name: Fuzz the request binder (short)
       if: runner.os == 'Linux'
-      run: go test -run '^$' -fuzz FuzzBind -fuzztime 20s .
+      run: go test -run '^$' -fuzz '^FuzzBind$' -fuzztime 20s .
 
     - name: Benchmark smoke test
       if: runner.os == 'Linux'

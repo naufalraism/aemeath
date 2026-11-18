@@ -476,7 +476,7 @@ Validation failures are now `422` with a list of field errors (they were `400` w
 
 ```bash
 go test -race ./...
-go test -run '^$' -fuzz FuzzBind -fuzztime 30s .   # fuzz the request binder
+go test -run '^$' -fuzz '^FuzzBind$' -fuzztime 30s .   # fuzz the request binder
 ```
 
 ## 📝 Technical Notes
