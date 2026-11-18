@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Fixed
 
 - **A struct tag Go cannot read is refused at startup.** `validate:"required,pattern=^\d{5}$"`, the form the validation guide showed, is not a valid Go string (`\d` is not an escape), so `reflect` returned no `validate` tag and the field lost every rule, `required` included, on the server, in the Zod schemas and in OpenAPI, without a word (only `go vet` warned). Registration now panics and names the field; the guide shows `\\d`.
+- **`null` for an optional field of a JSON body** is accepted by the generated Zod schemas, TypeScript types (`note?: string | null`) and OpenAPI, as it is by the server, which reads `null` as "not sent" for any type. Zod used to refuse `{"note": null}` for a non-pointer field that the server accepted. A required field, or a non-pointer struct with a required field, still refuses `null` everywhere.
 
 ## [0.4.0] - 2026-11-18
 

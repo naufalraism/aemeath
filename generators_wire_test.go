@@ -125,9 +125,9 @@ func TestPatternsAreTranslatedForJavaScript(t *testing.T) {
 	POST(a, "/p", func(c *Ctx, v in) (in, error) { return v, nil })
 	zod := a.ZodSchemas()
 	for _, want := range []string{
-		`a: z.string().regex(new RegExp("^[a-z]+$", "ui")).optional()`,
-		`b: z.string().regex(new RegExp("^[A-Za-z]+$", "u")).optional()`,
-		`c: z.string().regex(new RegExp("^abc$", "u")).optional()`,
+		`a: z.string().regex(new RegExp("^[a-z]+$", "ui")).nullable().optional()`,
+		`b: z.string().regex(new RegExp("^[A-Za-z]+$", "u")).nullable().optional()`,
+		`c: z.string().regex(new RegExp("^abc$", "u")).nullable().optional()`,
 	} {
 		if !strings.Contains(zod, want) {
 			t.Errorf("Zod is missing %q\n%s", want, zod)

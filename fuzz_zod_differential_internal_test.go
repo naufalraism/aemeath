@@ -176,7 +176,7 @@ process.stdout.write(JSON.stringify(out));
 		server, client bool
 	}
 	groups := map[int]*group{}
-	byDesign, leftToServer := 0, 0
+	leftToServer := 0
 	for i, c := range cases {
 		if zod[i] == c.Server {
 			continue
@@ -188,12 +188,6 @@ process.stdout.write(JSON.stringify(out));
 				leftToServer++
 				continue
 			}
-		}
-		if c.Body == `{"v":null}` && c.Server && !zod[i] && routes[c.Route].kind.Kind() != reflect.Pointer {
-			// The server reads null as "not sent"; the TypeScript type of a
-			// non-pointer field (v?: T) does not allow null, and Zod agrees with it.
-			byDesign++
-			continue
 		}
 		g := groups[c.Route]
 		if g == nil {
@@ -221,7 +215,7 @@ process.stdout.write(JSON.stringify(out));
 		t.Errorf("%-8s %-24q %4d, e.g. %-26s server %-5v zod %-5v | %s",
 			routes[k].kind, routes[k].tag, g.count, g.example, g.server, g.client, line)
 	}
-	t.Logf("by design: null for a non-pointer field %d; pattern left to the server %d", byDesign, leftToServer)
+	t.Logf("pattern left to the server: %d", leftToServer)
 	t.Logf("%d routes, %d cases, %d disagreements in %d routes", len(routes), len(cases), func() int {
 		n := 0
 		for _, g := range groups {
