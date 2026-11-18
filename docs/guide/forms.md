@@ -36,7 +36,7 @@ aemeath.POST(app, "/profile", func(c *aemeath.Ctx, in ProfileIn) (Profile, error
 - A `*multipart.FileHeader` field takes exactly one file (a second one is a 422); use `[]*multipart.FileHeader` for several.
 - The whole body is limited: `aemeath.DefaultMaxMultipartBytes` (32 MiB) for multipart and `DefaultMaxBodyBytes` (1 MiB) for urlencoded forms. Larger requests get 413. Change them before starting the server. A handler that reads `c.R.Body` itself is capped too, at `aemeath.DefaultMaxRequestBytes` (by default the larger of the two, 32 MiB); for bigger uploads put `aemeath.MaxBodySize(n)` on that group, which replaces the cap.
 - Uploads beyond 8 MiB spill to temporary files. They are **deleted when the handler returns**, so copy what you need inside the handler.
-- Never use the client's file name as a path. `aemeath.LocalStorage` generates safe names and stores files mode `0600`.
+- Never use the client's file name as a path. `aemeath.LocalStorage` generates safe names and stores files mode `0600` (on Linux and macOS; on Windows the folder's permissions apply).
 - Form values come from the request **body only**, never from the URL query, so `?user=attacker` cannot fill a form field.
 
 A file field needs `multipart/form-data`; a route with only text fields accepts both encodings. A `form` field on a `GET` or `DELETE` route, together with another source tag on the same field, or `maxsize`/`accept` on a non-file field all panic at startup.

@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -593,8 +594,13 @@ func TestStorageClaims(t *testing.T) {
 			t.Errorf("stored name %q", name)
 		}
 		st, err := os.Stat(filepath.Join(dir, name))
-		if err != nil || st.Mode().Perm() != 0o600 {
-			t.Errorf("%v %v", st, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Windows has no Unix permission bits: Go reports 0666 for any
+		// writable file, and access is governed by the folder's ACL.
+		if runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+			t.Errorf("mode %v, want 0600", st.Mode().Perm())
 		}
 	})
 }
