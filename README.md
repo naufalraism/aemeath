@@ -48,12 +48,12 @@ Aemeath adds typed binding and validation on top of `net/http` for a small fixed
 
 That table is one run of `go test -bench . -benchmem -count 5 -benchtime 2s` (median of five) on an Intel i7-10750H on Windows with Go 1.27, against the release of Aemeath current at the time. It is useful for the order of magnitude and for the comparison with Gin, and for nothing more: times vary by machine and Go version, and a microbenchmark says nothing about real-world throughput, where your handlers and database dominate.
 
-Allocation counts do not depend on the machine, so they are the part worth watching, and they have grown since that run. On the current code, measured with the commands below:
+Allocation counts do not depend on the machine (they do depend on the Go version), so they are the part worth watching, and they have grown since that run. On the current code with Go 1.27, measured with the commands below:
 
 | Route | Allocations | Memory |
 | :--- | :--- | :--- |
-| plain `GET`, no input | 16 | 1,568 B |
-| JSON `POST`, two validated fields | 37 | 7.5 KB |
+| plain `GET`, no input | 16 | 1,528 B |
+| JSON `POST`, two validated fields | 32 | 7.3 KB |
 
 Both include the cost of building the test request. To tell `{"website": ""}` from a missing key, Aemeath reads the JSON body a second time, but only when a validated value turns out to be empty; a body whose validated values are all filled in is decoded once. Measure your own routes:
 
