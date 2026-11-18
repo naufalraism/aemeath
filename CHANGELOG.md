@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A struct tag Go cannot read is refused at startup.** `validate:"required,pattern=^\d{5}$"`, the form the validation guide showed, is not a valid Go string (`\d` is not an escape), so `reflect` returned no `validate` tag and the field lost every rule, `required` included, on the server, in the Zod schemas and in OpenAPI, without a word (only `go vet` warned). Registration now panics and names the field; the guide shows `\\d`.
+
 ## [0.4.0] - 2026-11-18
 
 ### Fixed
