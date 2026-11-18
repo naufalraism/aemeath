@@ -103,6 +103,7 @@ func buildPlan(t reflect.Type) *typePlan {
 	}
 	for _, ff := range flatFields(t) {
 		f := ff.StructField
+		checkTagSyntax(t, f)
 		fp := &fieldPlan{field: f, path: ff.Path, name: fieldDisplayName(f)}
 		if _, param := paramSource(f); param == "" && formName(f) == "" && !jsonSkipped(f) {
 			fp.jsonKey = jsonName(f)

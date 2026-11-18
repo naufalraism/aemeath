@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p .",
+    "typecheck:strictest": "tsc -p tsconfig.strictest.json",
     "verify": "tsx verify.ts"
   },
   "devDependencies": {

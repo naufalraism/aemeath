@@ -239,7 +239,7 @@ async function request<T>(opts: ClientOptions, method: string, path: string, inp
   const res = await f(opts.baseUrl.replace(/\/$/, "") + url + (q ? "?" + q : ""), {
     method,
     headers: { ...contentType, ...extra, ...own },
-    body: payload,
+    body: payload ?? null,
   });
   const text = await res.text();
   let data: any;
@@ -690,7 +690,13 @@ func optMark(opt bool) string {
 	return ""
 }
 
+// tsField writes one property. An optional one is "T | undefined" too, which
+// is what Zod's .optional() produces, so the types also compile with
+// exactOptionalPropertyTypes (z.ZodType<T> annotations check them).
 func tsField(name, typ string, opt bool) string {
+	if opt && typ != "unknown" && typ != "any" {
+		typ += " | undefined"
+	}
 	return tsKey(name) + optMark(opt) + ": " + typ
 }
 
@@ -815,13 +821,23 @@ func tsIdent(s string) string {
 // nilable reports whether a nil value of t is encoded as JSON null
 // (a nil slice or map, which is easy to forget to initialize).
 // acceptsNull reports whether the field can be JSON null. In a response, a
-// nil pointer, slice or map is null. In a request, null means "not provided",
-// so it is accepted for those types unless the field is required.
+// nil pointer, slice or map is null. In a JSON request body, encoding/json
+// reads null as "not provided" for any type (a string stays "", an int 0), so
+// null is accepted unless the field is required; a non-pointer struct that
+// contains a required field counts as required, since null leaves those
+// fields empty. Path, query, header, cookie and form values cannot be null.
 func acceptsNull(f reflect.StructField, input bool) bool {
-	if f.Type.Kind() != reflect.Pointer && !nilable(f.Type) {
-		return false
+	pointerLike := f.Type.Kind() == reflect.Pointer || nilable(f.Type)
+	if !input {
+		return pointerLike
 	}
-	return !input || !hasRequired(f)
+	if src, _ := paramSource(f); src != "" || formName(f) != "" || isFileType(f.Type) {
+		return pointerLike && !hasRequired(f)
+	}
+	if f.Type.Kind() == reflect.Pointer {
+		return !hasRequired(f)
+	}
+	return !inputRequired(f)
 }
 
 func nilable(t reflect.Type) bool {

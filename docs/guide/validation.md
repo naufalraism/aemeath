@@ -19,7 +19,7 @@ type CreateUserIn struct {
 | `gt`, `gte`, `lt`, `lte` | numbers | comparisons |
 | `oneof=a b c` | string, number | one of the values |
 | `email`, `url`, `uuid` | string | `email`: `local@domain.tld` (non-ASCII letters allowed; `a@b` is refused). `url`: absolute http/https. `uuid`: 8-4-4-4-12 hex, any version. The Zod schemas and OpenAPI use the same patterns as the server |
-| `pattern=REGEX` | string | regular expression (RE2). It takes the rest of the tag, so write it last: `validate:"required,pattern=^\d{1,3}$"`. The Zod schemas carry a translation that matches the same strings in JavaScript; `(?m)` and the few other constructs without one are checked by the server only |
+| `pattern=REGEX` | string | regular expression (RE2). It takes the rest of the tag, so write it last: `validate:"required,pattern=^\\d{1,3}$"` (or `^[0-9]{1,3}$`). A struct tag is a Go string, so **a backslash must be doubled**: with `\d` the tag cannot be read, and Aemeath refuses to start rather than run without the field's rules. The Zod schemas carry a translation that matches the same strings in JavaScript; `(?m)` and the few other constructs without one are checked by the server only |
 
 ## The response
 

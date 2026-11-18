@@ -20,11 +20,11 @@ func TestNumberRangesInSchemas(t *testing.T) {
 	registerRuntimeRoute(app, "POST", "/n", typeOf[rangeIn](), typeOf[struct{}]())
 	zod := app.ZodSchemas()
 	for _, want := range []string{
-		"a: z.number().int().gte(-128).lte(127).optional()",
-		"b: z.number().int().gte(0).gte(-1).optional()",
-		"c: z.number().gte(-3.4028235677973366e+38).lte(3.4028235677973366e+38).optional()",
-		"d: z.number().int().gte(0).lte(255).gt(0).optional()",
-		"e: z.number().int().optional()",
+		"a: z.number().int().gte(-128).lte(127).nullable().optional()",
+		"b: z.number().int().gte(0).gte(-1).nullable().optional()",
+		"c: z.number().gte(-3.4028235677973366e+38).lte(3.4028235677973366e+38).nullable().optional()",
+		"d: z.number().int().gte(0).lte(255).gt(0).nullable().optional()",
+		"e: z.number().int().nullable().optional()",
 	} {
 		if !strings.Contains(zod, want) {
 			t.Errorf("schemas.ts has no %q", want)

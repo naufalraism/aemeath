@@ -49,7 +49,7 @@ create.mutate({ body: { name: "Ana", email: "ana@example.com" } });
 
 ## Typing rules
 
-- **Input**: a field is optional unless it has `validate:"required"` (or is a non-pointer struct containing a required field).
+- **Input**: a field is optional unless it has `validate:"required"` (or is a non-pointer struct containing a required field). An optional field of a JSON body also accepts `null` (`note?: string | null`), because the server reads `null` as "not sent".
 - **Output**: a field is required unless it has `json:",omitempty"`.
 - Nil slices and maps are `null` in JSON, so output slices/maps are typed `T[] | null`. Use `make([]T, 0)` to send `[]`.
 - `oneof` becomes a literal union (`"admin" | "user"`).
