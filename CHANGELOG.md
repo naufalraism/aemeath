@@ -15,6 +15,10 @@ All notable changes to this project are documented here.
 - **TypeScript and Zod** string literals are written as JavaScript, not Go: `strconv.Quote` wrote characters above U+FFFF that are not printable as `\U000e0067`, which JavaScript reads as `U000e0067`. A `oneof` with a subdivision flag emoji (🏴󠁧󠁢󠁳󠁣󠁴󠁿) was refused by the generated schema while the server accepted it.
 - **Groups** collapse repeated slashes in the prefix and in route paths: `app.Group("/api//")` registered its `"/"` route as the catch-all `/api/`, and `Group("//")` panicked. `"//x"` now joins as `/x`.
 - **The request target `*`** (as in `OPTIONS *`) is answered `400`, like `net/http.ServeMux`, instead of `404` or `405`.
+- **A client that leaves before the response** is recorded as `499` (`aemeath.StatusClientClosedRequest`), not as a `500` with "internal error: context canceled" in the log: a handler that returns an error wrapping `context.Canceled` is no longer counted as a server error by the Logger, metrics and tracing. `context.DeadlineExceeded` stays a `500`.
+- **JSON names on Go 1.27:** encoding/json now runs on encoding/json/v2 by default and reads names in json tags differently (`json:"price€"` is used as is; `json:"we\"ird"` is `we`). The TypeScript client, the Zod schemas, OpenAPI and validation errors follow the rule of the Go version in use (`GOEXPERIMENT=nojsonv2` keeps the old one).
+- **Tests on Windows:** the Node tests import zod by `file://` URL, and the `0600` file-mode check of `LocalStorage` runs on Linux and macOS only.
+- **CI and the README** fuzz exactly `FuzzBind` (`-fuzz '^FuzzBind$'`); the old pattern also matched `FuzzBindMatchesEncodingJSON`, and `go test` refuses to fuzz two targets.
 
 ### Security
 
@@ -25,16 +29,24 @@ All notable changes to this project are documented here.
 - **Validating a map** turns each key into text once instead of twice per comparison while sorting: a 1 MiB body with 100,000 keys took 615 ms and 118 MB, now 116 ms and 25 MB. Keys that implement `encoding.TextMarshaler` are now named in error paths the way JSON writes them.
 - **Validation** stops after `aemeath.MaxValidationErrors` errors (100 by default, `0` for no limit). A 1 MiB JSON body of empty objects used to produce 349,517 errors and a 25 MB response.
 - **`Static` and `Ctx.File`** send `X-Content-Type-Options: nosniff` on every file, and a file whose extension has no known type ("note", "report.dat") as `application/octet-stream` instead of a type guessed from its content. An uploaded file that started with `<!doctype html>` used to be served as `text/html` (stored XSS) even though `LocalStorage` renames `.html`, `.svg` and `.js` uploads.
+- **Server-Sent Events** get a write timeout per event (`aemeath.DefaultSSEWriteTimeout`, 10 seconds; `SSE.SetWriteTimeout` changes it, `0` turns it off). A client that stopped reading but kept the connection open used to block the handler in `Send` forever.
+- **Request bodies are capped by default (breaking):** every body, including one a handler reads itself from `c.R.Body`, stops at `aemeath.DefaultMaxRequestBytes` (by default the larger of the JSON and multipart limits, 32 MiB), and returning the read error answers `413`. A raw handler used to read any amount (300 MB in the test). For larger uploads put `MaxBodySize(n)` on the group; it now replaces the default cap instead of nesting inside it, and `MaxBodySize(-1)` removes it.
+- **Request headers are limited to 64 KiB (breaking)** by `NewServer` (`aemeath.DefaultMaxHeaderBytes`; net/http's default is 1 MiB). Larger headers get `431`. 200 clients sending 1000 KB of headers each took the heap from 51-86 MB down to 7-15 MB.
 
 ### Documentation
 
-- The README's performance section now separates the one-machine timings from the allocation counts, which are measured by `BenchmarkHelloRoute` and `BenchmarkValidatedJSONPost` (16 and 35 allocations today, not the 13 and 31 it used to claim).
+- The README's performance section now separates the one-machine timings from the allocation counts, which are measured by `BenchmarkHelloRoute` and `BenchmarkValidatedJSONPost` (16 and 32 allocations with Go 1.27, the version in `go.mod`; the test that checks them is skipped on other Go versions, whose counts differ).
 - Corrected: the OpenAPI `<Type>Input` components (an operation's own input struct is inlined), the TypeScript types of nil slices and maps, the per-hook shutdown limit, what `jwt.Middleware` and `RateLimiter` actually enforce in `SECURITY.md`, and the comparison page, which still said there was no job runner and no metrics or tracing.
+- The README has a section on behaviour under pressure (shutdown, slow clients, no connection limit, `Timeout` and handlers that ignore their context), each point tested in `internal/hostile`.
 - `internal/docclaims` tests the statements made in the README and `docs/` against the running framework, so a claim that stops being true fails the build.
 
 ### Performance
 
-- A JSON body is decoded a second time (to learn which keys were sent) only when a validated value is empty, instead of on every request with validation rules. A body whose validated values are filled in costs 35 allocations instead of 46 for two fields, and a 200-item list about 40% less time and memory. Validation results are unchanged; a test and a fuzz target compare both ways.
+- A JSON body is decoded a second time (to learn which keys were sent) only when a validated value is empty, instead of on every request with validation rules. A body whose validated values are filled in costs 35 allocations instead of 46 for two fields (measured with Go 1.24), and a 200-item list about 40% less time and memory. Validation results are unchanged; a test and a fuzz target compare both ways.
+
+### Added
+
+- `App.SetShutdownTimeout(d)`: how long requests in flight get to finish after SIGINT/SIGTERM (`aemeath.DefaultShutdownTimeout`, 10 seconds, which used to be fixed). When it runs out their connections are closed and their clients get no response.
 
 ### Changed
 
