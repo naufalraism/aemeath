@@ -38,11 +38,19 @@ type Config struct {
 	ServiceName   string            // required; reported as service.name
 	Endpoint      string            // OTLP/HTTP traces URL, e.g. http://localhost:4318/v1/traces; empty = trace but do not export
 	Headers       map[string]string // for example an API key for a hosted backend
-	SampleRatio   float64           // 0..1 for new traces (default 1); incoming sampled decisions are honored
+	SampleRatio   float64           // 0..1 for new traces (default 1); incoming sampled decisions are honored unless IgnoreIncomingSampling
 	QueueSize     int               // max buffered spans (default 2048)
 	BatchSize     int               // spans per export request (default 256)
 	FlushInterval time.Duration     // default 5s
 	Client        *http.Client      // default: 5s timeout
+	// IgnoreIncomingSampling makes the sampling decision here even when the
+	// request carries a traceparent: the trace still continues (same trace
+	// ID, the caller as parent), but its "sampled" flag is ignored. Set it on
+	// a service that faces the internet with SampleRatio below 1, where any
+	// client could otherwise send "-01" and have every request traced and
+	// exported. Leave it off behind your own services, so a trace sampled
+	// upstream is complete.
+	IgnoreIncomingSampling bool
 }
 
 // Span is one unit of work.
@@ -239,6 +247,9 @@ func (t *Tracer) Middleware() aemeath.Middleware {
 				traceID, parent, sampled = "", "", false
 			}
 			span := t.newSpan(c.R.Method, 2, traceID, parent, sampled)
+			if ok && t.cfg.IgnoreIncomingSampling {
+				span.Sampled = t.cfg.SampleRatio >= 1 || randFloat() < t.cfg.SampleRatio
+			}
 			c.R = c.R.WithContext(context.WithValue(c.R.Context(), ctxKey{}, span))
 			c.State["trace_id"] = span.TraceID
 			sw := &statusCapture{ResponseWriter: c.W, status: 200}

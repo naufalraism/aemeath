@@ -62,6 +62,6 @@ Guarantees:
 
 - Tracing **never blocks or fails a request**. The queue is bounded (`QueueSize`, default 2048); when the collector is slow or down, spans are dropped and counted (`tr.Dropped()`).
 - Only the path is recorded (`url.path`), never the query string, which often carries tokens. Do not put secrets or personal data in attributes.
-- `SampleRatio` (default 1) samples new traces; the decision of an incoming trace is honored.
+- `SampleRatio` (default 1) samples new traces; the decision of an incoming trace is honored. On a service that faces the internet, set `IgnoreIncomingSampling: true` so a client cannot send `traceparent: ...-01` to have every request traced and exported; the trace ID still continues.
 
 This is an exporter for the OTLP/HTTP protocol, not the OpenTelemetry SDK. It covers HTTP server spans, child spans and propagation. If you need auto-instrumentation of other libraries, use the official SDK; you can run both against the same Collector.
