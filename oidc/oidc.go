@@ -52,7 +52,9 @@ type Config struct {
 	ClientSecret string   // empty for a public client
 	RedirectURL  string   // your callback URL, registered at the provider
 	Scopes       []string // "openid" is always included; default adds "profile" and "email"
-	HTTPClient   *http.Client
+	// HTTPClient makes every request to the provider (discovery, keys, token
+	// exchange). Default: a client with a 10-second timeout.
+	HTTPClient *http.Client
 	// MaxLoginAge limits how long a login may take between Begin and Complete (default 10 minutes).
 	MaxLoginAge time.Duration
 	// Leeway tolerates clock skew when checking exp/iat (default 1 minute).
@@ -65,6 +67,7 @@ type Provider struct {
 	oauth    *xoauth2.Config
 	verifier *jwt.Verifier
 	endpoint struct{ Auth, Token, UserInfo string }
+	hc       *http.Client // Config.HTTPClient, or a client with a 10 s timeout
 }
 
 // Identity is a verified login.
@@ -167,7 +170,7 @@ func Discover(ctx context.Context, cfg Config) (*Provider, error) {
 	if len(cfg.Scopes) == 0 {
 		scopes = []string{"openid", "profile", "email"}
 	}
-	p := &Provider{cfg: cfg}
+	p := &Provider{cfg: cfg, hc: hc}
 	p.endpoint.Auth, p.endpoint.Token, p.endpoint.UserInfo = d.AuthURL, d.TokenURL, d.UserInfo
 	p.oauth = &xoauth2.Config{
 		ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURL: cfg.RedirectURL, Scopes: dedupe(scopes),
@@ -254,7 +257,15 @@ func (p *Provider) Complete(c *aemeath.Ctx) (*Identity, error) {
 	if code == "" {
 		return nil, fail("missing code")
 	}
-	ctx := context.WithValue(c.Context(), xoauth2.HTTPClient, p.httpClient())
+	// One time limit for the whole exchange: x/oauth2 may try a second
+	// request (another client authentication style) after the first fails.
+	hc := p.httpClient()
+	limit := hc.Timeout
+	if limit <= 0 {
+		limit = 10 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.WithValue(c.Context(), xoauth2.HTTPClient, hc), limit)
+	defer cancel()
 	tok, err := p.oauth.Exchange(ctx, code, xoauth2.VerifierOption(verifier))
 	if err != nil {
 		return nil, fail("code exchange failed")
@@ -270,11 +281,15 @@ func (p *Provider) Complete(c *aemeath.Ctx) (*Identity, error) {
 	return p.identity(claims, nonce, tok)
 }
 
+// httpClient is the client Discover used: Config.HTTPClient, or one with a
+// 10-second timeout. It used to fall back to http.DefaultClient, which has no
+// timeout, so a slow token endpoint held the login callback for as long as
+// the provider liked.
 func (p *Provider) httpClient() *http.Client {
-	if p.cfg.HTTPClient != nil {
-		return p.cfg.HTTPClient
+	if p.hc != nil {
+		return p.hc
 	}
-	return http.DefaultClient
+	return &http.Client{Timeout: 10 * time.Second}
 }
 
 func (p *Provider) identity(claims gojwt.MapClaims, nonce string, tok *xoauth2.Token) (*Identity, error) {

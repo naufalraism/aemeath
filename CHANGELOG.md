@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Security
 
 - **`Static` no longer follows a symbolic link out of its folder.** A link such as `public/link.txt -> ../secret.txt` (or a link to a directory such as `/etc`) served the file it pointed to with `200`. Files are now opened with `os.OpenInRoot`, so a link that resolves outside the folder is a `404`; links that stay inside, and a folder that is itself a link, still work.
+- **The OIDC token exchange has a time limit.** Without `Config.HTTPClient` it used `http.DefaultClient`, which has none (discovery already used a 10-second client), and x/oauth2 may try a second request, so a slow provider held the login callback for 2 × its delay (30 s against a 15 s token endpoint). The exchange now uses the same client as discovery and one time limit for the whole exchange: the client's timeout, or 10 seconds.
 
 ## [0.4.1] - 2026-11-18
 
