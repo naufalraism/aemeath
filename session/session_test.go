@@ -249,3 +249,39 @@ func TestRenewKeepsUserDataDropsFrameworkEntries(t *testing.T) {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 }
+
+// ExpireIn sets the lifetime of one save (store and cookie); the next save
+// uses Config.TTL again. IsNew is true only without a stored session.
+func TestExpireInAndIsNew(t *testing.T) {
+	now := time.Now()
+	store := session.NewMemoryStore().WithClock(func() time.Time { return now })
+	app := aemeath.New()
+	app.Use(session.Middleware(session.Config{Store: store, Insecure: true, TTL: time.Hour}))
+	var wasNew bool
+	app.Handle("POST", "/brief", func(c *aemeath.Ctx) error {
+		s := session.From(c)
+		wasNew = s.IsNew()
+		s.ExpireIn(time.Minute)
+		s.Set("x", 1)
+		return c.Text(204, "")
+	})
+	app.Handle("POST", "/set", func(c *aemeath.Ctx) error {
+		s := session.From(c)
+		wasNew = s.IsNew()
+		s.Set("y", 2)
+		return c.Text(204, "")
+	})
+	w := do(app, "POST", "/brief", "")
+	ck := w.Result().Cookies()[0]
+	if !wasNew || ck.MaxAge != 60 {
+		t.Fatalf("new=%v, cookie MaxAge %d, want true and 60", wasNew, ck.MaxAge)
+	}
+	w = do(app, "POST", "/set", ck.Value)
+	if wasNew || w.Result().Cookies()[0].MaxAge != 3600 {
+		t.Fatalf("second request: new=%v, MaxAge %d, want false and 3600", wasNew, w.Result().Cookies()[0].MaxAge)
+	}
+	now = now.Add(2 * time.Minute) // past the brief lifetime, within the hour
+	if store.Len() != 1 {
+		t.Fatalf("after the normal save the session must outlive ExpireIn: %d sessions", store.Len())
+	}
+}

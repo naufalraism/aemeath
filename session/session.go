@@ -48,7 +48,8 @@ type Session struct {
 	dirty   bool
 	destroy bool
 	renewed bool
-	full    *fullLog // shared by the requests of one Middleware
+	ttl     time.Duration // ExpireIn: the lifetime of this save, instead of Config.TTL
+	full    *fullLog      // shared by the requests of one Middleware
 	mu      sync.Mutex
 }
 
@@ -203,7 +204,11 @@ func (s *Session) commit(c *aemeath.Ctx) error {
 	if s.id == "" {
 		s.id = newID()
 	}
-	if err := s.cfg.Store.Save(ctx, s.id, s.data, s.cfg.TTL); err != nil {
+	ttl := s.cfg.TTL
+	if s.ttl > 0 {
+		ttl = s.ttl
+	}
+	if err := s.cfg.Store.Save(ctx, s.id, s.data, ttl); err != nil {
 		if errors.Is(err, ErrStoreFull) {
 			// A capacity limit, not a failure: the visitor gets no session
 			// and the response stays as the handler wrote it. (Answering 500
@@ -215,7 +220,7 @@ func (s *Session) commit(c *aemeath.Ctx) error {
 		log.Printf("aemeath/session: saving the session failed: %v", err)
 		return err
 	}
-	http.SetCookie(c.W, s.cookie(s.id, int(s.cfg.TTL.Seconds())))
+	http.SetCookie(c.W, s.cookie(s.id, int(ttl.Seconds())))
 	return nil
 }
 
@@ -310,6 +315,17 @@ func (s *Session) Renew(ctx context.Context) error {
 	s.dirty, s.renewed = true, true
 	return nil
 }
+
+// IsNew reports whether the request came without a stored session: the
+// session exists only in this request until something is saved in it.
+func (s *Session) IsNew() bool { s.mu.Lock(); defer s.mu.Unlock(); return !s.loaded && s.id == "" }
+
+// ExpireIn makes this request save the session with a lifetime of d instead
+// of Config.TTL (store entry and cookie). The next request that changes the
+// session saves it with Config.TTL again. oidc.Provider.Begin uses it so a
+// session that only holds a login in progress lasts as long as the login may
+// take, not 24 hours: a crawler hitting /login cannot keep the store full.
+func (s *Session) ExpireIn(d time.Duration) { s.mu.Lock(); defer s.mu.Unlock(); s.ttl = d }
 
 // Destroy deletes the session and clears the cookie (logout).
 func (s *Session) Destroy() { s.mu.Lock(); defer s.mu.Unlock(); s.destroy = true }

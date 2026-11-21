@@ -212,6 +212,12 @@ type pending struct {
 func (p *Provider) Begin(c *aemeath.Ctx) error {
 	st := pending{State: random(24), Nonce: random(24), Verifier: xoauth2.GenerateVerifier(), Started: time.Now().Unix()}
 	s := session.From(c)
+	if s.IsNew() {
+		// A visitor without a session gets one that lasts as long as the
+		// login may take (MaxLoginAge), not Config.TTL: every GET of the login
+		// page creates one, and a crawler must not fill the store for 24 hours.
+		s.ExpireIn(p.cfg.MaxLoginAge)
+	}
 	s.Set(sessionKey, map[string]any{"s": st.State, "n": st.Nonce, "v": st.Verifier, "t": st.Started})
 	u := p.oauth.AuthCodeURL(st.State, xoauth2.S256ChallengeOption(st.Verifier), xoauth2.SetAuthURLParam("nonce", st.Nonce))
 	return c.Redirect(http.StatusFound, u)
