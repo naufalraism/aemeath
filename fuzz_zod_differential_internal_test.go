@@ -61,6 +61,7 @@ func diffRoutes() []diffRoute {
 	for _, k := range []reflect.Type{reflect.TypeFor[int64](), reflect.TypeFor[uint64](), reflect.TypeFor[int8](), reflect.TypeFor[uint8](), reflect.TypeFor[*int32](), reflect.TypeFor[bool]()} {
 		r = append(r, diffRoute{k, "", true})
 	}
+	r = append(r, diffRoute{reflect.TypeFor[*int64](), "required", true})
 	r = append(r, diffRoute{reflect.TypeFor[[]string](), "required", false})
 	r = append(r, diffRoute{reflect.TypeFor[*int](), "required", false}, diffRoute{reflect.TypeFor[*string](), "min=2", false}, diffRoute{reflect.TypeFor[bool](), "", false})
 	return r
@@ -85,7 +86,7 @@ func diffValues(r *rand.Rand, k reflect.Type) []any {
 	special := []any{nil, "", "a", "ab", "abc", "k", "ss", "straße", "STRASSE", "a\nb", "b", "a\nb\nc", "ab", "abab",
 		"\t", "😀", "😁", "😂", "é", "x", "ana@example.com", "a@b", "ana@exämple.com", "https://example.com/x",
 		"http://a", "javascript:alert(1)", "ftp://x", "00000000-0000-0000-0000-000000000000", "A", "AA", "12", "1 2",
-		"ä", "a b", "+5", "05", "-0", "-5", "127", "128", "-128", "-129", "255", "256", "+255", "1e3", " 5", "5.0",
+		"ä", "a b", "null", "+5", "05", "-0", "-5", "127", "128", "-128", "-129", "255", "256", "+255", "1e3", " 5", "5.0",
 		"9223372036854775807", "9223372036854775808", "-9223372036854775808", "-9223372036854775809",
 		"18446744073709551615", "18446744073709551616", "true", "false", true, false, []any{}, []any{"a"}, []any{"a", "b"}, []any{"a", "b", "c"}, []any{1, 2}, map[string]any{},
 		map[string]any{"a": 1}, map[string]any{"a": 1, "b": 2}}
