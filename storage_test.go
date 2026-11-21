@@ -2,6 +2,8 @@ package aemeath_test
 
 import (
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -69,6 +71,32 @@ func TestLocalStorageNeutralizesActiveExtensions(t *testing.T) {
 		app.ServeHTTP(w, httptest.NewRequest("GET", "/uploads/"+stored, nil))
 		if ct := w.Header().Get("Content-Type"); strings.Contains(ct, "html") || strings.Contains(ct, "svg") || strings.Contains(ct, "javascript") {
 			t.Errorf("%q is served as %s", stored, ct)
+		}
+	}
+}
+
+// A colon and the other characters Windows refuses in a file name are
+// replaced. On NTFS "x.html::$DATA" names the file x.html itself, so it
+// slipped past the .html -> .html.txt rename and the upload was stored as
+// an HTML page; "a.png:evil.html" wrote a hidden stream of a.png (B5 of the
+// security audit). The stored name is now the same, and harmless, on every OS.
+func TestSaveReplacesWindowsReservedCharacters(t *testing.T) {
+	st := aemeath.NewLocalStorage(t.TempDir())
+	for _, tc := range []struct{ in, suffix string }{
+		{"x.html::$DATA", "_x.html__$DATA"},
+		{"a.png:evil.html", "_a.png_evil.html.txt"},
+		{"report?.pdf", "_report_.pdf"},
+		{`a"b|c<d>e*.txt`, "_a_b_c_d_e_.txt"},
+	} {
+		name, err := st.Save(tc.in, strings.NewReader("<script>alert(1)</script>"))
+		if err != nil {
+			t.Fatalf("Save(%q): %v", tc.in, err)
+		}
+		if strings.ContainsAny(name, `<>:"|?*`) || !strings.HasSuffix(name, tc.suffix) {
+			t.Errorf("Save(%q) = %q, want a name ending in %q", tc.in, name, tc.suffix)
+		}
+		if _, err := os.Stat(filepath.Join(st.UploadDir, name)); err != nil {
+			t.Errorf("Save(%q): the returned name is not the file on disk: %v", tc.in, err)
 		}
 	}
 }

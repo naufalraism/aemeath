@@ -53,9 +53,14 @@ func NewLocalStorage(uploadDir string) *LocalStorage {
 // formatting characters (right-to-left override, zero-width space, ...) with
 // "_". Kept, "evil\u202Egnp.exe" displays as "evilexe.png" in a file list,
 // and a newline forges lines in a log that prints the name.
+// cleanName replaces control and invisible format characters, and the
+// characters Windows does not allow in a file name (<>:"|?*), with "_" on
+// every OS, so a stored name means the same file everywhere. A colon matters
+// most: on NTFS "x.html::$DATA" writes the file x.html (and "a.png:b" a
+// hidden stream of a.png), slipping past the check that renames .html.
 func cleanName(name string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || strings.ContainsRune(`<>:"|?*`, r) {
 			return '_'
 		}
 		return r
