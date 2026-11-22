@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-22
+
 ### Security
 
 - **`Static` no longer follows a symbolic link out of its folder.** A link such as `public/link.txt -> ../secret.txt` (or a link to a directory such as `/etc`) served the file it pointed to with `200`. Files are now opened with `os.OpenInRoot`, so a link that resolves outside the folder is a `404`; links that stay inside, and a folder that is itself a link, still work.
