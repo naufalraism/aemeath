@@ -139,7 +139,7 @@ func (g *tsGen) zodFieldNamed(f reflect.StructField, name string, input bool) st
 		// `json:",string"`: the value travels as a JSON string. Numeric rules
 		// are enforced by the server; here the format and, for integers, the
 		// range of the Go type are checked, as encoding/json does.
-		expr = quotedZod(f.Type, input)
+		expr = quotedZod(f.Type, input, input && !hasRequired(f))
 	}
 	if input && !isFileType(f.Type) && !quoted {
 		expr = zodRules(expr, f)
@@ -437,7 +437,7 @@ func jsNum(f float64) string {
 // encoding/json writes; input is what it reads, which for integers is wider
 // (encoding/json on v2 accepts a leading "+") and bounded by the Go type: an
 // int64 of "9223372036854775808" is refused with 400, so the schema refuses it.
-func quotedZod(t reflect.Type, input bool) string {
+func quotedZod(t reflect.Type, input, nullString bool) string {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
@@ -455,9 +455,16 @@ func quotedZod(t reflect.Type, input bool) string {
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		lo, hi = "0", new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), uint(t.Bits())), big.NewInt(1)).String()
-	default:
-		return "z.string().regex(/" + pattern + "/)"
 	}
-	return "z.string().regex(/" + pattern + "/).refine((s) => { if (!/" + pattern + "/.test(s)) return true; const n = BigInt(s); return n >= " + lo + "n && n <= " + hi +
+	// encoding/json also reads the string "null" as "not sent", like JSON
+	// null; a required field still refuses it (it stays empty).
+	accepted := pattern
+	if nullString {
+		accepted = "^(?:null|" + strings.TrimSuffix(strings.TrimPrefix(pattern, "^"), "$") + ")$"
+	}
+	if lo == "" {
+		return "z.string().regex(/" + accepted + "/)"
+	}
+	return "z.string().regex(/" + accepted + "/).refine((s) => { if (!/" + pattern + "/.test(s)) return true; const n = BigInt(s); return n >= " + lo + "n && n <= " + hi +
 		"n; }, \"must be between " + lo + " and " + hi + "\")"
 }

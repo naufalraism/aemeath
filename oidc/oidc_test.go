@@ -242,3 +242,60 @@ func sha256S256(verifier string) string {
 	h := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(h[:])
 }
+
+// Every GET of the login page creates a session. A crawler used to fill the
+// session store with them for 24 hours (B8 of the security audit), so real
+// users got no session and could not log in. A session that only holds a
+// login in progress now lasts MaxLoginAge (10 minutes); after a real login
+// it lasts Config.TTL as usual.
+func TestCrawlerCannotKeepTheSessionStoreFull(t *testing.T) {
+	f := newIdP(t)
+	p, err := oidc.Discover(context.Background(), oidc.Config{Issuer: f.srv.URL, ClientID: clientID, ClientSecret: "s", RedirectURL: "http://localhost/cb"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	store := session.NewMemoryStore().WithMaxSessions(100).WithClock(func() time.Time { return now })
+	app := aemeath.New()
+	app.Use(session.Middleware(session.Config{Store: store, Insecure: true}))
+	app.Handle("GET", "/login", func(c *aemeath.Ctx) error { return p.Begin(c) })
+	app.Handle("GET", "/cb", func(c *aemeath.Ctx) error {
+		id, err := p.Complete(c)
+		if err != nil {
+			return err
+		}
+		session.From(c).Set("user", id.Subject)
+		return c.Text(200, id.Subject)
+	})
+
+	var botCookie *http.Cookie
+	for i := 0; i < 150; i++ { // a crawler, without cookies
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, httptest.NewRequest("GET", "/login", nil))
+		if cs := w.Result().Cookies(); i == 0 && len(cs) > 0 {
+			botCookie = cs[0]
+		}
+	}
+	if botCookie == nil || botCookie.MaxAge != 600 {
+		t.Fatalf("a login-only session must last MaxLoginAge (600 s), cookie: %+v", botCookie)
+	}
+	t.Logf("after 150 crawler requests: %d sessions (cap 100)", store.Len())
+
+	now = now.Add(11 * time.Minute) // the crawler's sessions expire after 10 minutes, not 24 hours
+	ck, state := f.login(t, app)
+	if ck == nil {
+		t.Fatalf("11 minutes later a real user still got no session (store: %d)", store.Len())
+	}
+	w := callback(app, ck, "code=abc&state="+state)
+	if w.Code != 200 || w.Body.String() != "user-123" {
+		t.Fatalf("login: %d %s", w.Code, w.Body)
+	}
+	var after *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		after = c
+	}
+	if after == nil || after.MaxAge != int((24*time.Hour).Seconds()) {
+		t.Fatalf("after the login the session must last Config.TTL (24 h), cookie: %+v", after)
+	}
+	t.Logf("11 minutes later: real user logged in, session cookie MaxAge %d s", after.MaxAge)
+}

@@ -4,9 +4,35 @@ import (
 	"io/fs"
 	"mime"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
+
+// rootDir serves the files of a directory without ever leaving it. Unlike
+// http.Dir, which follows a symbolic link wherever it points, each file is
+// opened with os.OpenInRoot: a link inside dir that resolves outside it
+// (public/link.txt -> ../secret.txt, or to /etc) is not found, while links
+// that stay inside dir still work. dir itself may be a link, and need not
+// exist when Static is called.
+type rootDir string
+
+func (d rootDir) Open(name string) (http.File, error) {
+	if strings.ContainsRune(name, 0) {
+		return nil, fs.ErrNotExist
+	}
+	rel := strings.TrimPrefix(path.Clean("/"+name), "/")
+	if rel == "" {
+		rel = "."
+	}
+	f, err := os.OpenInRoot(string(d), filepath.FromSlash(rel))
+	if err != nil {
+		// Outside the root, or not there: both are a plain 404.
+		return nil, fs.ErrNotExist
+	}
+	return f, nil
+}
 
 // noListingFS hides directory listings: a directory is only served when it
 // contains an index.html, otherwise it is reported as not found. It also
@@ -83,7 +109,7 @@ func (a *App) Static(prefix string, dir string) {
 	if !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
 	}
-	fs := noSniff(http.FileServer(noListingFS{http.Dir(dir)}))
+	fs := noSniff(http.FileServer(noListingFS{rootDir(dir)}))
 
 	// A root prefix is registered directly, without a redirect.
 	if prefix == "/" {

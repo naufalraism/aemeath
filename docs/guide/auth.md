@@ -148,7 +148,7 @@ app.Handle("GET", "/auth/callback", func(c *aemeath.Ctx) error {
 })
 ```
 
-`Begin` and `Complete` need `session.Middleware`: the state, nonce and PKCE verifier live in the server-side session, never in a cookie the browser can edit. `Complete` checks:
+`Begin` and `Complete` need `session.Middleware`: the state, nonce and PKCE verifier live in the server-side session, never in a cookie the browser can edit. For a visitor who has no session yet, `Begin` creates one that lasts `MaxLoginAge` (10 minutes) instead of the session TTL, so crawlers following the login link cannot keep the session store full; after the login it is saved with the usual TTL. `Complete` checks:
 
 - the `state` (constant time), and that a login attempt can only be completed **once**, even after a failure;
 - the PKCE verifier (the token endpoint rejects a stolen code);

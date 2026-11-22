@@ -267,3 +267,38 @@ func TestFlushAndShutdownNeverHang(t *testing.T) {
 	_, s = used.Start(bg, "late")
 	s.End() // after Shutdown: ignored, must not start the exporter again
 }
+
+// A client can send traceparent "...-01" to have its request sampled and
+// exported whatever SampleRatio says (B3 of the security audit). With
+// IgnoreIncomingSampling the decision is made here; the trace ID still
+// continues.
+func TestIgnoreIncomingSampling(t *testing.T) {
+	forced := map[string]string{"traceparent": "00-" + parentTrace + "-00f067aa0ba902b7-01"}
+	for _, ignore := range []bool{false, true} {
+		col := newCollector(t, 200)
+		tr := tracing.New(tracing.Config{ServiceName: "svc", Endpoint: col.srv.URL, SampleRatio: 1e-9, IgnoreIncomingSampling: ignore})
+		app := newApp(tr)
+		for i := 0; i < 50; i++ {
+			get(app, "/users/1", forced)
+		}
+		_ = tr.Flush(context.Background())
+		sp := col.spans()
+		t.Logf("IgnoreIncomingSampling=%v, SampleRatio=1e-9, 50 requests with sampled=01: %d spans exported", ignore, len(sp))
+		if !ignore && len(sp) == 0 {
+			t.Error("by default an incoming sampled decision must be honored")
+		}
+		if ignore && len(sp) != 0 {
+			t.Errorf("with IgnoreIncomingSampling the client still forced %d spans", len(sp))
+		}
+	}
+	// The trace continues: same trace ID, the caller as parent.
+	tr := tracing.New(tracing.Config{ServiceName: "svc", SampleRatio: 1e-9, IgnoreIncomingSampling: true})
+	app := aemeath.New()
+	app.Use(tr.Middleware())
+	var got *tracing.Span
+	app.Handle("GET", "/x", func(c *aemeath.Ctx) error { got = tracing.FromContext(c.Context()); return nil })
+	get(app, "/x", forced)
+	if got == nil || got.TraceID != parentTrace || got.ParentID != "00f067aa0ba902b7" || got.Sampled {
+		t.Errorf("span: %+v", got)
+	}
+}

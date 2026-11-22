@@ -438,7 +438,7 @@ app.EnableDocs(aemeath.Info{Title: "My API", Version: "1.0.0"})
 ## 📂 Static files & server
 
 ```go
-app.Static("/public", "./public") // no directory listings; global middlewares apply
+app.Static("/public", "./public") // no directory listings, no dotfiles, no links leading outside ./public; global middlewares apply
 if err := app.Listen(":3000"); err != nil { // read header 5 s, read 15 s, write 15 s, idle 60 s, headers 64 KiB
 	log.Fatal(err)
 }
