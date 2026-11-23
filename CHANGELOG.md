@@ -11,6 +11,10 @@ All notable changes to this project are documented here.
 - **`cache.New` takes a `cache.Config`**, and can now connect over TLS, which managed Redis services such as Upstash or Redis Cloud require (the old `cache.New(addr, password, db)` could not). `cache.New(cache.Config{URL: os.Getenv("REDIS_URL")})` accepts the `redis://` or `rediss://` URL such services hand out; `Addr`, `Password`, `DB` and `TLS` set them one by one. A malformed URL panics at startup. Migrate with `cache.New(cache.Config{Addr: addr, Password: password, DB: db})`.
 - **`Client.HTTP` and `Client.Header` are no longer exported.** Code could change the header map while requests read it, a data race (the race detector reported it). Set them once with `NewClient(url, aemeath.WithHTTPClient(h), aemeath.WithHeader(k, v))`; a `Client` is then safe for concurrent use. `BaseURL` stays exported.
 
+### Fixed
+
+- **The Go client no longer alters cookie values silently.** A cookie parameter holding `;`, `"`, `\`, a control character or non-ASCII text was sent with those bytes dropped (net/http only logs it), so the server got `ab` for `a;b` and an empty value for `é` while the call succeeded. `Call` now returns an error naming the cookie and sends nothing.
+
 ## [0.5.0] - 2026-11-23
 
 ### Security
