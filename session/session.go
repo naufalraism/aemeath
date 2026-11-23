@@ -367,7 +367,15 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{m: map[string]entry{}, now: time.Now, max: DefaultMaxSessions}
 }
 
-// WithClock replaces the clock (tests).
+// WithClock replaces the clock the store uses to expire sessions. It is
+// meant for tests, yours included: a test can move the clock past the TTL
+// to check that an expired session logs the user out, without waiting.
+// Call it before the store is used.
+//
+//	now := time.Now()
+//	store := session.NewMemoryStore().WithClock(func() time.Time { return now })
+//	// ... log in ...
+//	now = now.Add(25 * time.Hour) // past the TTL: the session is gone
 func (s *MemoryStore) WithClock(f func() time.Time) *MemoryStore { s.now = f; return s }
 
 // WithMaxSessions sets the cap on live sessions; n <= 0 keeps DefaultMaxSessions.
