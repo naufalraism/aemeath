@@ -368,7 +368,7 @@ func TestLocalStorageStaysInsideUploadDir(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "evil.txt")); err == nil {
 		t.Fatal("file escaped the upload directory")
 	}
-	if !s.IsAllowedFile("PHOTO.PNG", []string{".png"}) {
+	if !s.IsAllowedFile("PHOTO.PNG", []string{".png"}) { //nolint:staticcheck // deprecated, still tested until v1.0 removes it
 		t.Fatal("extension check should be case-insensitive")
 	}
 }
