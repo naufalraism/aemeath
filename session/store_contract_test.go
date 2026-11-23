@@ -15,3 +15,7 @@ func TestMemoryStoreContract(t *testing.T) {
 		return storetest.Store{Store: m, Advance: func(d time.Duration) { now = now.Add(d) }}
 	})
 }
+
+func TestMemoryStoreConcurrentRequests(t *testing.T) {
+	storetest.RunConcurrentRequests(t, func(*testing.T) session.Store { return session.NewMemoryStore() })
+}
