@@ -52,9 +52,11 @@ Errors are sent as `{"error": "message"}`. Any error that is not an `*aemeath.HT
 admin := app.Group("/admin", authMiddleware)
 admin.Options(aemeath.Tags("admin"), aemeath.RequireAuth()) // 401 unless authMiddleware authenticated the caller
 
-aemeath.GroupGET(admin, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+aemeath.GET(admin, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 	return map[string]string{"status": "ok"}, nil
 })
 ```
+
+`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `Route` and `Register` take a group as well as the app. Inside a group the path is relative to its prefix (`/dashboard` above serves `/admin/dashboard`), and the group's middlewares and options apply. The older `GroupGET` family does the same and is deprecated.
 
 Register a group's middlewares and options before creating sub-groups; a sub-group copies them when it is created.

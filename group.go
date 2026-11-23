@@ -2,7 +2,6 @@ package aemeath
 
 import (
 	"path"
-	"reflect"
 	"strings"
 	"sync"
 )
@@ -98,47 +97,57 @@ func (g *Group) Handle(method, path string, h HandlerFunc) {
 }
 
 // GroupRoute registers a type-safe route inside a Group.
+//
+// Deprecated: Route accepts a Group: use aemeath.Route(g, method, path, fn).
+// GroupRoute will be removed before v1.0.
 func GroupRoute[In, Out any](g *Group, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
-	fullPath := g.fullPath(path)
-	cfg := newRouteConfig(append(append([]RouteOption(nil), g.opts...), opts...))
-	info := prepareInput(reflect.TypeFor[In](), method, fullPath)
-	checkJSONNames(reflect.TypeFor[Out](), map[reflect.Type]bool{})
-
-	g.app.specs = append(g.app.specs, routeSpec{
-		method: method, path: fullPath,
-		in: reflect.TypeFor[In](), out: reflect.TypeFor[Out](),
-		cfg: cfg,
-	})
-	g.Handle(method, path, typedHandler(cfg, info, fn))
-	return Endpoint[In, Out]{Method: method, Path: fullPath}
+	return Route(g, method, path, fn, opts...)
 }
 
 // GroupGET registers a type-safe GET route inside a Group.
+//
+// Deprecated: GET accepts a Group: use aemeath.GET(g, path, fn).
+// GroupGET will be removed before v1.0.
 func GroupGET[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return GroupRoute(g, "GET", path, fn, o...)
+	return Route(g, "GET", path, fn, o...)
 }
 
 // GroupPOST registers a type-safe POST route inside a Group.
+//
+// Deprecated: POST accepts a Group: use aemeath.POST(g, path, fn).
+// GroupPOST will be removed before v1.0.
 func GroupPOST[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return GroupRoute(g, "POST", path, fn, o...)
+	return Route(g, "POST", path, fn, o...)
 }
 
 // GroupPUT registers a type-safe PUT route inside a Group.
+//
+// Deprecated: PUT accepts a Group: use aemeath.PUT(g, path, fn).
+// GroupPUT will be removed before v1.0.
 func GroupPUT[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return GroupRoute(g, "PUT", path, fn, o...)
+	return Route(g, "PUT", path, fn, o...)
 }
 
 // GroupPATCH registers a type-safe PATCH route inside a Group.
+//
+// Deprecated: PATCH accepts a Group: use aemeath.PATCH(g, path, fn).
+// GroupPATCH will be removed before v1.0.
 func GroupPATCH[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return GroupRoute(g, "PATCH", path, fn, o...)
+	return Route(g, "PATCH", path, fn, o...)
 }
 
 // GroupDELETE registers a type-safe DELETE route inside a Group.
+//
+// Deprecated: DELETE accepts a Group: use aemeath.DELETE(g, path, fn).
+// GroupDELETE will be removed before v1.0.
 func GroupDELETE[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return GroupRoute(g, "DELETE", path, fn, o...)
+	return Route(g, "DELETE", path, fn, o...)
 }
 
 // RegisterGroup registers a handler for an existing Endpoint inside a Group.
+//
+// Deprecated: Register accepts a Group: use aemeath.Register(g, e, fn).
+// RegisterGroup will be removed before v1.0.
 func RegisterGroup[In, Out any](g *Group, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
-	return GroupRoute(g, e.Method, e.Path, fn, opts...)
+	return Register(g, e, fn, opts...)
 }

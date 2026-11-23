@@ -85,7 +85,7 @@ func main() {
 			return next(c)
 		}
 	})
-	aemeath.GroupGET(adminGroup, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+	aemeath.GET(adminGroup, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 		return map[string]string{"status": "Welcome to the Admin Dashboard"}, nil
 	})
 
@@ -118,14 +118,14 @@ func main() {
 	// RequireAuth is the safety net: a route here answers 401 if the JWT middleware above is ever removed.
 	secretGroup.Options(aemeath.Tags("secret"), aemeath.RequireAuth())
 
-	aemeath.GroupGET(secretGroup, "/profile", func(c *aemeath.Ctx, _ struct{}) (map[string]any, error) {
+	aemeath.GET(secretGroup, "/profile", func(c *aemeath.Ctx, _ struct{}) (map[string]any, error) {
 		return map[string]any{
 			"message": "Hello! You are signed in.",
 			"user_id": jwt.UserID(c),
 		}, nil
 	})
 
-	aemeath.GroupPOST(secretGroup, "/users", func(c *aemeath.Ctx, in api.CreateUserIn) (User, error) {
+	aemeath.POST(secretGroup, "/users", func(c *aemeath.Ctx, in api.CreateUserIn) (User, error) {
 		user := User{Name: in.Name, Email: in.Email}
 		if err := db.From(c).Create(&user).Error; err != nil {
 			return user, aemeath.Conflict("could not save the user, the email may already be in use")
@@ -133,7 +133,7 @@ func main() {
 		return user, nil
 	}, aemeath.Status(201))
 
-	aemeath.GroupGET(secretGroup, "/users", func(c *aemeath.Ctx, _ struct{}) ([]User, error) {
+	aemeath.GET(secretGroup, "/users", func(c *aemeath.Ctx, _ struct{}) ([]User, error) {
 		users := []User{}
 		if err := db.From(c).Find(&users).Error; err != nil {
 			return nil, aemeath.InternalError("could not load users")

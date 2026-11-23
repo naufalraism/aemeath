@@ -168,44 +168,71 @@ func typedHandler[In, Out any](cfg routeConfig, info *inputInfo, fn func(*Ctx, I
 	}
 }
 
-// Route registers a type-safe handler. The input (In) is bound and validated
-// automatically and the output (Out) is serialized as JSON.
-func Route[In, Out any](a *App, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
-	cfg := newRouteConfig(opts)
-	info := prepareInput(reflect.TypeFor[In](), method, path)
+// Router is where routes are registered: an *App or a *Group. Route, GET,
+// POST, PUT, PATCH, DELETE and Register accept either, so a group's routes
+// use the same functions as the app's:
+//
+//	api := app.Group("/api", auth)
+//	aemeath.GET(api, "/users/{id}", getUser)
+//
+// Only *App and *Group implement it.
+type Router interface {
+	// Handle registers a plain route (no automatic JSON binding).
+	Handle(method, path string, h HandlerFunc)
+	// target returns the app, the full path of a route and the options it
+	// gets (a group's prefix and options included).
+	target(path string, opts []RouteOption) (a *App, full string, merged []RouteOption)
+}
+
+func (a *App) target(path string, opts []RouteOption) (*App, string, []RouteOption) {
+	return a, path, opts
+}
+
+func (g *Group) target(path string, opts []RouteOption) (*App, string, []RouteOption) {
+	return g.app, g.fullPath(path), append(append([]RouteOption(nil), g.opts...), opts...)
+}
+
+// Route registers a type-safe handler on an App or a Group. The input (In)
+// is bound and validated automatically and the output (Out) is serialized as
+// JSON. Inside a Group the path is relative to the group's prefix, and the
+// group's middlewares and options apply.
+func Route[In, Out any](r Router, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
+	a, full, merged := r.target(path, opts)
+	cfg := newRouteConfig(merged)
+	info := prepareInput(reflect.TypeFor[In](), method, full)
 	checkJSONNames(reflect.TypeFor[Out](), map[reflect.Type]bool{})
 	a.specs = append(a.specs, routeSpec{
-		method: method, path: path,
+		method: method, path: full,
 		in: reflect.TypeFor[In](), out: reflect.TypeFor[Out](),
 		cfg: cfg,
 	})
-	a.Handle(method, path, typedHandler(cfg, info, fn))
-	return Endpoint[In, Out]{Method: method, Path: path}
+	r.Handle(method, path, typedHandler(cfg, info, fn))
+	return Endpoint[In, Out]{Method: method, Path: full}
 }
 
 // GET registers a type-safe HTTP GET route.
-func GET[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return Route(a, "GET", path, fn, o...)
+func GET[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
+	return Route(r, "GET", path, fn, o...)
 }
 
 // POST registers a type-safe HTTP POST route.
-func POST[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return Route(a, "POST", path, fn, o...)
+func POST[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
+	return Route(r, "POST", path, fn, o...)
 }
 
 // PUT registers a type-safe HTTP PUT route.
-func PUT[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return Route(a, "PUT", path, fn, o...)
+func PUT[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
+	return Route(r, "PUT", path, fn, o...)
 }
 
 // PATCH registers a type-safe HTTP PATCH route.
-func PATCH[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return Route(a, "PATCH", path, fn, o...)
+func PATCH[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
+	return Route(r, "PATCH", path, fn, o...)
 }
 
 // DELETE registers a type-safe HTTP DELETE route.
-func DELETE[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
-	return Route(a, "DELETE", path, fn, o...)
+func DELETE[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out] {
+	return Route(r, "DELETE", path, fn, o...)
 }
 
 // bodyMethod reports whether the HTTP method carries a request body.
@@ -464,8 +491,9 @@ func setField(fv reflect.Value, raw string) error {
 	return nil
 }
 
-// Register registers a handler for an existing Endpoint definition.
-// Useful for sharing one contract between server and client.
-func Register[In, Out any](a *App, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
-	return Route(a, e.Method, e.Path, fn, opts...)
+// Register registers a handler for an existing Endpoint definition on an App
+// or a Group. Useful for sharing one contract between server and client.
+// Inside a Group, e.Path is relative to the group's prefix.
+func Register[In, Out any](r Router, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
+	return Route(r, e.Method, e.Path, fn, opts...)
 }

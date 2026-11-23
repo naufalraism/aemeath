@@ -20,7 +20,7 @@ func TestGroupRouteAndMiddleware(t *testing.T) {
 
 	admin := app.Group("/admin", adminMW)
 
-	aemeath.GroupGET(admin, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+	aemeath.GET(admin, "/dashboard", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 		return map[string]string{"status": "ok"}, nil
 	})
 

@@ -15,10 +15,19 @@ All notable changes to this project are documented here.
 
 - **Round-trip tests for the Go client**: every parameter source and the body through one shared `Endpoint`, values that need escaping, nil versus zero pointers, a time with nanoseconds and a zone; parameter fields kept out of the body; and the error paths (422 with field errors, a non-JSON error page, 204, a 200 that is not JSON, a response over 32 MiB, an empty path parameter, a cancelled context, an unreachable server).
 - **More shutdown tests on a real process**: an open Server-Sent Events stream is ended by the server and the process exits at once instead of waiting out the grace time, and a job that is running when the signal arrives finishes before the process exits.
+- **`Route`, `GET`, `POST`, `PUT`, `PATCH`, `DELETE` and `Register` accept a `Group` as well as an `App`**, through the new `Router` interface: `aemeath.GET(api, "/users/{id}", getUser)`. Inside a group the path is relative to its prefix, and its middlewares and options apply, exactly as with the `GroupGET` family. Code that passes an `*App` is unchanged.
+
+### Deprecated
+
+- **`GroupRoute`, `GroupGET`, `GroupPOST`, `GroupPUT`, `GroupPATCH`, `GroupDELETE` and `RegisterGroup`**: use `Route`, `GET`, `POST`, `PUT`, `PATCH`, `DELETE` and `Register` with the group. They still work and will be removed before v1.0.
 
 ### Fixed
 
 - **The Go client no longer alters cookie values silently.** A cookie parameter holding `;`, `"`, `\`, a control character or non-ASCII text was sent with those bytes dropped (net/http only logs it), so the server got `ab` for `a;b` and an empty value for `é` while the call succeeded. `Call` now returns an error naming the cookie and sends nothing.
+
+### Changed
+
+- **Docs, README and examples register group routes with `GET(group, …)`** instead of the deprecated `GroupGET`.
 
 ## [0.5.0] - 2026-11-23
 
