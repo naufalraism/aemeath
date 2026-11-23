@@ -12,6 +12,9 @@ import (
 // the error responder work. Those are logged with stack traces, which look like
 // failures in CI output. Hide them unless the tests run with -v.
 func TestMain(m *testing.M) {
+	if mode := os.Getenv(shutdownChildEnv); mode != "" {
+		runShutdownChild(mode) // the test binary started again as a server (shutdown_process_test.go)
+	}
 	flag.Parse() // testing.Verbose needs the flags to be parsed
 	if !testing.Verbose() {
 		log.SetOutput(io.Discard)
