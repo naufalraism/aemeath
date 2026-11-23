@@ -35,12 +35,12 @@ aemeath: func AsHTTPError(err error) *HTTPError
 aemeath: func BadRequest(msg string) *HTTPError
 aemeath: func CORS(configs ...CORSConfig) Middleware
 aemeath: func Conflict(msg string) *HTTPError
-aemeath: func DELETE[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func DELETE[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
 aemeath: func DefaultCORSConfig() CORSConfig
 aemeath: func Deprecated() RouteOption
 aemeath: func Description(s string) RouteOption
 aemeath: func Forbidden(msg string) *HTTPError
-aemeath: func GET[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func GET[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
 aemeath: func GeneratingTypeScript() bool
 aemeath: func Get[T any](c *Ctx) (T, bool)
 aemeath: func GroupDELETE[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
@@ -64,19 +64,19 @@ aemeath: func NewFileLogger(path string) (*FileLoggerPlugin, error)
 aemeath: func NewLocalStorage(uploadDir string) *LocalStorage
 aemeath: func NotFound(msg string) *HTTPError
 aemeath: func OperationID(id string) RouteOption
-aemeath: func PATCH[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
-aemeath: func POST[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
-aemeath: func PUT[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func PATCH[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func POST[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func PUT[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
 aemeath: func PayloadTooLarge(msg string) *HTTPError
 aemeath: func Provide[T any](a *App, v T)
 aemeath: func RateLimiter(limit int, window time.Duration) Middleware
 aemeath: func RealIP(trusted ...string) Middleware
 aemeath: func Recover() Middleware
 aemeath: func RegisterGroup[In, Out any](g *Group, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out]
-aemeath: func Register[In, Out any](a *App, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out]
+aemeath: func Register[In, Out any](r Router, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out]
 aemeath: func RequestID() Middleware
 aemeath: func RequireAuth() RouteOption
-aemeath: func Route[In, Out any](a *App, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out]
+aemeath: func Route[In, Out any](r Router, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out]
 aemeath: func SecurityHeaders() Middleware
 aemeath: func SlogLogger(l *slog.Logger) Middleware
 aemeath: func Status(code int) RouteOption
@@ -91,6 +91,8 @@ aemeath: func ValidationError(errs ...FieldError) *HTTPError
 aemeath: func WithHTTPClient(h *http.Client) ClientOption
 aemeath: func WithHeader(k, v string) ClientOption
 aemeath: imethod Plugin.Apply(app *App) error
+aemeath: imethod Router.Handle(method, path string, h HandlerFunc)
+aemeath: imethod Router.target(path string, opts []RouteOption) (a *App, full string, merged []RouteOption)
 aemeath: imethod Storage.Delete(filename string) error
 aemeath: imethod Storage.Save(filename string, src io.Reader) (string, error)
 aemeath: method (*App) AddReadyCheck(name string, fn HealthCheck)
@@ -165,6 +167,7 @@ aemeath: type LocalStorage struct
 aemeath: type Middleware func(HandlerFunc) HandlerFunc
 aemeath: type Plugin interface
 aemeath: type RouteOption func(*routeConfig)
+aemeath: type Router interface
 aemeath: type SSE struct
 aemeath: type Storage interface
 aemeath: type StoragePlugin struct
