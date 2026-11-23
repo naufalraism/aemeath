@@ -54,10 +54,12 @@ Safety properties, each covered by a test:
 ### Redis store (several servers, survives restarts)
 
 ```go
-cachePlugin := cache.New("localhost:6379", "", 0)
+cachePlugin := cache.New(cache.Config{Addr: "localhost:6379"})
 app.RegisterPlugin(cachePlugin)
 app.Use(session.Middleware(session.Config{Store: cache.NewSessionStore(cachePlugin, "")}))
 ```
+
+A managed Redis (Upstash, Redis Cloud and the like) gives you a URL; `rediss://` means TLS, which these services require: `cache.New(cache.Config{URL: os.Getenv("REDIS_URL")})`. A malformed URL stops the server at startup.
 
 Values are stored as JSON. Numbers come back as `float64`; `s.Int("n")` handles that. A Redis outage returns an error (HTTP 500) instead of silently logging everyone out.
 

@@ -11,8 +11,6 @@ aemeath: field CORSConfig.AllowOrigins []string
 aemeath: field CORSConfig.ExposeHeaders []string
 aemeath: field CORSConfig.MaxAge int
 aemeath: field Client.BaseURL string
-aemeath: field Client.HTTP *http.Client
-aemeath: field Client.Header http.Header
 aemeath: field Ctx.R *http.Request
 aemeath: field Ctx.State map[string]any
 aemeath: field Ctx.W http.ResponseWriter
@@ -176,15 +174,21 @@ aemeath: var DefaultMaxRequestBytes int64
 aemeath: var MaxValidationErrors
 aemeath: var PrivateNetworks
 aetest: func NewClient(h http.Handler, opts ...aemeath.ClientOption) *aemeath.Client
+cache: field Config.Addr string
+cache: field Config.DB int
+cache: field Config.Password string
+cache: field Config.TLS *tls.Config
+cache: field Config.URL string
 cache: field Plugin.Client *redis.Client
 cache: func From(c *aemeath.Ctx) *redis.Client
-cache: func New(addr, password string, db int) *Plugin
+cache: func New(cfg Config) *Plugin
 cache: func NewSessionStore(p *Plugin, prefix string) *SessionStore
 cache: method (*Plugin) Apply(app *aemeath.App) error
 cache: method (*Plugin) Close() error
 cache: method (*SessionStore) Delete(ctx context.Context, id string) error
 cache: method (*SessionStore) Load(ctx context.Context, id string) (map[string]any, bool, error)
 cache: method (*SessionStore) Save(ctx context.Context, id string, data map[string]any, ttl time.Duration) error
+cache: type Config struct
 cache: type Plugin struct
 cache: type SessionStore struct
 csrf: field Config.Cookie string
@@ -255,7 +259,7 @@ jwt: field IssueOptions.Issuer string
 jwt: field IssueOptions.KeyID string
 jwt: field IssueOptions.Subject string
 jwt: field IssueOptions.TTL time.Duration
-jwt: func Claims(c *aemeath.Ctx) (gojwt.MapClaims, bool)
+jwt: func Claims(c *aemeath.Ctx) (map[string]any, bool)
 jwt: func Issue(alg string, key any, o IssueOptions) (string, error)
 jwt: func Middleware(cfg Config) aemeath.Middleware
 jwt: func NewJWKS(rawURL string, opts ...JWKSOption) (*JWKS, error)
@@ -265,8 +269,8 @@ jwt: func WithJWKSHTTPClient(c *http.Client) JWKSOption
 jwt: func WithJWKSMinRefresh(d time.Duration) JWKSOption
 jwt: func WithJWKSTTL(d time.Duration) JWKSOption
 jwt: method (*JWKS) Key(ctx context.Context, kid string) (crypto.PublicKey, string, error)
-jwt: method (*Verifier) Verify(token string) (gojwt.MapClaims, error)
-jwt: method (*Verifier) VerifyContext(ctx context.Context, token string) (gojwt.MapClaims, error)
+jwt: method (*Verifier) Verify(token string) (map[string]any, error)
+jwt: method (*Verifier) VerifyContext(ctx context.Context, token string) (map[string]any, error)
 jwt: type Config struct
 jwt: type IssueOptions struct
 jwt: type JWKS struct
@@ -274,14 +278,20 @@ jwt: type JWKSOption func(*JWKS)
 jwt: type Verifier struct
 jwt: var ErrKeyNotFound
 mailer: const DefaultTimeout
-mailer: field Plugin.Dialer *gomail.Dialer
-mailer: field Plugin.From string
-mailer: field Plugin.Timeout time.Duration
+mailer: field Config.From string
+mailer: field Config.Host string
+mailer: field Config.Password string
+mailer: field Config.Port int
+mailer: field Config.SSL bool
+mailer: field Config.TLSConfig *tls.Config
+mailer: field Config.Timeout time.Duration
+mailer: field Config.Username string
 mailer: func From(c *aemeath.Ctx) *Plugin
-mailer: func New(host string, port int, username, password, from string) *Plugin
+mailer: func New(cfg Config) *Plugin
 mailer: method (*Plugin) Apply(app *aemeath.App) error
 mailer: method (*Plugin) Send(to, subject, body string) error
 mailer: method (*Plugin) SendContext(ctx context.Context, to, subject, body string) error
+mailer: type Config struct
 mailer: type Plugin struct
 metrics: func New() *Registry
 metrics: method (*Counter) Add(v float64, labels ...string)

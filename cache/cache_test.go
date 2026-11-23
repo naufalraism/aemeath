@@ -19,7 +19,7 @@ import (
 // with their TTL and expire.
 func TestClientSetGetAndExpiry(t *testing.T) {
 	mr := miniredis.RunT(t)
-	p := cache.New(mr.Addr(), "", 0)
+	p := cache.New(cache.Config{Addr: mr.Addr()})
 	defer func() { _ = p.Close() }()
 	ctx := context.Background()
 
@@ -40,7 +40,7 @@ func TestClientSetGetAndExpiry(t *testing.T) {
 
 func TestPluginProvidesTheClientAndReadiness(t *testing.T) {
 	mr := miniredis.RunT(t)
-	p := cache.New(mr.Addr(), "", 0)
+	p := cache.New(cache.Config{Addr: mr.Addr()})
 	defer func() { _ = p.Close() }()
 
 	app := aemeath.New()

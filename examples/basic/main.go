@@ -161,9 +161,10 @@ func main() {
 	})
 
 	// 8. Mailer plugin (try it with a local SMTP catcher such as MailHog on :1025).
-	smtp := mailer.New(
-		"localhost", 1025, "user", "pass", "Admin <admin@aemeath.dev>",
-	)
+	smtp := mailer.New(mailer.Config{
+		Host: "localhost", Port: 1025, Username: "user", Password: "pass",
+		From: "Admin <admin@aemeath.dev>",
+	})
 	if err := app.RegisterPlugin(smtp); err != nil {
 		log.Fatal(err)
 	}
@@ -176,7 +177,7 @@ func main() {
 	})
 
 	// 9. Cache plugin (Redis).
-	redisCache := cache.New("localhost:6379", "", 0)
+	redisCache := cache.New(cache.Config{Addr: "localhost:6379"})
 	if err := app.RegisterPlugin(redisCache); err != nil {
 		log.Fatal(err)
 	}

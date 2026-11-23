@@ -13,7 +13,7 @@ import (
 func TestRedisSessionStoreContract(t *testing.T) {
 	storetest.Run(t, func(t *testing.T) storetest.Store {
 		mr := miniredis.RunT(t)
-		p := cache.New(mr.Addr(), "", 0)
+		p := cache.New(cache.Config{Addr: mr.Addr()})
 		t.Cleanup(func() { _ = p.Close() })
 		return storetest.Store{Store: cache.NewSessionStore(p, ""), Advance: mr.FastForward}
 	})
@@ -22,7 +22,7 @@ func TestRedisSessionStoreContract(t *testing.T) {
 func TestRedisSessionStoreConcurrentRequests(t *testing.T) {
 	storetest.RunConcurrentRequests(t, func(t *testing.T) session.Store {
 		mr := miniredis.RunT(t)
-		p := cache.New(mr.Addr(), "", 0)
+		p := cache.New(cache.Config{Addr: mr.Addr()})
 		t.Cleanup(func() { _ = p.Close() })
 		return cache.NewSessionStore(p, "")
 	})

@@ -34,6 +34,11 @@ var reservedSchemaNames = []string{"Error", "ValidationError", "FieldError"}
 // with $ref), so recursive types work. Types used as request input are named
 // "<Type>Input" because their requiredness and constraints differ from the
 // same type used in a response.
+//
+// The map is the JSON document: marshal it, serve it or compare it whole.
+// Its exact contents are not part of the API's compatibility promise: a
+// release may add keys, schemas or descriptions, so code that walks into it
+// should tolerate entries it does not know.
 func (a *App) OpenAPI(info Info) map[string]any {
 	if info.Version == "" {
 		info.Version = "0.1.0"

@@ -23,7 +23,7 @@ type out struct {
 
 func redisApp(t *testing.T) (*aemeath.App, *miniredis.Miniredis, *cache.SessionStore) {
 	mr := miniredis.RunT(t)
-	p := cache.New(mr.Addr(), "", 0)
+	p := cache.New(cache.Config{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = p.Close() })
 	store := cache.NewSessionStore(p, "")
 	app := aemeath.New()
