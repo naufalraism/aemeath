@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`benchmarks/load`: a load test over real TCP.** It starts `net/http`, Aemeath and Gin as separate processes with the same two routes (`GET /hello`, and `POST /users` with validation), checks that each one refuses bad input, then measures requests per second, p50/p95/p99 latency, errors and process memory. `go run ./load all` from `benchmarks/`.
+
 ## [0.4.2] - 2026-11-22
 
 ### Security
