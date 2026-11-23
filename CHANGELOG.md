@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **Removed `App.WriteTypeScriptClient`**, an older duplicate of `WriteTypeScript` that wrote only client.ts and not atomically (an interrupted write could leave half a file). Use `app.WriteTypeScript(dir)`, which writes client.ts, schemas.ts and hooks.ts.
+- **Removed `cache.Plugin.Set` and `Get`**, one-line wrappers over the Redis client. Handlers already get the client from `cache.From(c)`; use `client.Set(ctx, key, value, ttl).Err()` and `client.Get(ctx, key).Result()`.
+
 ### Added
 
 - **A list of the public API** in `testdata/api.txt`, checked by `go test`: every exported function and method with its signature, type, field, constant and variable. A change to the public API now shows up in the diff of that file instead of slipping in by accident (`go test -run TestPublicAPI -update-api .` after an intended change).

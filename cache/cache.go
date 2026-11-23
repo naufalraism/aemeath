@@ -3,7 +3,6 @@ package cache
 
 import (
 	"context"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -34,16 +33,6 @@ func (p *Plugin) Apply(app *aemeath.App) error {
 
 // From returns the Redis client of the application handling c.
 func From(c *aemeath.Ctx) *redis.Client { return aemeath.MustGet[*redis.Client](c) }
-
-// Set stores a value with a time-to-live (TTL).
-func (p *Plugin) Set(ctx context.Context, key, value string, ttl time.Duration) error {
-	return p.Client.Set(ctx, key, value, ttl).Err()
-}
-
-// Get reads a value. A missing key returns redis.Nil.
-func (p *Plugin) Get(ctx context.Context, key string) (string, error) {
-	return p.Client.Get(ctx, key).Result()
-}
 
 // Close closes the Redis connection; call it when the server shuts down.
 func (p *Plugin) Close() error { return p.Client.Close() }
