@@ -88,19 +88,18 @@ func clientFromHeaders(c *Ctx, isTrusted func(netip.Addr) bool) (netip.Addr, boo
 		hops = append(hops, strings.Split(h, ",")...)
 	}
 	if len(hops) == 0 {
-		if a, err := netip.ParseAddr(strings.TrimSpace(c.R.Header.Get("X-Real-IP"))); err == nil {
-			return a.Unmap(), true
+		if a, ok := headerAddr(c.R.Header.Get("X-Real-IP")); ok {
+			return a, true
 		}
 		return netip.Addr{}, false
 	}
 	var last netip.Addr
 	for i := len(hops) - 1; i >= 0; i-- {
-		a, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
-		if err != nil {
+		a, ok := headerAddr(hops[i])
+		if !ok {
 			// Garbage in the chain: stop and trust nothing further left.
 			break
 		}
-		a = a.Unmap()
 		last = a
 		if !isTrusted(a) {
 			return a, true
@@ -109,4 +108,16 @@ func clientFromHeaders(c *Ctx, isTrusted func(netip.Addr) bool) (netip.Addr, boo
 	// Every hop was a trusted proxy (or the chain was invalid): use the
 	// left-most valid one we reached.
 	return last, last.IsValid()
+}
+
+// headerAddr parses one address from a forwarding header. An IPv6 zone
+// ("fe80::1%eth0") names an interface of the machine that wrote it and never
+// identifies a client, and netip accepts any text as a zone: such an entry is
+// rejected, or the RemoteAddr built from it would not parse as host:port.
+func headerAddr(s string) (netip.Addr, bool) {
+	a, err := netip.ParseAddr(strings.TrimSpace(s))
+	if err != nil || a.Zone() != "" {
+		return netip.Addr{}, false
+	}
+	return a.Unmap(), true
 }

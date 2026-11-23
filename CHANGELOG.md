@@ -12,6 +12,7 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **`RealIP` ignores addresses with an IPv6 zone** in `X-Forwarded-For` and `X-Real-IP`. A zone (`fe80::1%eth0`) only names an interface of the machine that wrote it, and any text was accepted as one: `::%[` became the `RemoteAddr` `[::%[]:4000`, which `net.SplitHostPort` rejects. Found by the new `FuzzRealIP`.
 - **JWT with a JWKS: the key lookup follows the request.** It used `context.Background()`, so a request whose client had left still waited for a slow JWKS endpoint until the HTTP client's timeout (3 s in the test, 10 s by default); it now stops with the request. The fetch itself is shared and now runs detached from the request that started it, bounded by the client's timeout: before, when that request went away, every other request waiting for the same key failed with `context deadline exceeded`.
 
 ### Changed
