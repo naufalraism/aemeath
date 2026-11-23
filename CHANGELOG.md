@@ -14,6 +14,7 @@ All notable changes to this project are documented here.
 ### Added
 
 - **Round-trip tests for the Go client**: every parameter source and the body through one shared `Endpoint`, values that need escaping, nil versus zero pointers, a time with nanoseconds and a zone; parameter fields kept out of the body; and the error paths (422 with field errors, a non-JSON error page, 204, a 200 that is not JSON, a response over 32 MiB, an empty path parameter, a cancelled context, an unreachable server).
+- **More shutdown tests on a real process**: an open Server-Sent Events stream is ended by the server and the process exits at once instead of waiting out the grace time, and a job that is running when the signal arrives finishes before the process exits.
 
 ### Fixed
 

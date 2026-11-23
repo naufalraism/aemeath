@@ -128,7 +128,7 @@ func TestListenTLSServesHTTPSAndStops(t *testing.T) {
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}}
 	c := startChild(t, 5*time.Second, certFile, client)
 
-	resp, err := client.Get("https://" + c.addr + "/ping")
+	resp, err := c.http.Get("https://" + c.addr + "/ping")
 	if err != nil {
 		t.Fatal(err)
 	}
