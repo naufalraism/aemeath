@@ -274,14 +274,20 @@ jwt: type JWKSOption func(*JWKS)
 jwt: type Verifier struct
 jwt: var ErrKeyNotFound
 mailer: const DefaultTimeout
-mailer: field Plugin.Dialer *gomail.Dialer
-mailer: field Plugin.From string
-mailer: field Plugin.Timeout time.Duration
+mailer: field Config.From string
+mailer: field Config.Host string
+mailer: field Config.Password string
+mailer: field Config.Port int
+mailer: field Config.SSL bool
+mailer: field Config.TLSConfig *tls.Config
+mailer: field Config.Timeout time.Duration
+mailer: field Config.Username string
 mailer: func From(c *aemeath.Ctx) *Plugin
-mailer: func New(host string, port int, username, password, from string) *Plugin
+mailer: func New(cfg Config) *Plugin
 mailer: method (*Plugin) Apply(app *aemeath.App) error
 mailer: method (*Plugin) Send(to, subject, body string) error
 mailer: method (*Plugin) SendContext(ctx context.Context, to, subject, body string) error
+mailer: type Config struct
 mailer: type Plugin struct
 metrics: func New() *Registry
 metrics: method (*Counter) Add(v float64, labels ...string)

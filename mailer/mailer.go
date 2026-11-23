@@ -18,19 +18,40 @@ import (
 	"github.com/naufalraism/aemeath"
 )
 
-// Plugin sends email through one SMTP server.
-type Plugin struct {
-	Dialer *gomail.Dialer
-	From   string
+// Config describes one SMTP server and the sender.
+type Config struct {
+	Host     string // e.g. "smtp.gmail.com"
+	Port     int    // usually 587 (STARTTLS) or 465 (TLS from the start)
+	Username string // empty: no authentication
+	Password string
+	From     string // e.g. "Admin <admin@example.com>"
+
+	// SSL speaks TLS from the first byte (port 465 always does). Otherwise
+	// the connection switches to TLS with STARTTLS when the server offers it.
+	SSL bool
+	// TLSConfig overrides the TLS settings (server name, roots, minimum
+	// version). Nil: verify Host's certificate, TLS 1.2 or later.
+	TLSConfig *tls.Config
 	// Timeout limits one Send, from connecting to the server's last answer.
 	// Zero means DefaultTimeout.
 	Timeout time.Duration
 }
 
-// New creates a Plugin.
-// Example: mailer.New("smtp.gmail.com", 587, "email@gmail.com", "password", "Admin <admin@example.com>")
-func New(host string, port int, username, password, from string) *Plugin {
-	return &Plugin{Dialer: gomail.NewDialer(host, port, username, password), From: from}
+// Plugin sends email through one SMTP server.
+type Plugin struct {
+	cfg Config
+}
+
+// New creates a Plugin. The connection is made on each Send.
+//
+//	mailer.New(mailer.Config{Host: "smtp.gmail.com", Port: 587,
+//		Username: "email@gmail.com", Password: os.Getenv("SMTP_PASSWORD"),
+//		From: "Admin <admin@example.com>"})
+func New(cfg Config) *Plugin {
+	if cfg.Port == 465 {
+		cfg.SSL = true
+	}
+	return &Plugin{cfg: cfg}
 }
 
 // Apply provides the *Plugin to handlers.
@@ -57,12 +78,12 @@ func (p *Plugin) Send(to, subject, body string) error {
 // silent can therefore no longer block the caller for ever.
 func (p *Plugin) SendContext(ctx context.Context, to, subject, body string) error {
 	msg := gomail.NewMessage()
-	msg.SetHeader("From", p.From)
+	msg.SetHeader("From", p.cfg.From)
 	msg.SetHeader("To", to)
 	msg.SetHeader("Subject", subject)
 	msg.SetBody("text/html", body)
 
-	timeout := p.Timeout
+	timeout := p.cfg.Timeout
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
@@ -78,11 +99,10 @@ func (p *Plugin) SendContext(ctx context.Context, to, subject, body string) erro
 }
 
 // deliver runs the SMTP exchange on a connection that is closed when ctx
-// ends. It follows gomail's Dialer (implicit TLS when Dialer.SSL is set,
-// STARTTLS when offered, then CRAM-MD5, LOGIN or PLAIN), which has no way to
-// set a deadline itself.
+// ends: implicit TLS when Config.SSL is set, STARTTLS when offered, then
+// CRAM-MD5, LOGIN or PLAIN.
 func (p *Plugin) deliver(ctx context.Context, msg *gomail.Message) error {
-	d := p.Dialer
+	d := p.cfg
 	var nd net.Dialer
 	conn, err := nd.DialContext(ctx, "tcp", net.JoinHostPort(d.Host, strconv.Itoa(d.Port)))
 	if err != nil {
@@ -103,11 +123,6 @@ func (p *Plugin) deliver(ctx context.Context, msg *gomail.Message) error {
 	if err != nil {
 		return err
 	}
-	if d.LocalName != "" {
-		if err := c.Hello(d.LocalName); err != nil {
-			return err
-		}
-	}
 	if !d.SSL {
 		if ok, _ := c.Extension("STARTTLS"); ok {
 			if err := c.StartTLS(tlsConfig); err != nil {
@@ -115,8 +130,8 @@ func (p *Plugin) deliver(ctx context.Context, msg *gomail.Message) error {
 			}
 		}
 	}
-	auth := d.Auth
-	if auth == nil && d.Username != "" {
+	var auth smtp.Auth
+	if d.Username != "" {
 		if ok, mechanisms := c.Extension("AUTH"); ok {
 			switch {
 			case strings.Contains(mechanisms, "CRAM-MD5"):

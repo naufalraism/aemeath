@@ -162,7 +162,7 @@ func decodeHeader(t *testing.T, v string) string {
 
 func TestSendDeliversAnHTMLMessage(t *testing.T) {
 	srv, host, port := startSMTP(t, "", "")
-	m := mailer.New(host, port, "", "", "App <noreply@example.com>")
+	m := mailer.New(mailer.Config{Host: host, Port: port, From: "App <noreply@example.com>"})
 
 	if err := m.Send("ana@example.com", "Welcome", "<h1>Hello</h1><p>caf\u00e9 =)</p>"); err != nil {
 		t.Fatal(err)
@@ -191,7 +191,7 @@ func TestSendDeliversAnHTMLMessage(t *testing.T) {
 
 func TestSendEncodesNonASCIISubjects(t *testing.T) {
 	srv, host, port := startSMTP(t, "", "")
-	m := mailer.New(host, port, "", "", "noreply@example.com")
+	m := mailer.New(mailer.Config{Host: host, Port: port, From: "noreply@example.com"})
 	if err := m.Send("ana@example.com", "Selamat datang \u2615", "<p>hi</p>"); err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestSendEncodesNonASCIISubjects(t *testing.T) {
 // (for example a hidden Bcc) or a recipient.
 func TestSendResistsHeaderInjection(t *testing.T) {
 	srv, host, port := startSMTP(t, "", "")
-	m := mailer.New(host, port, "", "", "noreply@example.com")
+	m := mailer.New(mailer.Config{Host: host, Port: port, From: "noreply@example.com"})
 
 	errSubject := m.Send("ana@example.com", "Hi\r\nBcc: evil@example.com", "<p>x</p>")
 	errAddress := m.Send("ana@example.com\r\nBcc: evil@example.com", "Hi", "<p>x</p>")
@@ -249,14 +249,14 @@ func TestSendResistsHeaderInjection(t *testing.T) {
 func TestSendAuthenticates(t *testing.T) {
 	srv, host, port := startSMTP(t, "mailer", "correct-password")
 
-	if err := mailer.New(host, port, "mailer", "correct-password", "noreply@example.com").Send("ana@example.com", "Hi", "<p>x</p>"); err != nil {
+	if err := mailer.New(mailer.Config{Host: host, Port: port, Username: "mailer", Password: "correct-password", From: "noreply@example.com"}).Send("ana@example.com", "Hi", "<p>x</p>"); err != nil {
 		t.Fatalf("valid credentials: %v", err)
 	}
 	if len(srv.received()) != 1 {
 		t.Fatalf("the message was not delivered")
 	}
 
-	err := mailer.New(host, port, "mailer", "wrong-password", "noreply@example.com").Send("ana@example.com", "Hi", "<p>x</p>")
+	err := mailer.New(mailer.Config{Host: host, Port: port, Username: "mailer", Password: "wrong-password", From: "noreply@example.com"}).Send("ana@example.com", "Hi", "<p>x</p>")
 	if err == nil || !strings.Contains(err.Error(), "aemeath/mailer") {
 		t.Fatalf("a wrong password must be an aemeath/mailer error, got %v", err)
 	}
@@ -275,7 +275,7 @@ func TestSendReportsAnUnreachableServer(t *testing.T) {
 	}
 	_, portStr, _ := net.SplitHostPort(ln.Addr().String())
 	_ = ln.Close() // nothing listens on this port any more
-	err = mailer.New("127.0.0.1", atoi(portStr), "", "", "noreply@example.com").Send("ana@example.com", "Hi", "<p>x</p>")
+	err = mailer.New(mailer.Config{Host: "127.0.0.1", Port: atoi(portStr), From: "noreply@example.com"}).Send("ana@example.com", "Hi", "<p>x</p>")
 	if err == nil || !strings.Contains(err.Error(), "aemeath/mailer: failed to send email") {
 		t.Fatalf("err = %v", err)
 	}
@@ -284,7 +284,7 @@ func TestSendReportsAnUnreachableServer(t *testing.T) {
 func TestPluginProvidesTheMailerToHandlers(t *testing.T) {
 	srv, host, port := startSMTP(t, "", "")
 	app := aemeath.New()
-	if err := app.RegisterPlugin(mailer.New(host, port, "", "", "noreply@example.com")); err != nil {
+	if err := app.RegisterPlugin(mailer.New(mailer.Config{Host: host, Port: port, From: "noreply@example.com"})); err != nil {
 		t.Fatal(err)
 	}
 	app.Handle("POST", "/welcome", func(c *aemeath.Ctx) error {

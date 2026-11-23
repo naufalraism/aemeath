@@ -49,7 +49,9 @@ func selfSigned(t *testing.T) tls.Certificate {
 	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
 }
 
-func startFake(t *testing.T, o fakeOpts) (*fakeServer, *mailer.Plugin) {
+// startFake returns the server and a Config pointing at it; tests adjust the
+// Config, then call mailer.New.
+func startFake(t *testing.T, o fakeOpts) (*fakeServer, mailer.Config) {
 	t.Helper()
 	cert := selfSigned(t)
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -69,10 +71,11 @@ func startFake(t *testing.T, o fakeOpts) (*fakeServer, *mailer.Plugin) {
 	}()
 	host, port, _ := net.SplitHostPort(l.Addr().String())
 	n, _ := strconv.Atoi(port)
-	p := mailer.New(host, n, "", "", "noreply@app.example")
-	p.Dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // test server with a self-signed certificate
-	p.Dialer.SSL = o.implicitTLS
-	return f, p
+	return f, mailer.Config{
+		Host: host, Port: n, From: "noreply@app.example",
+		TLSConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // test server with a self-signed certificate
+		SSL:       o.implicitTLS,
+	}
 }
 
 func (f *fakeServer) serve(conn net.Conn, o fakeOpts, cert tls.Certificate) {
@@ -154,8 +157,9 @@ func (f *fakeServer) state() (int, bool, string, string) {
 // A server that accepts the connection and then stays silent used to block
 // Send for ever: gomail sets no deadline and takes no context.
 func TestSendGivesUpOnASilentServer(t *testing.T) {
-	_, p := startFake(t, fakeOpts{silent: true})
-	p.Timeout = 300 * time.Millisecond
+	_, cfg := startFake(t, fakeOpts{silent: true})
+	cfg.Timeout = 300 * time.Millisecond
+	p := mailer.New(cfg)
 	start := time.Now()
 	err := p.Send("user@example.com", "hi", "<p>hi</p>")
 	if err == nil || !errors.Is(err, context.DeadlineExceeded) {
@@ -167,7 +171,8 @@ func TestSendGivesUpOnASilentServer(t *testing.T) {
 }
 
 func TestSendContextStopsWhenTheContextIsCancelled(t *testing.T) {
-	_, p := startFake(t, fakeOpts{silent: true})
+	_, cfg := startFake(t, fakeOpts{silent: true})
+	p := mailer.New(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(200*time.Millisecond, cancel)
 	start := time.Now()
@@ -189,7 +194,8 @@ func TestDeliveryModes(t *testing.T) {
 		"STARTTLS":     {startTLS: true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			f, p := startFake(t, o)
+			f, cfg := startFake(t, o)
+			p := mailer.New(cfg)
 			if err := p.Send("user@example.com", "hi", "<p>hi</p>"); err != nil {
 				t.Fatal(err)
 			}
@@ -200,8 +206,9 @@ func TestDeliveryModes(t *testing.T) {
 		})
 	}
 	t.Run("AUTH LOGIN", func(t *testing.T) {
-		f, p := startFake(t, fakeOpts{loginOnly: true})
-		p.Dialer.Username, p.Dialer.Password = "ann", "s3cret"
+		f, cfg := startFake(t, fakeOpts{loginOnly: true})
+		cfg.Username, cfg.Password = "ann", "s3cret"
+		p := mailer.New(cfg)
 		if err := p.Send("user@example.com", "hi", "<p>hi</p>"); err != nil {
 			t.Fatal(err)
 		}
@@ -214,8 +221,9 @@ func TestDeliveryModes(t *testing.T) {
 // Concurrent sends share the Plugin; gomail's dialer wrote to itself on each
 // dial, which the race detector flags.
 func TestConcurrentSends(t *testing.T) {
-	f, p := startFake(t, fakeOpts{loginOnly: true})
-	p.Dialer.Username, p.Dialer.Password = "ann", "s3cret"
+	f, cfg := startFake(t, fakeOpts{loginOnly: true})
+	cfg.Username, cfg.Password = "ann", "s3cret"
+	p := mailer.New(cfg)
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
 		wg.Add(1)

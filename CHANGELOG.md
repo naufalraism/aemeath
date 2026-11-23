@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Breaking changes
 
 - **`jwt.Claims`, `Verifier.Verify` and `Verifier.VerifyContext` return `map[string]any`** instead of golang-jwt's `MapClaims`, so the public API no longer depends on that library. Reading a claim is unchanged (`claims["role"].(string)`); only code calling `MapClaims` methods such as `GetSubject` needs to read the map instead (or use `jwt.UserID`).
+- **`mailer.New` takes a `mailer.Config`**: `mailer.New(mailer.Config{Host: "smtp.gmail.com", Port: 587, Username: …, Password: …, From: …})`. The plugin's fields (`Dialer`, a gomail type, `From`, `Timeout`) are no longer exported; `Config` holds them, plus `SSL` and `TLSConfig`, which were only reachable through the gomail dialer. Port 465 still means TLS from the start.
 
 ## [0.5.0] - 2026-11-23
 

@@ -161,9 +161,10 @@ func main() {
 	})
 
 	// 8. Mailer plugin (try it with a local SMTP catcher such as MailHog on :1025).
-	smtp := mailer.New(
-		"localhost", 1025, "user", "pass", "Admin <admin@aemeath.dev>",
-	)
+	smtp := mailer.New(mailer.Config{
+		Host: "localhost", Port: 1025, Username: "user", Password: "pass",
+		From: "Admin <admin@aemeath.dev>",
+	})
 	if err := app.RegisterPlugin(smtp); err != nil {
 		log.Fatal(err)
 	}

@@ -85,7 +85,7 @@ func (f *fakeSMTP) serve(c net.Conn) {
 func (f *fakeSMTP) mailer(t *testing.T) *mailer.Plugin {
 	host, port, _ := net.SplitHostPort(f.addr)
 	p, _ := strconv.Atoi(port)
-	return mailer.New(host, p, "", "", "noreply@app.example")
+	return mailer.New(mailer.Config{Host: host, Port: p, From: "noreply@app.example"})
 }
 
 // A signup or "email me a copy" form passes the user's input to Send.
