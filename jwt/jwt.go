@@ -90,7 +90,10 @@ var asymmetricMethods = []string{"RS256", "RS384", "RS512", "PS256", "PS384", "P
 // Middleware verifies Bearer tokens. It panics at startup when the key
 // configuration is wrong (none, several, an empty secret, an unsupported key):
 // a mistake here must never turn into tokens that anyone can forge.
-func newParser(cfg Config) (*gojwt.Parser, gojwt.Keyfunc) {
+// newParser returns the parser and, for a request's context, the function that
+// finds the verification key. The context matters for a JWKS: the key lookup
+// stops waiting when the request ends.
+func newParser(cfg Config) (*gojwt.Parser, func(context.Context) gojwt.Keyfunc) {
 	sources := 0
 	for _, set := range []bool{cfg.SecretKey != "", cfg.PublicKey != nil, cfg.JWKSURL != "", cfg.JWKS != nil} {
 		if set {
@@ -103,7 +106,7 @@ func newParser(cfg Config) (*gojwt.Parser, gojwt.Keyfunc) {
 
 	var (
 		methods []string
-		keyFunc gojwt.Keyfunc
+		keyFunc func(context.Context) gojwt.Keyfunc
 	)
 	switch {
 	case cfg.SecretKey != "":
@@ -112,14 +115,14 @@ func newParser(cfg Config) (*gojwt.Parser, gojwt.Keyfunc) {
 		}
 		key := []byte(cfg.SecretKey)
 		methods = []string{"HS256", "HS384", "HS512"}
-		keyFunc = func(*gojwt.Token) (any, error) { return key, nil }
+		keyFunc = func(context.Context) gojwt.Keyfunc { return func(*gojwt.Token) (any, error) { return key, nil } }
 	case cfg.PublicKey != nil:
 		methods = methodsForKey(cfg.PublicKey)
 		if len(methods) == 0 {
 			panic(fmt.Sprintf("aemeath/jwt: unsupported Config.PublicKey type %T", cfg.PublicKey))
 		}
 		pub := cfg.PublicKey
-		keyFunc = func(*gojwt.Token) (any, error) { return pub, nil }
+		keyFunc = func(context.Context) gojwt.Keyfunc { return func(*gojwt.Token) (any, error) { return pub, nil } }
 	default:
 		set := cfg.JWKS
 		if set == nil {
@@ -129,16 +132,18 @@ func newParser(cfg Config) (*gojwt.Parser, gojwt.Keyfunc) {
 			}
 		}
 		methods = asymmetricMethods
-		keyFunc = func(t *gojwt.Token) (any, error) {
-			kid, _ := t.Header["kid"].(string)
-			key, alg, err := set.Key(context.Background(), kid)
-			if err != nil {
-				return nil, err
+		keyFunc = func(ctx context.Context) gojwt.Keyfunc {
+			return func(t *gojwt.Token) (any, error) {
+				kid, _ := t.Header["kid"].(string)
+				key, alg, err := set.Key(ctx, kid)
+				if err != nil {
+					return nil, err
+				}
+				if alg != "" && alg != t.Method.Alg() {
+					return nil, fmt.Errorf("jwt: the key is restricted to %s but the token uses %s", alg, t.Method.Alg())
+				}
+				return key, nil
 			}
-			if alg != "" && alg != t.Method.Alg() {
-				return nil, fmt.Errorf("jwt: the key is restricted to %s but the token uses %s", alg, t.Method.Alg())
-			}
-			return key, nil
 		}
 	}
 
@@ -174,7 +179,7 @@ func Middleware(cfg Config) aemeath.Middleware {
 				return unauthorized(c, "missing token or invalid Authorization format")
 			}
 
-			token, err := parser.Parse(tokenString, keyFunc)
+			token, err := parser.Parse(tokenString, keyFunc(c.Context()))
 			if err != nil || !token.Valid {
 				return unauthorized(c, "invalid or expired token")
 			}
@@ -214,7 +219,7 @@ func UserID(c *aemeath.Ctx) string {
 // restrictions that defeat algorithm-confusion attacks.
 type Verifier struct {
 	parser  *gojwt.Parser
-	keyFunc gojwt.Keyfunc
+	keyFunc func(context.Context) gojwt.Keyfunc
 }
 
 // NewVerifier builds a Verifier. It panics on a bad key configuration, like Middleware.
@@ -224,8 +229,15 @@ func NewVerifier(cfg Config) *Verifier {
 }
 
 // Verify checks the signature and the registered claims and returns the claims.
+// It is VerifyContext with context.Background().
 func (v *Verifier) Verify(token string) (gojwt.MapClaims, error) {
-	t, err := v.parser.Parse(token, v.keyFunc)
+	return v.VerifyContext(context.Background(), token)
+}
+
+// VerifyContext is Verify for a request: with a JWKS, the key lookup stops
+// waiting when ctx ends.
+func (v *Verifier) VerifyContext(ctx context.Context, token string) (gojwt.MapClaims, error) {
+	t, err := v.parser.Parse(token, v.keyFunc(ctx))
 	if err != nil || !t.Valid {
 		if err == nil {
 			err = errors.New("invalid token")
