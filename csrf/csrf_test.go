@@ -20,7 +20,8 @@ type tok struct {
 
 func newApp(cfg csrf.Config) *aemeath.App {
 	app := aemeath.New()
-	app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore(), Insecure: true}))
+	// An origin trusted for writes must be trusted by the session middleware too.
+	app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore(), Insecure: true, TrustedOrigins: cfg.TrustedOrigins}))
 	app.Use(csrf.Middleware(cfg))
 	aemeath.GET(app, "/token", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{csrf.Token(c)}, nil })
 	aemeath.POST(app, "/act", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{"done"}, nil })
