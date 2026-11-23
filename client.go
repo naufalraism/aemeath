@@ -238,7 +238,14 @@ func encodeRequest(method, pattern string, in any) (encodedRequest, error) {
 		case "header":
 			enc.header.Set(name, s)
 		case "cookie":
-			enc.cookies = append(enc.cookies, &http.Cookie{Name: name, Value: s})
+			ck := &http.Cookie{Name: name, Value: s}
+			// net/http drops the bytes a cookie cannot carry (";", '"', "\\",
+			// anything outside printable ASCII) and only logs it, so the
+			// server would get another value. Refuse instead.
+			if err := ck.Valid(); err != nil {
+				return enc, fmt.Errorf("aemeath: cookie %q: value %q has characters a cookie cannot carry: %w", name, s, err)
+			}
+			enc.cookies = append(enc.cookies, ck)
 		}
 	}
 
