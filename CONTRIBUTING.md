@@ -63,3 +63,7 @@ go test -run TestPublicAPI -update-api .
 ## Security
 
 Do not report vulnerabilities in public issues; see [SECURITY.md](SECURITY.md).
+
+## Code of conduct
+
+Everyone taking part is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
