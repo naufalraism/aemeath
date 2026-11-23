@@ -11,8 +11,6 @@ aemeath: field CORSConfig.AllowOrigins []string
 aemeath: field CORSConfig.ExposeHeaders []string
 aemeath: field CORSConfig.MaxAge int
 aemeath: field Client.BaseURL string
-aemeath: field Client.HTTP *http.Client
-aemeath: field Client.Header http.Header
 aemeath: field Ctx.R *http.Request
 aemeath: field Ctx.State map[string]any
 aemeath: field Ctx.W http.ResponseWriter
