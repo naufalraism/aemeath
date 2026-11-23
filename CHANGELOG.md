@@ -14,6 +14,7 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **`NaN` and infinities no longer slip through binding and validation.** NaN compares false with everything, so `?price=NaN` passed `validate:"gte=0,lte=100"` and reached the handler (a response echoing it then failed with 500); infinities passed any rule without the matching bound. A float from the path, query, a header or a cookie that is not a finite number is now refused with 400, and `min`, `max`, `gt`, `gte`, `lt` and `lte` refuse NaN with 422 wherever it comes from (a float read with `json:",string"` can be `"NaN"`).
 - **`RealIP` ignores addresses with an IPv6 zone** in `X-Forwarded-For` and `X-Real-IP`. A zone (`fe80::1%eth0`) only names an interface of the machine that wrote it, and any text was accepted as one: `::%[` became the `RemoteAddr` `[::%[]:4000`, which `net.SplitHostPort` rejects. Found by the new `FuzzRealIP`.
 - **JWT with a JWKS: the key lookup follows the request.** It used `context.Background()`, so a request whose client had left still waited for a slow JWKS endpoint until the HTTP client's timeout (3 s in the test, 10 s by default); it now stops with the request. The fetch itself is shared and now runs detached from the request that started it, bounded by the client's timeout: before, when that request went away, every other request waiting for the same key failed with `context deadline exceeded`.
 
