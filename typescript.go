@@ -511,6 +511,9 @@ func oneofUnion(f reflect.StructField) string {
 // number. JavaScript numbers are exact only up to 2^53, so a large value (a
 // snowflake id, a random 64-bit number) silently changes in the browser.
 // time.Duration is left out: its precision only matters beyond 104 days.
+// int and uint are left out too, although they are 64 bits on a 64-bit
+// server: they hold counts and auto-increment ids, and a note on every int
+// would be ignored (see docs/guide/typescript.md, "Large integers").
 func wide64(f reflect.StructField) bool {
 	t := f.Type
 	for t.Kind() == reflect.Pointer {
