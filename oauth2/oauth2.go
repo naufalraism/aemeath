@@ -27,9 +27,6 @@ func New(providerName string, config *xoauth2.Config, userInfoURL string) *Plugi
 	return &Plugin{ProviderName: providerName, Config: config, UserInfoURL: userInfoURL}
 }
 
-// Name implements aemeath.Plugin.
-func (p *Plugin) Name() string { return "oauth2_" + p.ProviderName }
-
 // registry holds every provider registered on one application.
 type registry struct{ providers map[string]*Plugin }
 

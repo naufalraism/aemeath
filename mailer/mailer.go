@@ -33,9 +33,6 @@ func New(host string, port int, username, password, from string) *Plugin {
 	return &Plugin{Dialer: gomail.NewDialer(host, port, username, password), From: from}
 }
 
-// Name implements aemeath.Plugin.
-func (p *Plugin) Name() string { return "mailer" }
-
 // Apply provides the *Plugin to handlers.
 func (p *Plugin) Apply(app *aemeath.App) error {
 	aemeath.Provide(app, p)

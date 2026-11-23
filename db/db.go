@@ -148,9 +148,6 @@ func Translate(err error, what string) error {
 	return err
 }
 
-// Name implements aemeath.Plugin.
-func (p *Plugin) Name() string { return "database" }
-
 // Close closes the database connection. It is safe to call more than once. The
 // plugin calls it when the server shuts down; call it yourself in tests, since
 // Windows cannot delete a database file that is still open.

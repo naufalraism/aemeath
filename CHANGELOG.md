@@ -9,6 +9,7 @@ All notable changes to this project are documented here.
 - **Removed `App.WriteTypeScriptClient`**, an older duplicate of `WriteTypeScript` that wrote only client.ts and not atomically (an interrupted write could leave half a file). Use `app.WriteTypeScript(dir)`, which writes client.ts, schemas.ts and hooks.ts.
 - **Removed `cache.Plugin.Set` and `Get`**, one-line wrappers over the Redis client. Handlers already get the client from `cache.From(c)`; use `client.Set(ctx, key, value, ttl).Err()` and `client.Get(ctx, key).Result()`.
 - **`metrics.RouteOf` and `tracing.ParseTraceparent` are no longer exported.** They were helpers of the metrics and tracing middleware; keeping them public would have made their behaviour a promise.
+- **`Plugin` no longer has `Name()`**, and the built-in plugins no longer have the method. It was never read: `RegisterPlugin` only calls `Apply`. Your own plugins keep compiling (an extra `Name` method is allowed) and can drop it; only code that called `Name()` on a built-in plugin breaks.
 
 ### Added
 

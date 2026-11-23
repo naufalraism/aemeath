@@ -376,9 +376,6 @@ func (r *Runner) Stats() Stats {
 	}
 }
 
-// Name implements aemeath.Plugin.
-func (r *Runner) Name() string { return "jobs" }
-
 // Apply provides the runner to handlers, starts the workers, and stops them
 // when the server shuts down.
 func (r *Runner) Apply(app *aemeath.App) error {

@@ -94,7 +94,6 @@ aemeath: func ValidationError(errs ...FieldError) *HTTPError
 aemeath: func WithHTTPClient(h *http.Client) ClientOption
 aemeath: func WithHeader(k, v string) ClientOption
 aemeath: imethod Plugin.Apply(app *App) error
-aemeath: imethod Plugin.Name() string
 aemeath: imethod Storage.Delete(filename string) error
 aemeath: imethod Storage.Save(filename string, src io.Reader) (string, error)
 aemeath: method (*App) AddReadyCheck(name string, fn HealthCheck)
@@ -138,7 +137,6 @@ aemeath: method (*Ctx) Stopping() <-chan struct{}
 aemeath: method (*Ctx) Text(code int, s string) error
 aemeath: method (*FileLoggerPlugin) Apply(app *App) error
 aemeath: method (*FileLoggerPlugin) Close() error
-aemeath: method (*FileLoggerPlugin) Name() string
 aemeath: method (*Group) Group(prefix string, mws ...Middleware) *Group
 aemeath: method (*Group) Handle(method, path string, h HandlerFunc)
 aemeath: method (*Group) Options(opts ...RouteOption)
@@ -151,7 +149,6 @@ aemeath: method (*SSE) Comment(text string) error
 aemeath: method (*SSE) Send(event string, data any) error
 aemeath: method (*SSE) SetWriteTimeout(d time.Duration)
 aemeath: method (*StoragePlugin) Apply(app *App) error
-aemeath: method (*StoragePlugin) Name() string
 aemeath: method (Endpoint[In, Out]) Call(ctx context.Context, c *Client, in In) (Out, error)
 aemeath: type App struct
 aemeath: type CORSConfig struct
@@ -186,7 +183,6 @@ cache: func New(addr, password string, db int) *Plugin
 cache: func NewSessionStore(p *Plugin, prefix string) *SessionStore
 cache: method (*Plugin) Apply(app *aemeath.App) error
 cache: method (*Plugin) Close() error
-cache: method (*Plugin) Name() string
 cache: method (*SessionStore) Delete(ctx context.Context, id string) error
 cache: method (*SessionStore) Load(ctx context.Context, id string) (map[string]any, bool, error)
 cache: method (*SessionStore) Save(ctx context.Context, id string, data map[string]any, ttl time.Duration) error
@@ -212,7 +208,6 @@ db: func WithModels(models ...any) Option
 db: func WithPool(maxOpen, maxIdle int, maxLifetime time.Duration) Option
 db: method (*Plugin) Apply(app *aemeath.App) error
 db: method (*Plugin) Close() error
-db: method (*Plugin) Name() string
 db: type Option func(*options)
 db: type Plugin struct
 jobs: field Stats.Enqueued int64
@@ -234,7 +229,6 @@ jobs: imethod Timeouter.Timeout() time.Duration
 jobs: method (*Runner) Apply(app *aemeath.App) error
 jobs: method (*Runner) Enqueue(j Job) error
 jobs: method (*Runner) Every(interval time.Duration, j Job) error
-jobs: method (*Runner) Name() string
 jobs: method (*Runner) Shutdown(ctx context.Context) error
 jobs: method (*Runner) Start()
 jobs: method (*Runner) Stats() Stats
@@ -289,7 +283,6 @@ mailer: field Plugin.Timeout time.Duration
 mailer: func From(c *aemeath.Ctx) *Plugin
 mailer: func New(host string, port int, username, password, from string) *Plugin
 mailer: method (*Plugin) Apply(app *aemeath.App) error
-mailer: method (*Plugin) Name() string
 mailer: method (*Plugin) Send(to, subject, body string) error
 mailer: method (*Plugin) SendContext(ctx context.Context, to, subject, body string) error
 mailer: type Plugin struct
@@ -319,7 +312,6 @@ oauth2: func New(providerName string, config *xoauth2.Config, userInfoURL string
 oauth2: method (*Plugin) Apply(app *aemeath.App) error
 oauth2: method (*Plugin) AuthURL(state string) string
 oauth2: method (*Plugin) Exchange(ctx context.Context, code string) (*xoauth2.Token, error)
-oauth2: method (*Plugin) Name() string
 oauth2: method (*Plugin) UserInfo(ctx context.Context, token *xoauth2.Token) (map[string]any, error)
 oauth2: type Plugin struct
 oidc: field Config.ClientID string
@@ -408,7 +400,6 @@ tracing: method (*Tracer) Apply(app *aemeath.App) error
 tracing: method (*Tracer) Dropped() uint64
 tracing: method (*Tracer) Flush(ctx context.Context) error
 tracing: method (*Tracer) Middleware() aemeath.Middleware
-tracing: method (*Tracer) Name() string
 tracing: method (*Tracer) Shutdown(ctx context.Context) error
 tracing: method (*Tracer) Start(ctx context.Context, name string) (context.Context, *Span)
 tracing: type Config struct

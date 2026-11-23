@@ -39,7 +39,6 @@ aemeath.Provide[Notifier](app, emailNotifier)  // name an interface explicitly
 ```go
 type Plugin struct{ /* ... */ }
 
-func (p *Plugin) Name() string { return "mine" }
 func (p *Plugin) Apply(app *aemeath.App) error {
 	aemeath.Provide(app, p)
 	app.AddReadyCheck("mine", func(ctx context.Context) error { return p.ping(ctx) })

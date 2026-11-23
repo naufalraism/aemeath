@@ -19,9 +19,6 @@ func New(addr, password string, db int) *Plugin {
 	return &Plugin{Client: redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db})}
 }
 
-// Name implements aemeath.Plugin.
-func (p *Plugin) Name() string { return "cache" }
-
 // Apply provides the *redis.Client to handlers, adds a "cache" readiness check
 // (see App.EnableHealth) and closes the connection when the server shuts down.
 func (p *Plugin) Apply(app *aemeath.App) error {

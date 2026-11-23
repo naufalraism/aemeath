@@ -108,9 +108,6 @@ func New(cfg Config) *Tracer {
 	return &Tracer{cfg: cfg, queue: make(chan *Span, cfg.QueueSize), done: make(chan struct{}), flushCh: make(chan chan struct{})}
 }
 
-// Name implements aemeath.Plugin.
-func (t *Tracer) Name() string { return "tracing" }
-
 // Apply flushes pending spans when the server shuts down.
 func (t *Tracer) Apply(app *aemeath.App) error {
 	aemeath.Provide(app, t)
