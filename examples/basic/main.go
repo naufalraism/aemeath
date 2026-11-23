@@ -177,7 +177,7 @@ func main() {
 	})
 
 	// 9. Cache plugin (Redis).
-	redisCache := cache.New("localhost:6379", "", 0)
+	redisCache := cache.New(cache.Config{Addr: "localhost:6379"})
 	if err := app.RegisterPlugin(redisCache); err != nil {
 		log.Fatal(err)
 	}

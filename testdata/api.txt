@@ -176,15 +176,21 @@ aemeath: var DefaultMaxRequestBytes int64
 aemeath: var MaxValidationErrors
 aemeath: var PrivateNetworks
 aetest: func NewClient(h http.Handler, opts ...aemeath.ClientOption) *aemeath.Client
+cache: field Config.Addr string
+cache: field Config.DB int
+cache: field Config.Password string
+cache: field Config.TLS *tls.Config
+cache: field Config.URL string
 cache: field Plugin.Client *redis.Client
 cache: func From(c *aemeath.Ctx) *redis.Client
-cache: func New(addr, password string, db int) *Plugin
+cache: func New(cfg Config) *Plugin
 cache: func NewSessionStore(p *Plugin, prefix string) *SessionStore
 cache: method (*Plugin) Apply(app *aemeath.App) error
 cache: method (*Plugin) Close() error
 cache: method (*SessionStore) Delete(ctx context.Context, id string) error
 cache: method (*SessionStore) Load(ctx context.Context, id string) (map[string]any, bool, error)
 cache: method (*SessionStore) Save(ctx context.Context, id string, data map[string]any, ttl time.Duration) error
+cache: type Config struct
 cache: type Plugin struct
 cache: type SessionStore struct
 csrf: field Config.Cookie string
