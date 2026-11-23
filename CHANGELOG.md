@@ -10,6 +10,7 @@ All notable changes to this project are documented here.
 - **Removed `cache.Plugin.Set` and `Get`**, one-line wrappers over the Redis client. Handlers already get the client from `cache.From(c)`; use `client.Set(ctx, key, value, ttl).Err()` and `client.Get(ctx, key).Result()`.
 - **`metrics.RouteOf` and `tracing.ParseTraceparent` are no longer exported.** They were helpers of the metrics and tracing middleware; keeping them public would have made their behaviour a promise.
 - **`Plugin` no longer has `Name()`**, and the built-in plugins no longer have the method. It was never read: `RegisterPlugin` only calls `Apply`. Your own plugins keep compiling (an extra `Name` method is allowed) and can drop it; only code that called `Name()` on a built-in plugin breaks.
+- **Float parameters are plain decimal numbers.** A float from the path, query, a header, a cookie or a form no longer accepts digit separators (`1_000`) or hexadecimal floats (`0x1p4`): they get 400, as they already did for int fields and in JSON bodies. `+5`, `.5`, `5.`, `1e3` and leading zeros are still accepted.
 
 ### Added
 
