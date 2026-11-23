@@ -22,9 +22,6 @@ import (
 // HeaderRequestID is the header RequestID reads and writes.
 const HeaderRequestID = "X-Request-Id"
 
-// StateRequestID is the Ctx.State key holding the request id.
-const StateRequestID = "request_id"
-
 var requestIDRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 func newRequestID() string {
@@ -38,7 +35,7 @@ func newRequestID() string {
 // RequestID gives every request an id: the incoming X-Request-Id header when
 // it is a safe value (1-64 characters of letters, digits, '.', '_' and '-'),
 // otherwise a new random one. The id is echoed in the response header, stored
-// in Ctx.State, and printed by Logger and SlogLogger.
+// for Ctx.RequestID, and printed by Logger and SlogLogger.
 func RequestID() Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) error {
@@ -46,7 +43,7 @@ func RequestID() Middleware {
 			if !requestIDRe.MatchString(id) {
 				id = newRequestID()
 			}
-			c.State[StateRequestID] = id
+			c.requestID = id
 			c.W.Header().Set(HeaderRequestID, id)
 			return next(c)
 		}
@@ -55,8 +52,7 @@ func RequestID() Middleware {
 
 // RequestID returns the id set by the RequestID middleware, or "".
 func (c *Ctx) RequestID() string {
-	id, _ := c.State[StateRequestID].(string)
-	return id
+	return c.requestID
 }
 
 // ---------------------------------------------------------------- slog

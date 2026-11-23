@@ -11,6 +11,7 @@ All notable changes to this project are documented here.
 - **`metrics.RouteOf` and `tracing.ParseTraceparent` are no longer exported.** They were helpers of the metrics and tracing middleware; keeping them public would have made their behaviour a promise.
 - **`Plugin` no longer has `Name()`**, and the built-in plugins no longer have the method. It was never read: `RegisterPlugin` only calls `Apply`. Your own plugins keep compiling (an extra `Name` method is allowed) and can drop it; only code that called `Name()` on a built-in plugin breaks.
 - **Float parameters are plain decimal numbers.** A float from the path, query, a header, a cookie or a form no longer accepts digit separators (`1_000`) or hexadecimal floats (`0x1p4`): they get 400, as they already did for int fields and in JSON bodies. `+5`, `.5`, `5.`, `1e3` and leading zeros are still accepted.
+- **The verified identity no longer lives in `c.State`.** `jwt.Middleware` stored the token's subject under `c.State["user_id"]` and its claims under `"jwt_claims"`, and `RequestID` the id under `"request_id"`. Application code could overwrite them: a middleware keeping `c.State["user_id"]` for an audit log, filled from the query, made `jwt.UserID` report `"admin"` for alice's token. They are now kept where only their package can write them; read them with `jwt.UserID(c)`, `jwt.Claims(c)` and `c.RequestID()` as before. Removed: `jwt.StateClaims`, `jwt.StateUserID`, `aemeath.StateRequestID`.
 
 ### Added
 

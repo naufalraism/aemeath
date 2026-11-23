@@ -24,10 +24,11 @@ type Ctx struct {
 	R     *http.Request
 	State map[string]any
 
-	app      *App
-	cleanups []func()
-	authed   bool            // set by MarkAuthenticated; checked by routes with RequireAuth
-	rw       responseTracker // c.W starts as &rw; lives inside Ctx, so it costs no allocation
+	app       *App
+	cleanups  []func()
+	authed    bool            // set by MarkAuthenticated; checked by routes with RequireAuth
+	requestID string          // set by the RequestID middleware
+	rw        responseTracker // c.W starts as &rw; lives inside Ctx, so it costs no allocation
 }
 
 // newCtx creates the Ctx of a request. Its writer records whether the

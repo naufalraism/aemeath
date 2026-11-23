@@ -22,11 +22,13 @@ import (
 	"github.com/naufalraism/aemeath"
 )
 
-// Keys under which Middleware stores data in Ctx.State.
-const (
-	StateClaims = "jwt_claims" // gojwt.MapClaims
-	StateUserID = "user_id"    // the "sub" claim, if present
-)
+// verified is what Middleware stores in the request context for Claims and
+// UserID. The key is a private type, so no other code can set or replace it
+// (it used to live in Ctx.State under "user_id", which application code
+// could overwrite).
+type verified struct{ claims gojwt.MapClaims }
+
+type verifiedKey struct{}
 
 // Config configures Middleware. Set exactly one of SecretKey, PublicKey, JWKSURL or JWKS.
 type Config struct {
@@ -186,10 +188,7 @@ func Middleware(cfg Config) aemeath.Middleware {
 
 			c.MarkAuthenticated()
 			if claims, ok := token.Claims.(gojwt.MapClaims); ok {
-				c.State[StateClaims] = claims
-				if sub, ok := claims["sub"]; ok {
-					c.State[StateUserID] = sub
-				}
+				c.R = c.R.WithContext(context.WithValue(c.R.Context(), verifiedKey{}, verified{claims}))
 			}
 			return next(c)
 		}
@@ -198,14 +197,15 @@ func Middleware(cfg Config) aemeath.Middleware {
 
 // Claims returns the verified token claims of the current request.
 func Claims(c *aemeath.Ctx) (gojwt.MapClaims, bool) {
-	claims, ok := c.State[StateClaims].(gojwt.MapClaims)
-	return claims, ok
+	v, ok := c.Context().Value(verifiedKey{}).(verified)
+	return v.claims, ok
 }
 
 // UserID returns the "sub" claim of the verified token as a string ("" if absent).
 // Numeric subjects are rendered without a fractional part.
 func UserID(c *aemeath.Ctx) string {
-	switch v := c.State[StateUserID].(type) {
+	claims, _ := Claims(c)
+	switch v := claims["sub"].(type) {
 	case string:
 		return v
 	case float64:

@@ -3,7 +3,6 @@ aemeath: const DefaultSSEWriteTimeout
 aemeath: const DefaultShutdownTimeout
 aemeath: const EnvTypeScriptOut
 aemeath: const HeaderRequestID
-aemeath: const StateRequestID
 aemeath: const StatusClientClosedRequest
 aemeath: field CORSConfig.AllowCredentials bool
 aemeath: field CORSConfig.AllowHeaders []string
@@ -242,8 +241,6 @@ jobs: type Timeouter interface
 jobs: var ErrClosed
 jobs: var ErrQueueFull
 jwt: const MinSecretBytes
-jwt: const StateClaims
-jwt: const StateUserID
 jwt: field Config.AllowNoExpiry bool
 jwt: field Config.Audience string
 jwt: field Config.Issuer string
