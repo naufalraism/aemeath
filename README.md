@@ -12,7 +12,7 @@
 
 **Write your API once in Go. Get the docs, the TypeScript client, the Zod schemas and the React hooks for free.**
 
-🌐 [Website](https://aemeath-website.vercel.app) · 📚 [Documentation](https://naufalraism.github.io/aemeath/) · 🛠️ [CLI](https://github.com/naufalraism/aemeath-cli)
+🌐 [Website](https://aemeath-go.vercel.app) · 📚 [Documentation](https://naufalraism.github.io/aemeath/) · 🛠️ [CLI](https://github.com/naufalraism/aemeath-cli)
 
 Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeMux` patterns). You describe each route with a plain input struct and an output struct. From those same structs Aemeath derives request binding, validation, OpenAPI, a typed TypeScript client, Zod schemas and TanStack Query hooks, and they all follow the **same rules the server enforces**.
 
