@@ -48,7 +48,7 @@ func TestClientRoundTripEverySource(t *testing.T) {
 	ep := aemeath.NewEndpoint[rtIn, rtOut]("POST", "/items/{id}")
 	app := aemeath.New()
 	aemeath.Register(app, ep, func(c *aemeath.Ctx, in rtIn) (rtOut, error) {
-		return rtOut{in.ID, in.Q, in.Tags, in.Zero, in.Missing, in.When, in.Token, in.Sess, in.Name, in.Nickname}, nil
+		return rtOut(in), nil
 	})
 	srv := httptest.NewServer(app)
 	defer srv.Close()

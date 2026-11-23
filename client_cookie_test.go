@@ -27,7 +27,7 @@ func TestClientRefusesCookieValuesItCannotSend(t *testing.T) {
 	app := aemeath.New()
 	aemeath.GET(app, "/c", func(c *aemeath.Ctx, in cookieIn) (cookieOut, error) {
 		hits.Add(1)
-		return cookieOut{in.Sess}, nil
+		return cookieOut(in), nil
 	})
 	srv := httptest.NewServer(app)
 	defer srv.Close()
