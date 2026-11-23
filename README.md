@@ -36,9 +36,26 @@ Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeM
 
 ## 📊 Performance
 
-Aemeath adds typed binding and validation on top of `net/http` for a small fixed cost per request.
+Aemeath adds typed binding and validation on top of `net/http` for a small fixed cost per request. Under load over real TCP that cost all but disappears.
 
-*Microbenchmark of a single JSON route using `httptest` (lower is better).*
+### Under load
+
+Requests per second as a share of plain `net/http` (higher is better), with the p99 latency. Median of three 30-second runs, 0 errors in about 21 million requests. `POST /users` validates a name (3 to 50 characters) and an email.
+
+| Route | Connections | `net/http` | **Aemeath** | Gin |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET /hello` | 50 | 61,122 req/s · p99 3.8 ms | **96% · p99 4.0 ms** | 99% · p99 3.8 ms |
+| `GET /hello` | 200 | 69,378 req/s · p99 11.9 ms | **97% · p99 12.3 ms** | 100% · p99 11.6 ms |
+| `POST /users` | 50 | 50,677 req/s · p99 4.6 ms | **99% · p99 4.7 ms** | 100% · p99 4.5 ms |
+| `POST /users` | 200 | 58,854 req/s · p99 14.0 ms | **96% · p99 15.6 ms** | 95% · p99 17.5 ms |
+
+**Stress test** (50 up to 1,600 connections, one 15-second run each): throughput stops growing at about 200 connections (around 68,000 to 71,000 req/s for `GET /hello` and 58,000 to 61,000 for `POST /users`), after which latency grows instead, for all three servers. None of them returned a single error up to 1,600 connections; memory grew to about 100 MiB (Aemeath 132 MiB on the last `POST` step, a single run). Under heavy `POST` load Aemeath's p99 stayed between `net/http` and Gin (68 ms against 61 ms and 85 ms at 1,600 connections).
+
+Measured on 23 November 2026 with Aemeath v0.4.2, Go 1.27 on Windows, Intel i7-10750H (12 threads). The servers and the load generator share that machine, so the absolute numbers are lower than on a real server; the comparison is what matters. Reproduce with `cd benchmarks && go run ./load all` (stress: `go run ./load all -c 50,100,200,400,800,1600 -d 15s -runs 1`).
+
+### Microbenchmark
+
+*A single JSON route using `httptest`, no network (lower is better).*
 
 | Framework | Time (ns/op) | Memory (B/op) | Allocations |
 | :--- | :--- | :--- | :--- |
@@ -60,6 +77,7 @@ Both include the cost of building the test request. To tell `{"website": ""}` fr
 ```bash
 go test -run '^$' -bench . -benchmem .      # Aemeath alone
 cd benchmarks && go test -bench . -benchmem -count 5 -benchtime 2s   # comparison with Gin and Fiber
+cd benchmarks && go run ./load all                                    # load test over TCP: net/http, Aemeath, Gin
 ```
 
 Fiber is intentionally not listed because its `app.Test` helper goes through an in-memory connection and is not comparable to calling `ServeHTTP` directly.

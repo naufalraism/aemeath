@@ -537,37 +537,37 @@ h2.sh .ac-grad{background-image:linear-gradient(95deg,#db2777,#22d3ee);-webkit-b
             <div class="text-center mb-16 reveal">
                 <div class="eb eb-c">Performance</div>
                 <h2 class="sh">A thin layer over <span class="ac ac-pink">net/http.</span></h2>
-                <p class="text-slate-600 dark:text-slate-400">Time per request for one JSON route (lower is better). Aemeath adds typed binding and validation on top of the standard library for a small fixed cost.</p>
+                <p class="text-slate-600 dark:text-slate-400">Requests per second under load over real TCP, for a JSON route that validates its input (higher is better). The framework's cost all but disappears next to the network.</p>
             </div>
             <div class="space-y-8 bg-white dark:bg-[#0d1117] p-8 rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl reveal">
                 <div>
                     <div class="flex justify-between mb-2 text-sm text-slate-600 dark:text-slate-400">
                         <span class="font-medium">net/http (baseline)</span>
-                        <span class="font-mono">1,126 ns/op</span>
-                    </div>
-                    <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4">
-                        <div class="bg-slate-400 dark:bg-slate-600 h-4 rounded-full" style="width: 49%"></div>
-                    </div>
-                </div>
-                <div>
-                    <div class="flex justify-between mb-2 text-sm font-medium">
-                        <span class="text-pink-500 font-bold text-lg">Aemeath</span>
-                        <span class="font-mono text-pink-500 font-bold">2,120 ns/op</span>
-                    </div>
-                    <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4">
-                        <div class="bg-gradient-to-r from-pink-500 to-cyan-400 h-4 rounded-full shadow-[0_0_15px_rgba(244,114,182,0.5)]" style="width: 93%"></div>
-                    </div>
-                </div>
-                <div>
-                    <div class="flex justify-between mb-2 text-sm text-slate-600 dark:text-slate-400">
-                        <span class="font-medium">Gin</span>
-                        <span class="font-mono">2,280 ns/op</span>
+                        <span class="font-mono">58,854 req/s</span>
                     </div>
                     <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4">
                         <div class="bg-slate-400 dark:bg-slate-600 h-4 rounded-full" style="width: 100%"></div>
                     </div>
                 </div>
-                <p class="text-xs text-slate-500 dark:text-slate-500">Microbenchmark with httptest, median of five runs on an Intel i7-10750H (Windows, Go 1.27). Memory per request: net/http 1,040 B, Aemeath 1,152 B, Gin 1,433 B. Not a load test; results vary by machine. Reproduce with <code>cd benchmarks &amp;&amp; go test -bench . -benchmem -count 5 -benchtime 2s</code>.</p>
+                <div>
+                    <div class="flex justify-between mb-2 text-sm font-medium">
+                        <span class="text-pink-500 font-bold text-lg">Aemeath</span>
+                        <span class="font-mono text-pink-500 font-bold">56,690 req/s</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4">
+                        <div class="bg-gradient-to-r from-pink-500 to-cyan-400 h-4 rounded-full shadow-[0_0_15px_rgba(244,114,182,0.5)]" style="width: 96%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between mb-2 text-sm text-slate-600 dark:text-slate-400">
+                        <span class="font-medium">Gin</span>
+                        <span class="font-mono">56,179 req/s</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4">
+                        <div class="bg-slate-400 dark:bg-slate-600 h-4 rounded-full" style="width: 95%"></div>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-500"><code>POST /users</code> with validation, 200 connections, median of three 30-second runs on an Intel i7-10750H (Windows, Go 1.27, Aemeath v0.4.2), 0 errors. p99 latency: net/http 14.0 ms, Aemeath 15.6 ms, Gin 17.5 ms. In a stress test up to 1,600 connections none of the three returned an error. Servers and load generator share the machine, so compare, do not read the absolute numbers. Reproduce with <code>cd benchmarks &amp;&amp; go run ./load all</code>; the README also has the microbenchmark.</p>
             </div>
             <p class="mt-8 text-center text-sm reveal"><a href="https://naufalraism.github.io/aemeath/guide/comparison" class="text-slate-600 dark:text-slate-400 underline decoration-pink-400 underline-offset-4 hover:text-pink-600 dark:hover:text-pink-300 transition-colors">How Aemeath compares with Huma, Fuego, Gin and others, including where it is weaker →</a></p>
         </div>
