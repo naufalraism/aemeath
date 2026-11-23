@@ -383,6 +383,11 @@ func (r rule) check(v reflect.Value) string {
 }
 
 func (r rule) checkNumber(x float64) string {
+	// NaN compares false with everything, so without this it would pass
+	// min, max, gt and lt (a float read with json:",string" can be "NaN").
+	if math.IsNaN(x) && r.name != "oneof" {
+		return "must be a number"
+	}
 	switch r.name {
 	case "min", "gte":
 		if x < r.num {

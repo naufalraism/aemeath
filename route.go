@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"mime"
 	"net/http"
 	"reflect"
@@ -437,6 +438,12 @@ func setField(fv reflect.Value, raw string) error {
 		n, err := strconv.ParseFloat(raw, fv.Type().Bits())
 		if err != nil {
 			return err
+		}
+		// "NaN" and "Inf" parse, but no JSON client can send them, NaN slips
+		// through every numeric rule (it compares false with everything) and
+		// neither can be written back as JSON.
+		if math.IsNaN(n) || math.IsInf(n, 0) {
+			return errors.New("not a finite number")
 		}
 		fv.SetFloat(n)
 	case reflect.Bool:

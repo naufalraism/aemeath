@@ -63,7 +63,7 @@ func TestStaticDoesNotFollowLinksOutside(t *testing.T) {
 	}
 }
 
-func must(t *testing.T, err error) {
+func must(t testing.TB, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)

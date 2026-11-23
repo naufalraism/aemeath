@@ -42,6 +42,12 @@ cd examples/tscheck && npm install && npm run typecheck
 go run . &        # then, from examples/tscheck: npm run verify
 ```
 
+The generated `client.ts`, `schemas.ts`, `hooks.ts` and `openapi.json` of that example are also kept in `examples/tscheck/testdata/golden`, and `go test ./...` fails when they change. After an intended change, regenerate them and commit them with the change, so the review shows what users' frontends will receive:
+
+```bash
+go test ./examples/tscheck -update
+```
+
 ## Pull requests
 
 1. Open an issue first for anything larger than a bug fix, so we can agree on the design.

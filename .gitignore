@@ -17,6 +17,7 @@ test-upload.txt
 
 # Ignore generated output
 client.ts
+!examples/tscheck/testdata/golden/client.ts
 coverage.out
 *.test
 
