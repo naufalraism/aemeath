@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **`jwt.Claims`, `Verifier.Verify` and `Verifier.VerifyContext` return `map[string]any`** instead of golang-jwt's `MapClaims`, so the public API no longer depends on that library. Reading a claim is unchanged (`claims["role"].(string)`); only code calling `MapClaims` methods such as `GetSubject` needs to read the map instead (or use `jwt.UserID`).
+
 ## [0.5.0] - 2026-11-23
 
 ### Security

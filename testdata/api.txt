@@ -255,7 +255,7 @@ jwt: field IssueOptions.Issuer string
 jwt: field IssueOptions.KeyID string
 jwt: field IssueOptions.Subject string
 jwt: field IssueOptions.TTL time.Duration
-jwt: func Claims(c *aemeath.Ctx) (gojwt.MapClaims, bool)
+jwt: func Claims(c *aemeath.Ctx) (map[string]any, bool)
 jwt: func Issue(alg string, key any, o IssueOptions) (string, error)
 jwt: func Middleware(cfg Config) aemeath.Middleware
 jwt: func NewJWKS(rawURL string, opts ...JWKSOption) (*JWKS, error)
@@ -265,8 +265,8 @@ jwt: func WithJWKSHTTPClient(c *http.Client) JWKSOption
 jwt: func WithJWKSMinRefresh(d time.Duration) JWKSOption
 jwt: func WithJWKSTTL(d time.Duration) JWKSOption
 jwt: method (*JWKS) Key(ctx context.Context, kid string) (crypto.PublicKey, string, error)
-jwt: method (*Verifier) Verify(token string) (gojwt.MapClaims, error)
-jwt: method (*Verifier) VerifyContext(ctx context.Context, token string) (gojwt.MapClaims, error)
+jwt: method (*Verifier) Verify(token string) (map[string]any, error)
+jwt: method (*Verifier) VerifyContext(ctx context.Context, token string) (map[string]any, error)
 jwt: type Config struct
 jwt: type IssueOptions struct
 jwt: type JWKS struct

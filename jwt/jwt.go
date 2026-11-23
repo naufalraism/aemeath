@@ -26,7 +26,7 @@ import (
 // UserID. The key is a private type, so no other code can set or replace it
 // (it used to live in Ctx.State under "user_id", which application code
 // could overwrite).
-type verified struct{ claims gojwt.MapClaims }
+type verified struct{ claims map[string]any }
 
 type verifiedKey struct{}
 
@@ -188,15 +188,17 @@ func Middleware(cfg Config) aemeath.Middleware {
 
 			c.MarkAuthenticated()
 			if claims, ok := token.Claims.(gojwt.MapClaims); ok {
-				c.R = c.R.WithContext(context.WithValue(c.R.Context(), verifiedKey{}, verified{claims}))
+				c.R = c.R.WithContext(context.WithValue(c.R.Context(), verifiedKey{}, verified{map[string]any(claims)}))
 			}
 			return next(c)
 		}
 	}
 }
 
-// Claims returns the verified token claims of the current request.
-func Claims(c *aemeath.Ctx) (gojwt.MapClaims, bool) {
+// Claims returns the verified token claims of the current request. The map
+// is the decoded JSON payload: strings, float64 numbers, bools, []any and
+// map[string]any.
+func Claims(c *aemeath.Ctx) (map[string]any, bool) {
 	v, ok := c.Context().Value(verifiedKey{}).(verified)
 	return v.claims, ok
 }
@@ -230,13 +232,13 @@ func NewVerifier(cfg Config) *Verifier {
 
 // Verify checks the signature and the registered claims and returns the claims.
 // It is VerifyContext with context.Background().
-func (v *Verifier) Verify(token string) (gojwt.MapClaims, error) {
+func (v *Verifier) Verify(token string) (map[string]any, error) {
 	return v.VerifyContext(context.Background(), token)
 }
 
 // VerifyContext is Verify for a request: with a JWKS, the key lookup stops
 // waiting when ctx ends.
-func (v *Verifier) VerifyContext(ctx context.Context, token string) (gojwt.MapClaims, error) {
+func (v *Verifier) VerifyContext(ctx context.Context, token string) (map[string]any, error) {
 	t, err := v.parser.Parse(token, v.keyFunc(ctx))
 	if err != nil || !t.Valid {
 		if err == nil {
@@ -245,5 +247,5 @@ func (v *Verifier) VerifyContext(ctx context.Context, token string) (gojwt.MapCl
 		return nil, err
 	}
 	claims, _ := t.Claims.(gojwt.MapClaims)
-	return claims, nil
+	return map[string]any(claims), nil
 }
