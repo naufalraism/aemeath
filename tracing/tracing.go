@@ -53,18 +53,26 @@ type Config struct {
 	IgnoreIncomingSampling bool
 }
 
-// Span is one unit of work.
+// Span is one unit of work. The identifying fields are set when the span
+// starts and must not be changed; everything else changes through the
+// methods (SetAttr, SetError, End), which are safe to call from several
+// goroutines.
 type Span struct {
 	TraceID, SpanID, ParentID string
 	Name                      string
-	Start, EndTime            time.Time
-	Attrs                     map[string]string
-	Error                     bool
-	Sampled                   bool
-	kind                      int
-	tracer                    *Tracer
-	mu                        sync.Mutex
+	Start                     time.Time
+
+	mu      sync.Mutex // guards attrs, failed and end
+	attrs   map[string]string
+	failed  bool
+	end     time.Time
+	sampled bool // set before the span is shared
+	kind    int
+	tracer  *Tracer
 }
+
+// Sampled reports whether the span is recorded and exported.
+func (s *Span) Sampled() bool { return s.sampled }
 
 // Tracer creates spans and exports them.
 type Tracer struct {
@@ -173,7 +181,7 @@ func parseTraceparent(h string) (traceID, parentID string, sampled, ok bool) {
 // Traceparent formats the header for an outgoing request.
 func (s *Span) Traceparent() string {
 	f := "00"
-	if s.Sampled {
+	if s.sampled {
 		f = "01"
 	}
 	return "00-" + s.TraceID + "-" + s.SpanID + "-" + f
@@ -202,7 +210,7 @@ func (t *Tracer) newSpan(name string, kind int, traceID, parentID string, sample
 		traceID = randHex(16)
 		sampled = t.cfg.SampleRatio >= 1 || randFloat() < t.cfg.SampleRatio
 	}
-	return &Span{TraceID: traceID, SpanID: randHex(8), ParentID: parentID, Name: name, Start: time.Now(), Attrs: map[string]string{}, Sampled: sampled, kind: kind, tracer: t}
+	return &Span{TraceID: traceID, SpanID: randHex(8), ParentID: parentID, Name: name, Start: time.Now(), attrs: map[string]string{}, sampled: sampled, kind: kind, tracer: t}
 }
 
 // Start begins a child span of the span in ctx (or a new trace when there is none).
@@ -210,7 +218,7 @@ func (t *Tracer) newSpan(name string, kind int, traceID, parentID string, sample
 func (t *Tracer) Start(ctx context.Context, name string) (context.Context, *Span) {
 	var s *Span
 	if p := FromContext(ctx); p != nil {
-		s = t.newSpan(name, 1, p.TraceID, p.SpanID, p.Sampled)
+		s = t.newSpan(name, 1, p.TraceID, p.SpanID, p.sampled)
 	} else {
 		s = t.newSpan(name, 1, "", "", false)
 	}
@@ -218,19 +226,19 @@ func (t *Tracer) Start(ctx context.Context, name string) (context.Context, *Span
 }
 
 // SetAttr sets a string attribute. Do not put secrets or personal data in attributes.
-func (s *Span) SetAttr(k, v string) { s.mu.Lock(); s.Attrs[k] = v; s.mu.Unlock() }
+func (s *Span) SetAttr(k, v string) { s.mu.Lock(); s.attrs[k] = v; s.mu.Unlock() }
 
 // SetError marks the span as failed.
-func (s *Span) SetError() { s.mu.Lock(); s.Error = true; s.mu.Unlock() }
+func (s *Span) SetError() { s.mu.Lock(); s.failed = true; s.mu.Unlock() }
 
 // End finishes the span and queues it for export. Calling End twice is harmless.
 func (s *Span) End() {
 	s.mu.Lock()
-	if !s.EndTime.IsZero() {
+	if !s.end.IsZero() {
 		s.mu.Unlock()
 		return
 	}
-	s.EndTime = time.Now()
+	s.end = time.Now()
 	s.mu.Unlock()
 	s.tracer.enqueue(s)
 }
@@ -245,7 +253,7 @@ func (t *Tracer) Middleware() aemeath.Middleware {
 			}
 			span := t.newSpan(c.R.Method, 2, traceID, parent, sampled)
 			if ok && t.cfg.IgnoreIncomingSampling {
-				span.Sampled = t.cfg.SampleRatio >= 1 || randFloat() < t.cfg.SampleRatio
+				span.sampled = t.cfg.SampleRatio >= 1 || randFloat() < t.cfg.SampleRatio
 			}
 			c.R = c.R.WithContext(context.WithValue(c.R.Context(), ctxKey{}, span))
 			c.State["trace_id"] = span.TraceID
@@ -302,7 +310,7 @@ func (w *statusCapture) Flush() {
 }
 
 func (t *Tracer) enqueue(s *Span) {
-	if !s.Sampled || t.cfg.Endpoint == "" || !t.start() {
+	if !s.sampled || t.cfg.Endpoint == "" || !t.start() {
 		return
 	}
 	select {
@@ -434,25 +442,25 @@ func (t *Tracer) payload(spans []*Span) ([]byte, error) {
 	out := make([]map[string]any, 0, len(spans))
 	for _, s := range spans {
 		s.mu.Lock()
-		keys := make([]string, 0, len(s.Attrs))
-		for k := range s.Attrs {
+		keys := make([]string, 0, len(s.attrs))
+		for k := range s.attrs {
 			keys = append(keys, k)
 		}
 		sortStrings(keys)
 		attrs := make([]kv, 0, len(keys))
 		for _, k := range keys {
-			attrs = append(attrs, str(k, s.Attrs[k]))
+			attrs = append(attrs, str(k, s.attrs[k]))
 		}
 		sp := map[string]any{
 			"traceId": s.TraceID, "spanId": s.SpanID, "name": s.Name, "kind": s.kind,
 			"startTimeUnixNano": strconv.FormatInt(s.Start.UnixNano(), 10),
-			"endTimeUnixNano":   strconv.FormatInt(s.EndTime.UnixNano(), 10),
+			"endTimeUnixNano":   strconv.FormatInt(s.end.UnixNano(), 10),
 			"attributes":        attrs,
 		}
 		if s.ParentID != "" {
 			sp["parentSpanId"] = s.ParentID
 		}
-		if s.Error {
+		if s.failed {
 			sp["status"] = map[string]any{"code": 2}
 		}
 		s.mu.Unlock()
