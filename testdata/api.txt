@@ -1,0 +1,425 @@
+aemeath: const DefaultMaxHeaderBytes
+aemeath: const DefaultSSEWriteTimeout
+aemeath: const DefaultShutdownTimeout
+aemeath: const EnvTypeScriptOut
+aemeath: const HeaderRequestID
+aemeath: const StateRequestID
+aemeath: const StatusClientClosedRequest
+aemeath: field CORSConfig.AllowCredentials bool
+aemeath: field CORSConfig.AllowHeaders []string
+aemeath: field CORSConfig.AllowMethods []string
+aemeath: field CORSConfig.AllowOrigins []string
+aemeath: field CORSConfig.ExposeHeaders []string
+aemeath: field CORSConfig.MaxAge int
+aemeath: field Client.BaseURL string
+aemeath: field Client.HTTP *http.Client
+aemeath: field Client.Header http.Header
+aemeath: field Ctx.R *http.Request
+aemeath: field Ctx.State map[string]any
+aemeath: field Ctx.W http.ResponseWriter
+aemeath: field Endpoint.Method string
+aemeath: field Endpoint.Path string
+aemeath: field FieldError.Field string
+aemeath: field FieldError.Message string
+aemeath: field FieldError.Rule string
+aemeath: field FileLoggerPlugin.File *os.File
+aemeath: field FileLoggerPlugin.Logger *log.Logger
+aemeath: field HTTPError.Code int
+aemeath: field HTTPError.Errors []FieldError
+aemeath: field HTTPError.Message string
+aemeath: field Info.Description string
+aemeath: field Info.Title string
+aemeath: field Info.Version string
+aemeath: field LocalStorage.DirMode os.FileMode
+aemeath: field LocalStorage.FileMode os.FileMode
+aemeath: field LocalStorage.UploadDir string
+aemeath: field StoragePlugin.Storage Storage
+aemeath: func AsHTTPError(err error) *HTTPError
+aemeath: func BadRequest(msg string) *HTTPError
+aemeath: func CORS(configs ...CORSConfig) Middleware
+aemeath: func Conflict(msg string) *HTTPError
+aemeath: func DELETE[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func DefaultCORSConfig() CORSConfig
+aemeath: func Deprecated() RouteOption
+aemeath: func Description(s string) RouteOption
+aemeath: func Forbidden(msg string) *HTTPError
+aemeath: func GET[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func GeneratingTypeScript() bool
+aemeath: func Get[T any](c *Ctx) (T, bool)
+aemeath: func GroupDELETE[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func GroupGET[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func GroupPATCH[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func GroupPOST[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func GroupPUT[In, Out any](g *Group, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func GroupRoute[In, Out any](g *Group, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out]
+aemeath: func Gzip(minSize ...int) Middleware
+aemeath: func InternalError(msg string) *HTTPError
+aemeath: func Logger() Middleware
+aemeath: func Lookup[T any](a *App) (T, bool)
+aemeath: func MaxBodySize(bytes int64) Middleware
+aemeath: func MethodNotAllowed(msg string) *HTTPError
+aemeath: func MustGet[T any](c *Ctx) T
+aemeath: func New() *App
+aemeath: func NewClient(baseURL string, opts ...ClientOption) *Client
+aemeath: func NewEndpoint[In, Out any](method, path string) Endpoint[In, Out]
+aemeath: func NewError(code int, msg string) *HTTPError
+aemeath: func NewFileLogger(path string) (*FileLoggerPlugin, error)
+aemeath: func NewLocalStorage(uploadDir string) *LocalStorage
+aemeath: func NotFound(msg string) *HTTPError
+aemeath: func OperationID(id string) RouteOption
+aemeath: func PATCH[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func POST[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func PUT[In, Out any](a *App, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
+aemeath: func PayloadTooLarge(msg string) *HTTPError
+aemeath: func Provide[T any](a *App, v T)
+aemeath: func RateLimiter(limit int, window time.Duration) Middleware
+aemeath: func RealIP(trusted ...string) Middleware
+aemeath: func Recover() Middleware
+aemeath: func RegisterGroup[In, Out any](g *Group, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out]
+aemeath: func Register[In, Out any](a *App, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out]
+aemeath: func RequestID() Middleware
+aemeath: func RequireAuth() RouteOption
+aemeath: func Route[In, Out any](a *App, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out]
+aemeath: func SecurityHeaders() Middleware
+aemeath: func SlogLogger(l *slog.Logger) Middleware
+aemeath: func Status(code int) RouteOption
+aemeath: func Summary(s string) RouteOption
+aemeath: func Tags(t ...string) RouteOption
+aemeath: func Timeout(d time.Duration) Middleware
+aemeath: func TooManyRequests(msg string) *HTTPError
+aemeath: func Unauthorized(msg string) *HTTPError
+aemeath: func UnprocessableEntity(msg string) *HTTPError
+aemeath: func UnsupportedMediaType(msg string) *HTTPError
+aemeath: func ValidationError(errs ...FieldError) *HTTPError
+aemeath: func WithHTTPClient(h *http.Client) ClientOption
+aemeath: func WithHeader(k, v string) ClientOption
+aemeath: imethod Plugin.Apply(app *App) error
+aemeath: imethod Plugin.Name() string
+aemeath: imethod Storage.Delete(filename string) error
+aemeath: imethod Storage.Save(filename string, src io.Reader) (string, error)
+aemeath: method (*App) AddReadyCheck(name string, fn HealthCheck)
+aemeath: method (*App) EnableClient()
+aemeath: method (*App) EnableDocs(info Info)
+aemeath: method (*App) EnableHealth()
+aemeath: method (*App) Group(prefix string, mws ...Middleware) *Group
+aemeath: method (*App) Handle(method, path string, h HandlerFunc)
+aemeath: method (*App) Listen(addr string) error
+aemeath: method (*App) ListenTLS(addr, certFile, keyFile string) error
+aemeath: method (*App) NewServer(addr string) *http.Server
+aemeath: method (*App) OnError(fn func(*Ctx, error))
+aemeath: method (*App) OnShutdown(fn func(context.Context) error)
+aemeath: method (*App) OpenAPI(info Info) map[string]any
+aemeath: method (*App) ReactQueryHooks() string
+aemeath: method (*App) RegisterPlugin(p Plugin) error
+aemeath: method (*App) Serve(srv *http.Server) error
+aemeath: method (*App) ServeHTTP(w http.ResponseWriter, r *http.Request)
+aemeath: method (*App) SetShutdownDelay(d time.Duration)
+aemeath: method (*App) SetShutdownTimeout(d time.Duration)
+aemeath: method (*App) ShuttingDown() bool
+aemeath: method (*App) Static(prefix string, dir string)
+aemeath: method (*App) Stop()
+aemeath: method (*App) Stopping() <-chan struct{}
+aemeath: method (*App) TypeScriptClient() string
+aemeath: method (*App) Use(m ...Middleware)
+aemeath: method (*App) WriteTypeScript(dir string) error
+aemeath: method (*App) WriteTypeScriptClient(path string) error
+aemeath: method (*App) ZodSchemas() string
+aemeath: method (*Ctx) Authenticated() bool
+aemeath: method (*Ctx) Context() context.Context
+aemeath: method (*Ctx) File(path string) error
+aemeath: method (*Ctx) JSON(code int, v any) error
+aemeath: method (*Ctx) MarkAuthenticated()
+aemeath: method (*Ctx) Param(name string) string
+aemeath: method (*Ctx) Query(name string) string
+aemeath: method (*Ctx) Redirect(code int, url string) error
+aemeath: method (*Ctx) RequestID() string
+aemeath: method (*Ctx) SSE() (*SSE, error)
+aemeath: method (*Ctx) SetCookie(ck *http.Cookie)
+aemeath: method (*Ctx) Stopping() <-chan struct{}
+aemeath: method (*Ctx) Text(code int, s string) error
+aemeath: method (*FileLoggerPlugin) Apply(app *App) error
+aemeath: method (*FileLoggerPlugin) Close() error
+aemeath: method (*FileLoggerPlugin) Name() string
+aemeath: method (*Group) Group(prefix string, mws ...Middleware) *Group
+aemeath: method (*Group) Handle(method, path string, h HandlerFunc)
+aemeath: method (*Group) Options(opts ...RouteOption)
+aemeath: method (*Group) Use(m ...Middleware)
+aemeath: method (*HTTPError) Error() string
+aemeath: method (*LocalStorage) Delete(filename string) error
+aemeath: method (*LocalStorage) IsAllowedFile(filename string, allowedExts []string) bool
+aemeath: method (*LocalStorage) Save(filename string, src io.Reader) (string, error)
+aemeath: method (*SSE) Comment(text string) error
+aemeath: method (*SSE) Send(event string, data any) error
+aemeath: method (*SSE) SetWriteTimeout(d time.Duration)
+aemeath: method (*StoragePlugin) Apply(app *App) error
+aemeath: method (*StoragePlugin) Name() string
+aemeath: method (Endpoint[In, Out]) Call(ctx context.Context, c *Client, in In) (Out, error)
+aemeath: type App struct
+aemeath: type CORSConfig struct
+aemeath: type Client struct
+aemeath: type ClientOption func(*Client)
+aemeath: type Ctx struct
+aemeath: type Endpoint struct
+aemeath: type FieldError struct
+aemeath: type FileLoggerPlugin struct
+aemeath: type Group struct
+aemeath: type HTTPError struct
+aemeath: type Handled struct
+aemeath: type HandlerFunc func(*Ctx) error
+aemeath: type HealthCheck func(ctx context.Context) error
+aemeath: type Info struct
+aemeath: type LocalStorage struct
+aemeath: type Middleware func(HandlerFunc) HandlerFunc
+aemeath: type Plugin interface
+aemeath: type RouteOption func(*routeConfig)
+aemeath: type SSE struct
+aemeath: type Storage interface
+aemeath: type StoragePlugin struct
+aemeath: var DefaultMaxBodyBytes int64
+aemeath: var DefaultMaxMultipartBytes int64
+aemeath: var DefaultMaxRequestBytes int64
+aemeath: var MaxValidationErrors
+aemeath: var PrivateNetworks
+aetest: func NewClient(h http.Handler, opts ...aemeath.ClientOption) *aemeath.Client
+cache: field Plugin.Client *redis.Client
+cache: func From(c *aemeath.Ctx) *redis.Client
+cache: func New(addr, password string, db int) *Plugin
+cache: func NewSessionStore(p *Plugin, prefix string) *SessionStore
+cache: method (*Plugin) Apply(app *aemeath.App) error
+cache: method (*Plugin) Close() error
+cache: method (*Plugin) Get(ctx context.Context, key string) (string, error)
+cache: method (*Plugin) Name() string
+cache: method (*Plugin) Set(ctx context.Context, key, value string, ttl time.Duration) error
+cache: method (*SessionStore) Delete(ctx context.Context, id string) error
+cache: method (*SessionStore) Load(ctx context.Context, id string) (map[string]any, bool, error)
+cache: method (*SessionStore) Save(ctx context.Context, id string, data map[string]any, ttl time.Duration) error
+cache: type Plugin struct
+cache: type SessionStore struct
+csrf: field Config.Cookie string
+csrf: field Config.FormField string
+csrf: field Config.Header string
+csrf: field Config.Insecure bool
+csrf: field Config.TrustedOrigins []string
+csrf: func Middleware(cfg Config) aemeath.Middleware
+csrf: func Token(c *aemeath.Ctx) string
+csrf: type Config struct
+db/mysql: func Open(dsn string, opts ...db.Option) (*db.Plugin, error)
+db/postgres: func Open(dsn string, opts ...db.Option) (*db.Plugin, error)
+db: field Plugin.DB *gorm.DB
+db: func From(c *aemeath.Ctx) *gorm.DB
+db: func New(d gorm.Dialector, opts ...Option) (*Plugin, error)
+db: func Open(filename string, models ...any) (*Plugin, error)
+db: func Translate(err error, what string) error
+db: func WithConfig(cfg *gorm.Config) Option
+db: func WithModels(models ...any) Option
+db: func WithPool(maxOpen, maxIdle int, maxLifetime time.Duration) Option
+db: method (*Plugin) Apply(app *aemeath.App) error
+db: method (*Plugin) Close() error
+db: method (*Plugin) Name() string
+db: type Option func(*options)
+db: type Plugin struct
+jobs: field Stats.Enqueued int64
+jobs: field Stats.Failed int64
+jobs: field Stats.Queued int
+jobs: field Stats.Retried int64
+jobs: field Stats.Succeeded int64
+jobs: func Exponential(base time.Duration) func(attempt int) time.Duration
+jobs: func From(c *aemeath.Ctx) *Runner
+jobs: func New(opts ...Option) *Runner
+jobs: func WithBackoff(fn func(attempt int) time.Duration) Option
+jobs: func WithJobTimeout(d time.Duration) Option
+jobs: func WithLogger(l *slog.Logger) Option
+jobs: func WithQueueSize(n int) Option
+jobs: func WithRetries(n int) Option
+jobs: func WithWorkers(n int) Option
+jobs: imethod Job.Run(ctx context.Context) error
+jobs: imethod Timeouter.Timeout() time.Duration
+jobs: method (*Runner) Apply(app *aemeath.App) error
+jobs: method (*Runner) Enqueue(j Job) error
+jobs: method (*Runner) Every(interval time.Duration, j Job) error
+jobs: method (*Runner) Name() string
+jobs: method (*Runner) Shutdown(ctx context.Context) error
+jobs: method (*Runner) Start()
+jobs: method (*Runner) Stats() Stats
+jobs: method (Func) Run(ctx context.Context) error
+jobs: type Func func(ctx context.Context) error
+jobs: type Job interface
+jobs: type Option func(*Runner)
+jobs: type Runner struct
+jobs: type Stats struct
+jobs: type Timeouter interface
+jobs: var ErrClosed
+jobs: var ErrQueueFull
+jwt: const MinSecretBytes
+jwt: const StateClaims
+jwt: const StateUserID
+jwt: field Config.AllowNoExpiry bool
+jwt: field Config.Audience string
+jwt: field Config.Issuer string
+jwt: field Config.JWKS *JWKS
+jwt: field Config.JWKSURL string
+jwt: field Config.Leeway time.Duration
+jwt: field Config.PublicKey crypto.PublicKey
+jwt: field Config.SecretKey string
+jwt: field IssueOptions.Audience string
+jwt: field IssueOptions.Claims map[string]any
+jwt: field IssueOptions.Issuer string
+jwt: field IssueOptions.KeyID string
+jwt: field IssueOptions.Subject string
+jwt: field IssueOptions.TTL time.Duration
+jwt: func Claims(c *aemeath.Ctx) (gojwt.MapClaims, bool)
+jwt: func Issue(alg string, key any, o IssueOptions) (string, error)
+jwt: func Middleware(cfg Config) aemeath.Middleware
+jwt: func NewJWKS(rawURL string, opts ...JWKSOption) (*JWKS, error)
+jwt: func NewVerifier(cfg Config) *Verifier
+jwt: func UserID(c *aemeath.Ctx) string
+jwt: func WithJWKSHTTPClient(c *http.Client) JWKSOption
+jwt: func WithJWKSMinRefresh(d time.Duration) JWKSOption
+jwt: func WithJWKSTTL(d time.Duration) JWKSOption
+jwt: method (*JWKS) Key(ctx context.Context, kid string) (crypto.PublicKey, string, error)
+jwt: method (*Verifier) Verify(token string) (gojwt.MapClaims, error)
+jwt: method (*Verifier) VerifyContext(ctx context.Context, token string) (gojwt.MapClaims, error)
+jwt: type Config struct
+jwt: type IssueOptions struct
+jwt: type JWKS struct
+jwt: type JWKSOption func(*JWKS)
+jwt: type Verifier struct
+jwt: var ErrKeyNotFound
+mailer: const DefaultTimeout
+mailer: field Plugin.Dialer *gomail.Dialer
+mailer: field Plugin.From string
+mailer: field Plugin.Timeout time.Duration
+mailer: func From(c *aemeath.Ctx) *Plugin
+mailer: func New(host string, port int, username, password, from string) *Plugin
+mailer: method (*Plugin) Apply(app *aemeath.App) error
+mailer: method (*Plugin) Name() string
+mailer: method (*Plugin) Send(to, subject, body string) error
+mailer: method (*Plugin) SendContext(ctx context.Context, to, subject, body string) error
+mailer: type Plugin struct
+metrics: func New() *Registry
+metrics: func RouteOf(r *http.Request) string
+metrics: method (*Counter) Add(v float64, labels ...string)
+metrics: method (*Counter) Inc(labels ...string)
+metrics: method (*Gauge) Add(v float64, labels ...string)
+metrics: method (*Gauge) Set(v float64, labels ...string)
+metrics: method (*Histogram) Observe(v float64, labels ...string)
+metrics: method (*Registry) Counter(name, help string, labels ...string) *Counter
+metrics: method (*Registry) Gauge(name, help string, labels ...string) *Gauge
+metrics: method (*Registry) Handler() aemeath.HandlerFunc
+metrics: method (*Registry) Histogram(name, help string, buckets []float64, labels ...string) *Histogram
+metrics: method (*Registry) Middleware() aemeath.Middleware
+metrics: method (*Registry) Render() string
+metrics: type Counter struct
+metrics: type Gauge struct
+metrics: type Histogram struct
+metrics: type Registry struct
+metrics: var DefaultBuckets
+oauth2: field Plugin.Config *xoauth2.Config
+oauth2: field Plugin.ProviderName string
+oauth2: field Plugin.UserInfoURL string
+oauth2: func From(c *aemeath.Ctx, name string) (*Plugin, bool)
+oauth2: func GenerateState() (string, error)
+oauth2: func New(providerName string, config *xoauth2.Config, userInfoURL string) *Plugin
+oauth2: method (*Plugin) Apply(app *aemeath.App) error
+oauth2: method (*Plugin) AuthURL(state string) string
+oauth2: method (*Plugin) Exchange(ctx context.Context, code string) (*xoauth2.Token, error)
+oauth2: method (*Plugin) Name() string
+oauth2: method (*Plugin) UserInfo(ctx context.Context, token *xoauth2.Token) (map[string]any, error)
+oauth2: type Plugin struct
+oidc: field Config.ClientID string
+oidc: field Config.ClientSecret string
+oidc: field Config.HTTPClient *http.Client
+oidc: field Config.Issuer string
+oidc: field Config.Leeway time.Duration
+oidc: field Config.MaxLoginAge time.Duration
+oidc: field Config.RedirectURL string
+oidc: field Config.Scopes []string
+oidc: field Identity.Claims map[string]any
+oidc: field Identity.Email string
+oidc: field Identity.EmailVerified bool
+oidc: field Identity.Issuer string
+oidc: field Identity.Name string
+oidc: field Identity.Subject string
+oidc: field Identity.Token *xoauth2.Token
+oidc: func Discover(ctx context.Context, cfg Config) (*Provider, error)
+oidc: method (*Provider) Begin(c *aemeath.Ctx) error
+oidc: method (*Provider) Complete(c *aemeath.Ctx) (*Identity, error)
+oidc: type Config struct
+oidc: type Identity struct
+oidc: type Provider struct
+oidc: var ErrLogin
+session: const DefaultMaxSessions
+session: field Config.CookieName string
+session: field Config.Domain string
+session: field Config.Insecure bool
+session: field Config.Path string
+session: field Config.SameSite http.SameSite
+session: field Config.Sliding bool
+session: field Config.Store Store
+session: field Config.TTL time.Duration
+session: func From(c *aemeath.Ctx) *Session
+session: func Middleware(cfg Config) aemeath.Middleware
+session: func NewMemoryStore() *MemoryStore
+session: imethod Store.Delete(ctx context.Context, id string) error
+session: imethod Store.Load(ctx context.Context, id string) (map[string]any, bool, error)
+session: imethod Store.Save(ctx context.Context, id string, data map[string]any, ttl time.Duration) error
+session: method (*MemoryStore) Delete(_ context.Context, id string) error
+session: method (*MemoryStore) Len() int
+session: method (*MemoryStore) Load(_ context.Context, id string) (map[string]any, bool, error)
+session: method (*MemoryStore) Save(_ context.Context, id string, d map[string]any, ttl time.Duration) error
+session: method (*MemoryStore) WithClock(f func() time.Time) *MemoryStore
+session: method (*MemoryStore) WithMaxSessions(n int) *MemoryStore
+session: method (*Session) Delete(key string)
+session: method (*Session) Destroy()
+session: method (*Session) ExpireIn(d time.Duration)
+session: method (*Session) Get(key string) (any, bool)
+session: method (*Session) ID() string
+session: method (*Session) Int(key string) int
+session: method (*Session) IsNew() bool
+session: method (*Session) Renew(ctx context.Context) error
+session: method (*Session) Set(key string, v any)
+session: method (*Session) String(key string) string
+session: type Config struct
+session: type MemoryStore struct
+session: type Session struct
+session: type Store interface
+session: var ErrStoreFull
+tracing: field Config.BatchSize int
+tracing: field Config.Client *http.Client
+tracing: field Config.Endpoint string
+tracing: field Config.FlushInterval time.Duration
+tracing: field Config.Headers map[string]string
+tracing: field Config.IgnoreIncomingSampling bool
+tracing: field Config.QueueSize int
+tracing: field Config.SampleRatio float64
+tracing: field Config.ServiceName string
+tracing: field Span.Attrs map[string]string
+tracing: field Span.EndTime time.Time
+tracing: field Span.Error bool
+tracing: field Span.Name string
+tracing: field Span.ParentID string
+tracing: field Span.Sampled bool
+tracing: field Span.SpanID string
+tracing: field Span.Start time.Time
+tracing: field Span.TraceID string
+tracing: func FromContext(ctx context.Context) *Span
+tracing: func New(cfg Config) *Tracer
+tracing: func ParseTraceparent(h string) (traceID, parentID string, sampled, ok bool)
+tracing: method (*Span) End()
+tracing: method (*Span) SetAttr(k, v string)
+tracing: method (*Span) SetError()
+tracing: method (*Span) Traceparent() string
+tracing: method (*Tracer) Apply(app *aemeath.App) error
+tracing: method (*Tracer) Dropped() uint64
+tracing: method (*Tracer) Flush(ctx context.Context) error
+tracing: method (*Tracer) Middleware() aemeath.Middleware
+tracing: method (*Tracer) Name() string
+tracing: method (*Tracer) Shutdown(ctx context.Context) error
+tracing: method (*Tracer) Start(ctx context.Context, name string) (context.Context, *Span)
+tracing: type Config struct
+tracing: type Span struct
+tracing: type Tracer struct
+ws: func Upgrade(c *aemeath.Ctx) (*websocket.Conn, error)
+ws: var DefaultIdleTimeout
+ws: var DefaultReadLimit int64
+ws: var Upgrader

@@ -48,6 +48,12 @@ The generated `client.ts`, `schemas.ts`, `hooks.ts` and `openapi.json` of that e
 go test ./examples/tscheck -update
 ```
 
+Every exported name (functions and methods with their signatures, types, fields, constants, variables) is listed in `testdata/api.txt`, and `go test .` fails when the list changes. After v1.0 an exported name cannot change without a v2, so a change to it must be on purpose: update the list and commit it with the change, so the review shows it.
+
+```bash
+go test -run TestPublicAPI -update-api .
+```
+
 ## Pull requests
 
 1. Open an issue first for anything larger than a bug fix, so we can agree on the design.
