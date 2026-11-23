@@ -3,7 +3,6 @@ aemeath: const DefaultSSEWriteTimeout
 aemeath: const DefaultShutdownTimeout
 aemeath: const EnvTypeScriptOut
 aemeath: const HeaderRequestID
-aemeath: const StateRequestID
 aemeath: const StatusClientClosedRequest
 aemeath: field CORSConfig.AllowCredentials bool
 aemeath: field CORSConfig.AllowHeaders []string
@@ -242,8 +241,6 @@ jobs: type Timeouter interface
 jobs: var ErrClosed
 jobs: var ErrQueueFull
 jwt: const MinSecretBytes
-jwt: const StateClaims
-jwt: const StateUserID
 jwt: field Config.AllowNoExpiry bool
 jwt: field Config.Audience string
 jwt: field Config.Issuer string
@@ -381,18 +378,15 @@ tracing: field Config.IgnoreIncomingSampling bool
 tracing: field Config.QueueSize int
 tracing: field Config.SampleRatio float64
 tracing: field Config.ServiceName string
-tracing: field Span.Attrs map[string]string
-tracing: field Span.EndTime time.Time
-tracing: field Span.Error bool
 tracing: field Span.Name string
 tracing: field Span.ParentID string
-tracing: field Span.Sampled bool
 tracing: field Span.SpanID string
 tracing: field Span.Start time.Time
 tracing: field Span.TraceID string
 tracing: func FromContext(ctx context.Context) *Span
 tracing: func New(cfg Config) *Tracer
 tracing: method (*Span) End()
+tracing: method (*Span) Sampled() bool
 tracing: method (*Span) SetAttr(k, v string)
 tracing: method (*Span) SetError()
 tracing: method (*Span) Traceparent() string

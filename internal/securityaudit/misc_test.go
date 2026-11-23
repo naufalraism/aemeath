@@ -51,7 +51,7 @@ func TestTracing_ClientForcesSampling(t *testing.T) {
 	app.Use(tr.Middleware())
 	sampled := 0
 	app.Handle("GET", "/", func(c *aemeath.Ctx) error {
-		if s := tracing.FromContext(c.Context()); s != nil && s.Sampled {
+		if s := tracing.FromContext(c.Context()); s != nil && s.Sampled() {
 			sampled++
 		}
 		return nil
