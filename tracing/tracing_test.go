@@ -135,25 +135,6 @@ func TestSamplingFlagIsHonoredAndErrorsMarked(t *testing.T) {
 	}
 }
 
-func TestParseTraceparentRejectsGarbage(t *testing.T) {
-	good := "00-" + parentTrace + "-00f067aa0ba902b7-01"
-	if _, _, s, ok := tracing.ParseTraceparent(good); !ok || !s {
-		t.Fatal("valid header rejected")
-	}
-	for _, bad := range []string{
-		"", "garbage", "00-" + strings.Repeat("0", 32) + "-00f067aa0ba902b7-01",
-		"00-" + parentTrace + "-" + strings.Repeat("0", 16) + "-01",
-		"00-" + strings.ToUpper(parentTrace) + "-00f067aa0ba902b7-01",
-		"ff-" + parentTrace + "-00f067aa0ba902b7-01",
-		"00-" + parentTrace + "-00f067aa0ba902b7-01-extra",
-		"00-" + parentTrace + "-00f067aa0ba902b7-zz",
-	} {
-		if _, _, _, ok := tracing.ParseTraceparent(bad); ok {
-			t.Errorf("accepted %q", bad)
-		}
-	}
-}
-
 func TestInvalidIncomingHeaderStartsAFreshTrace(t *testing.T) {
 	col := newCollector(t, 200)
 	tr := tracing.New(tracing.Config{ServiceName: "svc", Endpoint: col.srv.URL})

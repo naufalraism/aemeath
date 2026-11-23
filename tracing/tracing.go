@@ -157,8 +157,8 @@ func isHex(s string, n int) bool {
 // isID is isHex for trace and span ids, which must not be all zeroes.
 func isID(s string, n int) bool { return isHex(s, n) && s != strings.Repeat("0", n) }
 
-// ParseTraceparent parses a W3C traceparent header ("00-<trace>-<parent>-<flags>").
-func ParseTraceparent(h string) (traceID, parentID string, sampled, ok bool) {
+// parseTraceparent parses a W3C traceparent header ("00-<trace>-<parent>-<flags>").
+func parseTraceparent(h string) (traceID, parentID string, sampled, ok bool) {
 	p := strings.Split(strings.TrimSpace(h), "-")
 	if len(p) < 4 || len(p[0]) != 2 || p[0] == "ff" {
 		return "", "", false, false
@@ -242,7 +242,7 @@ func (s *Span) End() {
 func (t *Tracer) Middleware() aemeath.Middleware {
 	return func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
 		return func(c *aemeath.Ctx) error {
-			traceID, parent, sampled, ok := ParseTraceparent(c.R.Header.Get("traceparent"))
+			traceID, parent, sampled, ok := parseTraceparent(c.R.Header.Get("traceparent"))
 			if !ok {
 				traceID, parent, sampled = "", "", false
 			}

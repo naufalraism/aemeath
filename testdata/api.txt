@@ -294,7 +294,6 @@ mailer: method (*Plugin) Send(to, subject, body string) error
 mailer: method (*Plugin) SendContext(ctx context.Context, to, subject, body string) error
 mailer: type Plugin struct
 metrics: func New() *Registry
-metrics: func RouteOf(r *http.Request) string
 metrics: method (*Counter) Add(v float64, labels ...string)
 metrics: method (*Counter) Inc(labels ...string)
 metrics: method (*Gauge) Add(v float64, labels ...string)
@@ -401,7 +400,6 @@ tracing: field Span.Start time.Time
 tracing: field Span.TraceID string
 tracing: func FromContext(ctx context.Context) *Span
 tracing: func New(cfg Config) *Tracer
-tracing: func ParseTraceparent(h string) (traceID, parentID string, sampled, ok bool)
 tracing: method (*Span) End()
 tracing: method (*Span) SetAttr(k, v string)
 tracing: method (*Span) SetError()
