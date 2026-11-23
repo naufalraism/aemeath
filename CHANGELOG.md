@@ -25,6 +25,10 @@ All notable changes to this project are documented here.
 
 - **The Go client no longer alters cookie values silently.** A cookie parameter holding `;`, `"`, `\`, a control character or non-ASCII text was sent with those bytes dropped (net/http only logs it), so the server got `ab` for `a;b` and an empty value for `é` while the call succeeded. `Call` now returns an error naming the cookie and sends nothing.
 
+### Changed
+
+- **Docs, README and examples register group routes with `GET(group, …)`** instead of the deprecated `GroupGET`.
+
 ## [0.5.0] - 2026-11-23
 
 ### Security

@@ -134,7 +134,7 @@ func TestMiddlewareSatisfiesRequireAuth(t *testing.T) {
 	app := aemeath.New()
 	g := app.Group("/api", jwt.Middleware(jwt.Config{SecretKey: secret}))
 	g.Options(aemeath.RequireAuth())
-	aemeath.GroupGET(g, "/me", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+	aemeath.GET(g, "/me", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 		return map[string]string{"user": jwt.UserID(c)}, nil
 	})
 	tok := sign(t, secret, gojwt.MapClaims{"sub": "u1", "exp": time.Now().Add(time.Hour).Unix()}, gojwt.SigningMethodHS256)

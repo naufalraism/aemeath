@@ -248,7 +248,7 @@ How it behaves:
 admin := app.Group("/admin", authMiddleware)
 admin.Options(aemeath.Tags("admin"), aemeath.RequireAuth()) // applies to every typed route below
 
-aemeath.GroupGET(admin, "/dashboard", dashboard)
+aemeath.GET(admin, "/dashboard", dashboard)
 v1 := app.Group("/api/v1")
 users := v1.Group("/users") // inherits /api/v1 and its middlewares
 ```

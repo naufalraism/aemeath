@@ -25,7 +25,7 @@ func TestRequireAuthRefusesUnauthenticatedRequests(t *testing.T) {
 	aemeath.GET(app, "/secret", h, aemeath.RequireAuth())
 	g := app.Group("/admin")
 	g.Options(aemeath.RequireAuth())
-	aemeath.GroupGET(g, "/users", h)
+	aemeath.GET(g, "/users", h)
 	for path, want := range map[string]int{"/open": 200, "/secret": 401, "/admin/users": 401} {
 		if got := get(app, path); got != want {
 			t.Errorf("no auth middleware, %s: %d, want %d", path, got, want)

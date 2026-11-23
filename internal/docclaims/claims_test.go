@@ -101,7 +101,7 @@ func TestRoutingAndBinding(t *testing.T) {
 		return struct{}{}, aemeath.NotFound("user not found")
 	})
 	g := app.Group("/admin")
-	aemeath.GroupGET(g, "/", func(_ *aemeath.Ctx, _ struct{}) (helloOut, error) { return helloOut{"root"}, nil })
+	aemeath.GET(g, "/", func(_ *aemeath.Ctx, _ struct{}) (helloOut, error) { return helloOut{"root"}, nil })
 
 	t.Run("Unknown paths return 404; wrong method 405 with Allow; both pass through global middlewares", func(t *testing.T) {
 		r := do(app, "GET", "/nope", "")

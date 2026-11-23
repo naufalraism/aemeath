@@ -63,8 +63,8 @@ func TestSiblingGroupsDoNotShareMiddlewares(t *testing.T) {
 	parent.Use(mw("c")) // len 3, cap 4: the aliasing trap
 	one := parent.Group("/one", mw("ONE"))
 	two := parent.Group("/two", mw("TWO"))
-	aemeath.GroupGET(one, "/h", okRoute)
-	aemeath.GroupGET(two, "/h", okRoute)
+	aemeath.GET(one, "/h", okRoute)
+	aemeath.GET(two, "/h", okRoute)
 
 	got1 := strings.Join(get(app, "/p/one/h").Header()["X-Mw"], ",")
 	got2 := strings.Join(get(app, "/p/two/h").Header()["X-Mw"], ",")
@@ -76,7 +76,7 @@ func TestSiblingGroupsDoNotShareMiddlewares(t *testing.T) {
 func TestGroupUseAfterRouteStillApplies(t *testing.T) {
 	app := aemeath.New()
 	g := app.Group("/g")
-	aemeath.GroupGET(g, "/h", okRoute)
+	aemeath.GET(g, "/h", okRoute)
 	g.Use(mw("late"))
 	if got := get(app, "/g/h").Header().Get("X-Mw"); got != "late" {
 		t.Fatalf("X-Mw = %q, want late", got)
@@ -86,7 +86,7 @@ func TestGroupUseAfterRouteStillApplies(t *testing.T) {
 func TestGroupRootIsExactMatch(t *testing.T) {
 	app := aemeath.New()
 	g := app.Group("/admin")
-	aemeath.GroupGET(g, "/", okRoute)
+	aemeath.GET(g, "/", okRoute)
 	if c := get(app, "/admin").Code; c != 200 {
 		t.Fatalf("/admin = %d, want 200", c)
 	}
