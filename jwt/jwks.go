@@ -127,15 +127,36 @@ func (j *JWKS) Key(ctx context.Context, kid string) (crypto.PublicKey, string, e
 		j.inflight = done
 		j.mu.Unlock()
 
-		keys, err := j.download(ctx) // network: without the lock
-
-		j.mu.Lock()
-		if err == nil {
-			j.keys, j.fetched = keys, j.now()
+		// The fetch is shared with every request that arrives while it runs,
+		// so it must not end when the request that started it goes away: it
+		// runs detached from that request's cancellation, bounded by the
+		// HTTP client's timeout (10 seconds when the client has none).
+		limit := j.client.Timeout
+		if limit <= 0 {
+			limit = 10 * time.Second
 		}
-		j.lastErr = err
-		j.inflight = nil
-		close(done)
+		go func() {
+			fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), limit)
+			defer cancel()
+			keys, err := j.download(fctx) // network: without the lock
+
+			j.mu.Lock()
+			if err == nil {
+				j.keys, j.fetched = keys, j.now()
+			}
+			j.lastErr = err
+			j.inflight = nil
+			j.mu.Unlock()
+			close(done)
+		}()
+
+		// This request waits only as long as its own context allows.
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		}
+		j.mu.Lock()
 	}
 	defer j.mu.Unlock()
 	if k, ok := j.lookup(kid); ok {

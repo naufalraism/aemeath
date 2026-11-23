@@ -6,7 +6,12 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- **`jwt.Verifier.VerifyContext(ctx, token)`**, used by `oidc` for the ID token: with a JWKS the key lookup stops waiting when `ctx` ends. `Verify` is `VerifyContext` with `context.Background()`.
 - **`benchmarks/load`: a load test over real TCP.** It starts `net/http`, Aemeath and Gin as separate processes with the same two routes (`GET /hello`, and `POST /users` with validation), checks that each one refuses bad input, then measures requests per second, p50/p95/p99 latency, errors and process memory. `go run ./load all` from `benchmarks/`.
+
+### Fixed
+
+- **JWT with a JWKS: the key lookup follows the request.** It used `context.Background()`, so a request whose client had left still waited for a slow JWKS endpoint until the HTTP client's timeout (3 s in the test, 10 s by default); it now stops with the request. The fetch itself is shared and now runs detached from the request that started it, bounded by the client's timeout: before, when that request went away, every other request waiting for the same key failed with `context deadline exceeded`.
 
 ### Changed
 

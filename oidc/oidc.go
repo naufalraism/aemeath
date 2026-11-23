@@ -280,7 +280,7 @@ func (p *Provider) Complete(c *aemeath.Ctx) (*Identity, error) {
 	if idt == "" {
 		return nil, fail("the provider returned no id_token")
 	}
-	claims, err := p.verifier.Verify(idt)
+	claims, err := p.verifier.VerifyContext(c.Context(), idt)
 	if err != nil {
 		return nil, fail("invalid id_token")
 	}
