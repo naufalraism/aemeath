@@ -10,6 +10,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- **README links the website, the documentation and the CLI**, and the website's CLI section lists `aemeath ts` and `aemeath help`; its terminal example shows the `💡 All commands: aemeath help` line that `aemeath new` prints since CLI v0.4.2.
 - **README and website: load-test and stress-test results.** Under load over TCP Aemeath serves 96 to 99% of plain `net/http`'s requests per second, on a par with Gin, with 0 errors in about 21 million requests; up to 1,600 connections none of the three servers returned an error. The microbenchmark stays in the README, now labelled as such.
 
 ## [0.4.2] - 2026-11-22
