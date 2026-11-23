@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"reflect"
@@ -37,6 +38,15 @@ type Config struct {
 	SameSite   http.SameSite // default Lax
 	Path       string        // default "/"
 	Domain     string
+
+	// TrustedOrigins are other origins allowed to send POST, PUT, PATCH and
+	// DELETE requests with the session cookie, such as a front end on
+	// another subdomain: "https://app.example.com". The middleware refuses
+	// other cross-origin writes with 403 (see Middleware).
+	TrustedOrigins []string
+	// AllowCrossOrigin turns that check off. Only for an application that
+	// protects every write in another way.
+	AllowCrossOrigin bool
 }
 
 // Session is the per-request session.
@@ -87,9 +97,23 @@ func newID() string {
 func validID(s string) bool { return len(s) == 43 }
 
 // Middleware loads the session before the handler and persists it afterwards.
+//
+// Cookies are sent with requests that a hostile page triggers, so the
+// middleware refuses cross-origin writes (POST, PUT, PATCH, DELETE) with
+// 403, using net/http.CrossOriginProtection: the browser's Sec-Fetch-Site
+// header, or the Origin header on browsers that do not send it. Pages of the
+// same origin, reads, and clients that are not browsers (curl, mobile apps,
+// webhooks) are not affected. List a front end on another origin in
+// Config.TrustedOrigins. csrf.Middleware adds a token check on top.
 func Middleware(cfg Config) aemeath.Middleware {
 	if cfg.Store == nil {
 		panic("session: Config.Store is required")
+	}
+	crossOrigin := http.NewCrossOriginProtection()
+	for _, o := range cfg.TrustedOrigins {
+		if err := crossOrigin.AddTrustedOrigin(o); err != nil {
+			panic(fmt.Sprintf("session: Config.TrustedOrigins: %v", err))
+		}
 	}
 	full := &fullLog{}
 	if cfg.CookieName == "" {
@@ -106,6 +130,11 @@ func Middleware(cfg Config) aemeath.Middleware {
 	}
 	return func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
 		return func(c *aemeath.Ctx) error {
+			if !cfg.AllowCrossOrigin {
+				if err := crossOrigin.Check(c.R); err != nil {
+					return aemeath.Forbidden("cross-origin request refused; a front end on another origin must be listed in session.Config.TrustedOrigins")
+				}
+			}
 			s := &Session{cfg: cfg, data: map[string]any{}, full: full}
 			if ck, err := c.R.Cookie(cfg.CookieName); err == nil && validID(ck.Value) {
 				data, ok, err := cfg.Store.Load(c.Context(), ck.Value)

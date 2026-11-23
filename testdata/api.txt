@@ -334,6 +334,7 @@ oidc: type Identity struct
 oidc: type Provider struct
 oidc: var ErrLogin
 session: const DefaultMaxSessions
+session: field Config.AllowCrossOrigin bool
 session: field Config.CookieName string
 session: field Config.Domain string
 session: field Config.Insecure bool
@@ -342,6 +343,7 @@ session: field Config.SameSite http.SameSite
 session: field Config.Sliding bool
 session: field Config.Store Store
 session: field Config.TTL time.Duration
+session: field Config.TrustedOrigins []string
 session: func From(c *aemeath.Ctx) *Session
 session: func Middleware(cfg Config) aemeath.Middleware
 session: func NewMemoryStore() *MemoryStore

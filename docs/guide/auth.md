@@ -90,6 +90,14 @@ The token is only created when something asks for it (`csrf.Token`), so visitors
 
 Set `Cookie: "XSRF-TOKEN"` to also publish the token in a readable cookie for front-end libraries that read it automatically. That creates a session for every visitor who loads a page, so use a store that can hold them (Redis) rather than `MemoryStore`.
 
+`session.Middleware` already refuses cross-origin writes on its own, without a token: a `POST`, `PUT`, `PATCH` or `DELETE` that the browser marks as coming from another site (`Sec-Fetch-Site`, or `Origin` on browsers that do not send it) gets 403. Your own pages, reads, and clients that are not browsers (curl, mobile apps, webhooks) are not affected. A front end on another origin, such as `https://app.example.com` calling `https://api.example.com` with cookies, must be listed:
+
+```go
+session.Config{Store: store, TrustedOrigins: []string{"https://app.example.com"}}
+```
+
+When you also use `csrf.Middleware` with `TrustedOrigins`, list the same origins in both. `csrf.Middleware` adds the token check on top, which also covers older browsers that send neither header. `AllowCrossOrigin: true` turns the session check off; use it only when every write is protected in another way.
+
 CSRF only matters for cookie authentication. Pure Bearer-token APIs do not need it.
 
 ## JWT

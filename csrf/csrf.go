@@ -25,7 +25,7 @@ type Config struct {
 	Header         string   // default "X-CSRF-Token"
 	FormField      string   // form field checked when the header is absent, default "csrf_token"
 	Cookie         string   // if set, also publish the token in a readable cookie (e.g. "XSRF-TOKEN")
-	TrustedOrigins []string // extra allowed origins, e.g. "https://app.example.com"
+	TrustedOrigins []string // extra allowed origins, e.g. "https://app.example.com"; list them in session.Config.TrustedOrigins too
 	Insecure       bool     // allow the optional cookie over plain HTTP (development only)
 }
 
