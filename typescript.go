@@ -139,11 +139,6 @@ func writeFileIfChanged(path string, content []byte) error {
 	return nil
 }
 
-// WriteTypeScriptClient writes the TypeScript client to a file.
-func (a *App) WriteTypeScriptClient(path string) error {
-	return os.WriteFile(path, []byte(a.TypeScriptClient()), 0o644)
-}
-
 // EnableClient registers the generated TypeScript sources:
 //
 //	GET /client.ts    typed fetch client

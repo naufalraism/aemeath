@@ -1,8 +1,9 @@
 package aemeath
 
-// Plugin is the base interface for all Aemeath plugins.
+// Plugin is the base interface for all Aemeath plugins: Apply registers
+// what the plugin provides (services, routes, readiness checks, shutdown
+// hooks) on the application.
 type Plugin interface {
-	Name() string
 	Apply(app *App) error
 }
 

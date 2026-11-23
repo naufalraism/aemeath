@@ -103,7 +103,7 @@ func neutralize(name string) string {
 // name never overwrite each other. Names with an extension a browser would
 // render or run (.html, .svg, .js, ...) get ".txt" appended ("x.html" is
 // stored as "..._x.html.txt"), so serving the upload folder cannot become
-// stored XSS. Check the type yourself (accept tag, IsAllowedFile) to refuse
+// stored XSS. Check the type with the accept tag to refuse
 // such files instead.
 func (s *LocalStorage) Save(filename string, src io.Reader) (string, error) {
 	if err := os.MkdirAll(s.UploadDir, s.dirMode()); err != nil {
@@ -145,6 +145,11 @@ func (s *LocalStorage) Delete(filename string) error {
 
 // IsAllowedFile reports whether the file's extension is in allowedExts
 // (compared case-insensitively, e.g. []string{".png", ".jpg"}).
+//
+// Deprecated: the extension is chosen by the client, so it says nothing
+// about the content. Use the accept tag on a *multipart.FileHeader field
+// (accept:"image/png,image/jpeg"), which checks the file's bytes. This
+// method will be removed in v1.0.
 func (s *LocalStorage) IsAllowedFile(filename string, allowedExts []string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	for _, allowed := range allowedExts {

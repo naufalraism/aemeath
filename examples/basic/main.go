@@ -9,6 +9,7 @@ package main
 import (
 	"crypto/subtle"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"time"
@@ -202,30 +203,23 @@ func main() {
 	if err := app.RegisterPlugin(&aemeath.StoragePlugin{Storage: localStore}); err != nil {
 		log.Fatal(err)
 	}
-	app.Handle("POST", "/upload", func(c *aemeath.Ctx) error {
-		if err := c.R.ParseMultipartForm(10 << 20); err != nil {
-			return aemeath.BadRequest("file too large or invalid form")
-		}
-
-		file, header, err := c.R.FormFile("file")
+	// The accept tag checks the file's bytes (not its name), maxsize its
+	// size; a file that fails either is refused with 422 before the handler.
+	type UploadIn struct {
+		File *multipart.FileHeader `form:"file" accept:"image/png,image/jpeg,image/gif,application/pdf" maxsize:"10MB" validate:"required"`
+	}
+	aemeath.POST(app, "/upload", func(c *aemeath.Ctx, in UploadIn) (map[string]string, error) {
+		file, err := in.File.Open()
 		if err != nil {
-			return aemeath.BadRequest("no file found in the form")
+			return nil, aemeath.BadRequest("could not read the file")
 		}
 		defer func() { _ = file.Close() }()
 
-		if !localStore.IsAllowedFile(header.Filename, []string{".png", ".jpg", ".jpeg", ".gif", ".pdf"}) {
-			return aemeath.UnsupportedMediaType("only png, jpg, gif and pdf files are allowed")
-		}
-
-		savedName, err := aemeath.MustGet[aemeath.Storage](c).Save(header.Filename, file)
+		savedName, err := aemeath.MustGet[aemeath.Storage](c).Save(in.File.Filename, file)
 		if err != nil {
-			return aemeath.InternalError("failed to save the file")
+			return nil, aemeath.InternalError("failed to save the file")
 		}
-
-		return c.JSON(http.StatusOK, map[string]string{
-			"message":  "File uploaded!",
-			"filename": savedName,
-		})
+		return map[string]string{"message": "File uploaded!", "filename": savedName}, nil
 	})
 
 	// 11. File logger plugin.

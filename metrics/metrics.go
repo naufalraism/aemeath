@@ -191,7 +191,7 @@ func (r *Registry) Middleware() aemeath.Middleware {
 			if err != nil && !sw.wrote {
 				status = aemeath.AsHTTPError(err).Code
 			}
-			route := RouteOf(c.R)
+			route := routeOf(c.R)
 			r.requests.Inc(c.R.Method, route, strconv.Itoa(status))
 			r.duration.Observe(time.Since(start).Seconds(), c.R.Method, route)
 			return err
@@ -199,9 +199,9 @@ func (r *Registry) Middleware() aemeath.Middleware {
 	}
 }
 
-// RouteOf returns the matched route pattern without the method ("/users/{id}"),
+// routeOf returns the matched route pattern without the method ("/users/{id}"),
 // or "unmatched" when no route matched (so scanners cannot create series).
-func RouteOf(r *http.Request) string {
+func routeOf(r *http.Request) string {
 	p := r.Pattern
 	if p == "" {
 		return "unmatched"

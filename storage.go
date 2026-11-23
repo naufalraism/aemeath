@@ -13,9 +13,6 @@ type StoragePlugin struct {
 	Storage
 }
 
-// Name implements Plugin.
-func (p *StoragePlugin) Name() string { return "storage" }
-
 // Apply provides the storage as an aemeath.Storage; read it in a handler with
 // aemeath.MustGet[aemeath.Storage](c).
 func (p *StoragePlugin) Apply(app *App) error {

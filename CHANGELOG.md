@@ -4,8 +4,16 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **Removed `App.WriteTypeScriptClient`**, an older duplicate of `WriteTypeScript` that wrote only client.ts and not atomically (an interrupted write could leave half a file). Use `app.WriteTypeScript(dir)`, which writes client.ts, schemas.ts and hooks.ts.
+- **Removed `cache.Plugin.Set` and `Get`**, one-line wrappers over the Redis client. Handlers already get the client from `cache.From(c)`; use `client.Set(ctx, key, value, ttl).Err()` and `client.Get(ctx, key).Result()`.
+- **`metrics.RouteOf` and `tracing.ParseTraceparent` are no longer exported.** They were helpers of the metrics and tracing middleware; keeping them public would have made their behaviour a promise.
+- **`Plugin` no longer has `Name()`**, and the built-in plugins no longer have the method. It was never read: `RegisterPlugin` only calls `Apply`. Your own plugins keep compiling (an extra `Name` method is allowed) and can drop it; only code that called `Name()` on a built-in plugin breaks.
+
 ### Added
 
+- **A list of the public API** in `testdata/api.txt`, checked by `go test`: every exported function and method with its signature, type, field, constant and variable. A change to the public API now shows up in the diff of that file instead of slipping in by accident (`go test -run TestPublicAPI -update-api .` after an intended change).
 - **Server limit tests.** `NewServer`'s documented timeouts and header limit are checked, and so is their effect on a real port: a header past 64 KiB is answered 431, and a client that sends its headers a byte at a time (slowloris) is cut off by `ReadHeaderTimeout`. `ListenTLS` is tested end to end with a self-signed certificate (HTTPS answered, plain HTTP refused, a clean stop on a signal, an error for a missing certificate).
 - **Shutdown tests on a real process.** The test binary starts itself again as a server and is stopped the way Docker, Kubernetes or a terminal does it (SIGTERM on Unix, Ctrl+Break on Windows): an in-flight request finishes, the hooks run, the port closes and the process exits with status 0; with a short grace time the process gives up on a stuck request and still exits.
 - **One contract for every `session.Store`.** `internal/storetest` checks loading a missing id, the round trip, that a save replaces the whole session, empty sessions, delete, expiry, that saving again restarts the TTL, that callers cannot change what is stored through the maps they pass or get back, and concurrent use. `MemoryStore` and the Redis `cache.SessionStore` both pass it; a store that keeps the caller's map and ignores the TTL fails two of its cases.
@@ -22,6 +30,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- **`LocalStorage.IsAllowedFile` is deprecated** and will be removed in v1.0. It trusts the extension the client chose: an HTML page named `photo.png` passed it. Use the `accept` tag on a `*multipart.FileHeader` field, which checks the file's bytes (that file gets 422). `examples/basic` now uploads this way.
 - **README links the website, the documentation and the CLI**, and the website's CLI section lists `aemeath ts` and `aemeath help`; its terminal example shows the `💡 All commands: aemeath help` line that `aemeath new` prints since CLI v0.4.2.
 - **README and website: load-test and stress-test results.** Under load over TCP Aemeath serves 96 to 99% of plain `net/http`'s requests per second, on a par with Gin, with 0 errors in about 21 million requests; up to 1,600 connections none of the three servers returned an error. The microbenchmark stays in the README, now labelled as such.
 

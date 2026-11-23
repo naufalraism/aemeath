@@ -15,23 +15,25 @@ import (
 	"github.com/naufalraism/aemeath/cache"
 )
 
-func TestSetGetAndExpiry(t *testing.T) {
+// The plugin's client talks to the configured server: values are stored
+// with their TTL and expire.
+func TestClientSetGetAndExpiry(t *testing.T) {
 	mr := miniredis.RunT(t)
 	p := cache.New(mr.Addr(), "", 0)
 	defer func() { _ = p.Close() }()
 	ctx := context.Background()
 
-	if err := p.Set(ctx, "k", "v", time.Minute); err != nil {
+	if err := p.Client.Set(ctx, "k", "v", time.Minute).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := p.Get(ctx, "k"); err != nil || got != "v" {
+	if got, err := p.Client.Get(ctx, "k").Result(); err != nil || got != "v" {
 		t.Fatalf("Get = %q, %v", got, err)
 	}
 	if ttl := mr.TTL("k"); ttl != time.Minute {
 		t.Fatalf("ttl = %v, want 1m", ttl)
 	}
 	mr.FastForward(2 * time.Minute)
-	if _, err := p.Get(ctx, "k"); !errors.Is(err, redis.Nil) {
+	if err := p.Client.Get(ctx, "k").Err(); !errors.Is(err, redis.Nil) {
 		t.Fatalf("expired key: err = %v, want redis.Nil", err)
 	}
 }
