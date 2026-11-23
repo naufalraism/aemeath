@@ -50,7 +50,25 @@ type Session struct {
 	renewed bool
 	ttl     time.Duration // ExpireIn: the lifetime of this save, instead of Config.TTL
 	full    *fullLog      // shared by the requests of one Middleware
+	// changes are the keys this request set or deleted. A loaded session is
+	// saved as these changes applied to what the store holds at the end of
+	// the request, so overlapping requests of one visitor do not erase each
+	// other's keys.
+	changes map[string]change
 	mu      sync.Mutex
+}
+
+// change is one key set (value) or deleted (deleted) by the request.
+type change struct {
+	value   any
+	deleted bool
+}
+
+func (s *Session) record(key string, c change) {
+	if s.changes == nil {
+		s.changes = map[string]change{}
+	}
+	s.changes[key] = c
 }
 
 const stateKey = "aemeath.session"
@@ -201,6 +219,31 @@ func (s *Session) commit(c *aemeath.Ctx) error {
 	if !s.dirty && (!s.loaded || !s.cfg.Sliding) {
 		return nil
 	}
+	if s.loaded && !s.renewed {
+		// Save on top of what is stored now, not of what this request loaded:
+		// another request may have changed other keys meanwhile, or ended the
+		// session (logout, Renew, expiry), which must not be undone.
+		current, ok, err := s.cfg.Store.Load(ctx, s.id)
+		if err != nil {
+			log.Printf("aemeath/session: reloading the session before saving failed: %v", err)
+			return err
+		}
+		if !ok {
+			return nil
+		}
+		merged := make(map[string]any, len(current)+len(s.changes))
+		for k, v := range current {
+			merged[k] = v
+		}
+		for k, c := range s.changes {
+			if c.deleted {
+				delete(merged, k)
+			} else {
+				merged[k] = c.value
+			}
+		}
+		s.data = merged
+	}
 	if s.id == "" {
 		s.id = newID()
 	}
@@ -260,6 +303,7 @@ func (s *Session) Set(key string, v any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data[key] = v
+	s.record(key, change{value: v})
 	s.dirty = true
 }
 
@@ -291,6 +335,7 @@ func (s *Session) Delete(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.data, key)
+	s.record(key, change{deleted: true})
 	s.dirty = true
 }
 

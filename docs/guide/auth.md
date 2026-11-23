@@ -40,7 +40,7 @@ aemeath.POST(app, "/logout", func(c *aemeath.Ctx, _ struct{}) (struct{}, error) 
 
 If saving fails for another reason (Redis is down), the request is answered `500`, because a "logged in" response without a stored session would be a lie. The handler has run by then: write handlers whose work may be repeated safely, or check the store before work that must not.
 
-**Requests of one session that run at the same time** each load the session, change their copy and save it; the last one to finish wins. Two tabs adding to a counter at the same moment can lose an increment (in a test, 200 parallel increments gave 133). This is how most session stores behave; keep values that many parallel requests update (counters, carts with heavy traffic) in your database, where an update can be atomic.
+**Requests of one session that run at the same time** (two tabs, polling, an upload in progress) save only the keys they changed, on top of what the store holds when they finish. A slow request that sets `cart` keeps the `theme` a faster one saved meanwhile, and a slow request that ends after a logout does not bring the session back. When two requests change **the same key**, the last one to finish wins: two tabs adding to a counter at the same moment can still lose an increment. Keep values that many parallel requests update (counters, carts with heavy traffic) in your database, where an update can be atomic. The reload and the save are two calls to the store, so requests finishing within the same moment can still overlap; the window is that short, not the length of a request.
 
 
 Safety properties, each covered by a test:
@@ -48,6 +48,7 @@ Safety properties, each covered by a test:
 - An id the server did not issue is **never adopted**, so an attacker cannot plant a known id in a victim's browser (session fixation).
 - `Renew` issues a new id **and deletes the old one**. Call it whenever the user's privilege changes (login, password change).
 - A cookie is only sent when the session was touched, so anonymous visitors get none.
+- A session ended by `Destroy` or `Renew` stays ended: a request of the same visitor that was still running does not store it again.
 - `Config.Insecure` exists for `http://localhost` development only. The default is `Secure`.
 
 ### Redis store (several servers, survives restarts)
