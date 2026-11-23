@@ -435,6 +435,12 @@ func setField(fv reflect.Value, raw string) error {
 		}
 		fv.SetUint(n)
 	case reflect.Float32, reflect.Float64:
+		// ParseFloat reads Go source syntax: digit separators ("1_000") and
+		// hexadecimal floats ("0x1p4"). Ints and JSON bodies refuse both, and
+		// no client sends them, so a parameter is a plain decimal number.
+		if strings.ContainsAny(raw, "_xX") {
+			return errors.New("not a decimal number")
+		}
 		n, err := strconv.ParseFloat(raw, fv.Type().Bits())
 		if err != nil {
 			return err
