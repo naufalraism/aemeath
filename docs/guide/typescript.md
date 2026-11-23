@@ -57,7 +57,11 @@ create.mutate({ body: { name: "Ana", email: "ana@example.com" } });
 
 ## Large integers
 
-A JavaScript number is exact only up to 2^53 (about 9 × 10^15). An `int64` or `uint64` above that, such as a snowflake id, silently changes in the browser. The generated types carry a note on such fields. If a field can hold values that large, send it as a string:
+A JavaScript number is exact only up to 2^53 (about 9 × 10^15). An `int64` or `uint64` above that, such as a snowflake id, silently changes in the browser. The generated types carry a note on such fields.
+
+On a 64-bit server `int` and `uint` are 64 bits too, and the same limit applies, but they get no note: they usually hold counts, prices and auto-increment ids, which never come near 2^53, and a note on every `int` would soon be ignored. Declare a field `int64` or `uint64` when its values can be that large, so the note shows where it matters.
+
+If a field can hold values that large, send it as a string:
 
 ```go
 ID uint64 `json:"id,string"`
