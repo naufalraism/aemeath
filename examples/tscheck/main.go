@@ -129,6 +129,24 @@ func main() {
 	write := flag.String("write", "", "write the generated TypeScript into this directory and exit")
 	flag.Parse()
 
+	app := newApp()
+	if *write != "" {
+		if err := app.WriteTypeScript(*write); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if err := app.Listen(":38123"); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// docsInfo is the OpenAPI info of this app (also used by the golden test).
+var docsInfo = aemeath.Info{Title: "TypeScript check"}
+
+// newApp registers every route. golden_test.go compares what the generators
+// produce for it with the files in testdata/golden.
+func newApp() *aemeath.App {
 	app := aemeath.New()
 	app.Use(aemeath.RequestID(), aemeath.Logger(), aemeath.CORS())
 	aemeath.GET(app, "/items", func(c *aemeath.Ctx, in ListIn) ([]User, error) { return []User{{ID: 1, Tags: in.Tags}}, nil })
@@ -151,14 +169,6 @@ func main() {
 	})
 	aemeath.POST(app, "/strict", func(c *aemeath.Ctx, in StrictIn) (map[string]bool, error) { return map[string]bool{"ok": true}, nil })
 	app.EnableClient()
-	app.EnableDocs(aemeath.Info{Title: "TypeScript check"})
-	if *write != "" {
-		if err := app.WriteTypeScript(*write); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-	if err := app.Listen(":38123"); err != nil {
-		log.Fatal(err)
-	}
+	app.EnableDocs(docsInfo)
+	return app
 }

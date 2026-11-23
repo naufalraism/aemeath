@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- **Golden files for the generators.** `examples/tscheck/testdata/golden` holds the `client.ts`, `schemas.ts`, `hooks.ts` and `openapi.json` generated for the example app, and `go test ./...` fails when the output changes, showing the first line that differs; `go test ./examples/tscheck -update` rewrites them after an intended change. A second test checks that two runs give the same bytes.
 - **`jwt.Verifier.VerifyContext(ctx, token)`**, used by `oidc` for the ID token: with a JWKS the key lookup stops waiting when `ctx` ends. `Verify` is `VerifyContext` with `context.Background()`.
 - **`benchmarks/load`: a load test over real TCP.** It starts `net/http`, Aemeath and Gin as separate processes with the same two routes (`GET /hello`, and `POST /users` with validation), checks that each one refuses bad input, then measures requests per second, p50/p95/p99 latency, errors and process memory. `go run ./load all` from `benchmarks/`.
 

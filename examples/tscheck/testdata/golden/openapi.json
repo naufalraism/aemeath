@@ -1,0 +1,882 @@
+{
+  "components": {
+    "schemas": {
+      "AddressInput": {
+        "properties": {
+          "city": {
+            "minLength": 2,
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "Child": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ChildInput": {
+        "properties": {
+          "name": {
+            "minLength": 2,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "Error": {
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "FieldError": {
+        "properties": {
+          "field": {
+            "description": "Name of the invalid field, e.g. address.city or items[0].name",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "description": "The validation rule that failed",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "rule",
+          "message"
+        ],
+        "type": "object"
+      },
+      "Meta": {
+        "properties": {
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "type": "object"
+      },
+      "User": {
+        "properties": {
+          "friends": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/User"
+                }
+              ],
+              "nullable": true
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nickname": {
+            "nullable": true,
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "tags",
+          "nickname"
+        ],
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "error",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "Wire": {
+        "properties": {
+          "Untagged": {
+            "type": "string"
+          },
+          "any": {},
+          "array": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "bytes": {
+            "format": "byte",
+            "type": "string"
+          },
+          "child_ptrs": {
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Child"
+                }
+              ],
+              "nullable": true
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/Child"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deep": {
+            "items": {
+              "additionalProperties": {
+                "items": {
+                  "format": "date-time",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "nullable": true,
+                "type": "array"
+              },
+              "nullable": true,
+              "type": "object"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "duration": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "int_keys": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "object"
+          },
+          "level": {
+            "type": "string"
+          },
+          "map": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "nullable": true,
+            "type": "object"
+          },
+          "money": {},
+          "named": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "nested": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/Child"
+              },
+              "nullable": true,
+              "type": "array"
+            },
+            "nullable": true,
+            "type": "object"
+          },
+          "note": {
+            "type": "string"
+          },
+          "ptr": {
+            "nullable": true,
+            "type": "string"
+          },
+          "ptr_child": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Child"
+              }
+            ],
+            "nullable": true
+          },
+          "ptr_omit": {
+            "nullable": true,
+            "type": "string"
+          },
+          "quoted": {
+            "pattern": "^\\d+$",
+            "type": "string"
+          },
+          "raw": {},
+          "slice": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "str_omit": {
+            "type": "string"
+          },
+          "when": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "zero": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "named",
+          "ptr",
+          "slice",
+          "map",
+          "int_keys",
+          "bytes",
+          "array",
+          "status",
+          "money",
+          "level",
+          "duration",
+          "raw",
+          "any",
+          "quoted",
+          "Untagged",
+          "children",
+          "child_ptrs",
+          "ptr_child",
+          "when",
+          "nested",
+          "deep"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "TypeScript check",
+    "version": "0.1.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/items": {
+      "get": {
+        "operationId": "getItems",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 3,
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 100,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Trace",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  },
+                  "nullable": true,
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Malformed request (for example an invalid JSON body or parameter)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/items/{id}": {
+      "delete": {
+        "operationId": "deleteItemsById",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Malformed request (for example an invalid JSON body or parameter)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        }
+      },
+      "get": {
+        "operationId": "getItemsById",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Malformed request (for example an invalid JSON body or parameter)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/ping": {
+      "get": {
+        "operationId": "getPing",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "nullable": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/signup": {
+      "post": {
+        "operationId": "postSignup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "address": {
+                    "$ref": "#/components/schemas/AddressInput"
+                  },
+                  "age": {
+                    "exclusiveMaximum": true,
+                    "maximum": 120,
+                    "minimum": 18,
+                    "type": "integer"
+                  },
+                  "code": {
+                    "nullable": true,
+                    "pattern": "^[A-Z]{3}-[0-9]+$",
+                    "type": "string"
+                  },
+                  "email": {
+                    "format": "email",
+                    "minLength": 1,
+                    "pattern": "^[^\\x00-\\x20\\x7f@\u003c\u003e()\\[\\],;:\"\\\\.]+(\\.[^\\x00-\\x20\\x7f@\u003c\u003e()\\[\\],;:\"\\\\.]+)*@[^\\x00-\\x20\\x7f@\u003c\u003e()\\[\\],;:\"\\\\.]+(\\.[^\\x00-\\x20\\x7f@\u003c\u003e()\\[\\],;:\"\\\\.]+)+$",
+                    "type": "string"
+                  },
+                  "level": {
+                    "enum": [
+                      1,
+                      2,
+                      3
+                    ],
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "name": {
+                    "description": "Display name",
+                    "example": "Bob",
+                    "maxLength": 10,
+                    "minLength": 3,
+                    "type": "string"
+                  },
+                  "nickname": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "role": {
+                    "enum": [
+                      "admin",
+                      "user"
+                    ],
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "tags": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 2,
+                    "nullable": true,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "name",
+                  "email",
+                  "age",
+                  "address"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Malformed request (for example an invalid JSON body or parameter)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/strict": {
+      "post": {
+        "operationId": "postStrict",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "age": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "children": {
+                    "items": {
+                      "$ref": "#/components/schemas/ChildInput"
+                    },
+                    "nullable": true,
+                    "type": "array"
+                  },
+                  "code_a": {
+                    "nullable": true,
+                    "pattern": "^ab$",
+                    "type": "string"
+                  },
+                  "code_i": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "code_n": {
+                    "nullable": true,
+                    "pattern": "(\\d{1,3})-x",
+                    "type": "string"
+                  },
+                  "email": {
+                    "format": "email",
+                    "nullable": true,
+                    "pattern": "^[^\\x00-\\x20\\x7f@\u003c\u003e()\\[\\],;:\"\\\\.]+(\\.[^\\x00-\\x20\\x7f@\u003c\u003e()\\[\\],;:\"\\\\.]+)*@[^\\x00-\\x20\\x7f@\u003c\u003e()\\[\\],;:\"\\\\.]+(\\.[^\\x00-\\x20\\x7f@\u003c\u003e()\\[\\],;:\"\\\\.]+)+$",
+                    "type": "string"
+                  },
+                  "flag": {
+                    "type": "boolean"
+                  },
+                  "kind": {
+                    "enum": [
+                      1,
+                      2
+                    ],
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "name": {
+                    "maxLength": 5,
+                    "minLength": 2,
+                    "type": "string"
+                  },
+                  "omit": {
+                    "minLength": 3,
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "opt_ptr": {
+                    "minimum": 1,
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "ratio": {
+                    "exclusiveMaximum": true,
+                    "exclusiveMinimum": true,
+                    "maximum": 1,
+                    "minimum": 0,
+                    "nullable": true,
+                    "type": "number"
+                  },
+                  "short": {
+                    "maxLength": 3,
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "a",
+                      "b"
+                    ],
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "tags": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 2,
+                    "minItems": 1,
+                    "nullable": true,
+                    "type": "array"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "nullable": true,
+                    "pattern": "^[hH][tT][tT][pP][sS]?://[^\\x00-\\x20\\x7f/?#\\\\]+([/?#][^\\x00-\\x20\\x7f]*)?$",
+                    "type": "string"
+                  },
+                  "uuid": {
+                    "format": "uuid",
+                    "nullable": true,
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                    "type": "string"
+                  },
+                  "when": {
+                    "format": "date-time",
+                    "nullable": true,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "age",
+                  "flag"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "nullable": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Malformed request (for example an invalid JSON body or parameter)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wire/full": {
+      "get": {
+        "operationId": "getWireFull",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Wire"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wire/zero": {
+      "get": {
+        "operationId": "getWireZero",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Wire"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        }
+      }
+    }
+  }
+}
