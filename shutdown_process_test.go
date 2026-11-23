@@ -28,10 +28,12 @@ import (
 const shutdownChildEnv = "AEMEATH_TEST_SHUTDOWN_CHILD"
 
 // runShutdownChild serves until stopped, then reports and exits. mode is
-// "addr|grace" (grace in milliseconds).
+// "addr|grace" (grace in milliseconds), or "addr|grace|certFile|keyFile"
+// to serve with ListenTLS.
 func runShutdownChild(mode string) {
-	addr, graceMS, _ := strings.Cut(mode, "|")
-	grace, _ := strconv.Atoi(graceMS)
+	parts := strings.Split(mode, "|")
+	addr := parts[0]
+	grace, _ := strconv.Atoi(parts[1])
 	log.SetOutput(os.Stderr)
 
 	app := aemeath.New()
@@ -47,7 +49,12 @@ func runShutdownChild(mode string) {
 		fmt.Println("shutdown hook ran")
 		return nil
 	})
-	err := app.Listen(addr)
+	var err error
+	if len(parts) == 4 {
+		err = app.ListenTLS(addr, parts[2], parts[3])
+	} else {
+		err = app.Listen(addr)
+	}
 	fmt.Printf("Listen returned: %v\n", err)
 	if err != nil {
 		os.Exit(1)
@@ -65,6 +72,13 @@ type shutdownChild struct {
 
 func startShutdownChild(t *testing.T, grace time.Duration) *shutdownChild {
 	t.Helper()
+	return startChild(t, grace, "", nil)
+}
+
+// startChild starts the server process; with certFile set it serves HTTPS
+// and client is used to wait for it.
+func startChild(t *testing.T, grace time.Duration, certFile string, client *http.Client) *shutdownChild {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("starts a separate server process")
 	}
@@ -74,7 +88,15 @@ func startShutdownChild(t *testing.T, grace time.Duration) *shutdownChild {
 	}
 	c := &shutdownChild{addr: "127.0.0.1:" + freeLocalPort(t), stdout: &syncBuffer{}, stderr: &syncBuffer{}, exited: make(chan struct{})}
 	c.cmd = exec.Command(exe, "-test.run=^$")
-	c.cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s|%d", shutdownChildEnv, c.addr, grace.Milliseconds()))
+	mode := fmt.Sprintf("%s|%d", c.addr, grace.Milliseconds())
+	scheme := "http://"
+	if certFile != "" {
+		mode += "|" + certFile + "|" + strings.TrimSuffix(certFile, "cert.pem") + "key.pem"
+		scheme = "https://"
+	} else {
+		client = http.DefaultClient
+	}
+	c.cmd.Env = append(os.Environ(), shutdownChildEnv+"="+mode)
 	c.cmd.Stdout, c.cmd.Stderr = c.stdout, c.stderr
 	prepareForSignal(c.cmd)
 	if err := c.cmd.Start(); err != nil {
@@ -92,7 +114,7 @@ func startShutdownChild(t *testing.T, grace time.Duration) *shutdownChild {
 
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		resp, err := http.Get("http://" + c.addr + "/ping")
+		resp, err := client.Get(scheme + c.addr + "/ping")
 		if err == nil {
 			_ = resp.Body.Close()
 			return c
