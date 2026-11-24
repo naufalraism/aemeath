@@ -363,7 +363,7 @@ app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore()}), csr
 Other notes:
 
 - `db` and `cache` close their connection when the server shuts down; register your own cleanup with `app.OnShutdown(func(ctx context.Context) error { ... })` (hooks run in reverse order, each with 10 seconds of its own).
-- `LocalStorage.Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part, replaces control and invisible formatting characters with `_`, and appends `.txt` to names a browser would render or run (`.html`, `.svg`, `.js`, ...). `Static` sends every file with `X-Content-Type-Options: nosniff` and a file of unknown type as `application/octet-stream`, so a served upload folder cannot become stored XSS. It does **not** reject file types: use the `accept` tag, which checks the file's bytes. Files are private to the server's user (mode `0600` on Linux and macOS; on Windows, access follows the folder's permissions); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
+- `storage.Local` (`storage.NewLocal(dir)`, registered with `aemeath.Provide[storage.Storage](app, ...)`) stores uploads on disk. `Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part, replaces control and invisible formatting characters with `_`, and appends `.txt` to names a browser would render or run (`.html`, `.svg`, `.js`, ...). `Static` sends every file with `X-Content-Type-Options: nosniff` and a file of unknown type as `application/octet-stream`, so a served upload folder cannot become stored XSS. It does **not** reject file types: use the `accept` tag, which checks the file's bytes. Files are private to the server's user (mode `0600` on Linux and macOS; on Windows, access follows the folder's permissions); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
 - For OAuth2, make the `state` with `oauth2.GenerateState()`, keep it in a cookie, and compare it in the callback. See `examples/basic`.
 - WebSockets only accept **same-origin** browser connections by default. To allow others, set `ws.Upgrader.CheckOrigin`. Messages are limited to 1 MiB (`ws.DefaultReadLimit`), and a connection whose client stops answering pings is closed after 60 seconds (`ws.DefaultIdleTimeout`; the server pings every 30 seconds, and browsers answer by themselves).
 
@@ -488,7 +488,7 @@ Plugins moved to their own packages and now provide typed dependencies instead o
 | `aemeath.NewMailer(...)`, `c.State["mailer"]` | `mailer.New(...)`, `mailer.From(c)` |
 | `aemeath.NewOAuth2(...)`, `aemeath.OAuthFrom(c, "google")` | `oauth2.New(...)`, `oauth2.From(c, "google")` |
 | `c.Upgrade()` | `ws.Upgrade(c)` |
-| `c.State["storage"].(aemeath.Storage)` | `aemeath.MustGet[aemeath.Storage](c)` |
+| `c.State["storage"].(aemeath.Storage)` | `aemeath.MustGet[storage.Storage](c)` (package `storage`) |
 
 Validation failures are now `422` with a list of field errors (they were `400` with a single message).
 

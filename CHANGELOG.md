@@ -34,6 +34,7 @@ All notable changes to this project are documented here.
 
 - **Docs, README and examples register group routes with `GET(group, …)`** instead of the deprecated `GroupGET`.
 - **Docs and README set limits with `app.SetMax…`** instead of the deprecated package variables.
+- **Docs, README, SECURITY.md and examples use the `storage` package and `SlogLogger` to a file** instead of the deprecated `LocalStorage`, `StoragePlugin` and `FileLogger`.
 
 ## [0.5.0] - 2026-11-23
 

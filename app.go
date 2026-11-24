@@ -155,7 +155,7 @@ func (a *App) writeError(c *Ctx, err error) {
 
 // Provide makes a service available to every handler through Get[T] and
 // MustGet[T]. Call it during startup, before the server runs. For an
-// interface, name it explicitly: Provide[aemeath.Storage](app, store).
+// interface, name it explicitly: Provide[storage.Storage](app, store).
 func Provide[T any](a *App, v T) {
 	a.depsMu.Lock()
 	defer a.depsMu.Unlock()

@@ -7,8 +7,10 @@
 package main
 
 import (
+	"context"
 	"crypto/subtle"
 	"log"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -26,6 +28,7 @@ import (
 	"github.com/naufalraism/aemeath/jwt"
 	"github.com/naufalraism/aemeath/mailer"
 	aeoauth "github.com/naufalraism/aemeath/oauth2"
+	"github.com/naufalraism/aemeath/storage"
 	"github.com/naufalraism/aemeath/ws"
 )
 
@@ -199,11 +202,9 @@ func main() {
 		return map[string]string{"message": "Served from cache", "value": val}, nil
 	})
 
-	// 10. Storage plugin (file upload).
-	localStore := aemeath.NewLocalStorage("./uploads")
-	if err := app.RegisterPlugin(&aemeath.StoragePlugin{Storage: localStore}); err != nil {
-		log.Fatal(err)
-	}
+	// 10. File storage (upload). Provided under the interface type, so a
+	// handler reads it as storage.Storage, whatever the backend.
+	aemeath.Provide[storage.Storage](app, storage.NewLocal("./uploads"))
 	// The accept tag checks the file's bytes (not its name), maxsize its
 	// size; a file that fails either is refused with 422 before the handler.
 	type UploadIn struct {
@@ -216,22 +217,20 @@ func main() {
 		}
 		defer func() { _ = file.Close() }()
 
-		savedName, err := aemeath.MustGet[aemeath.Storage](c).Save(in.File.Filename, file)
+		savedName, err := aemeath.MustGet[storage.Storage](c).Save(in.File.Filename, file)
 		if err != nil {
 			return nil, aemeath.InternalError("failed to save the file")
 		}
 		return map[string]string{"message": "File uploaded!", "filename": savedName}, nil
 	})
 
-	// 11. File logger plugin.
-	fileLogger, err := aemeath.NewFileLogger("access.log")
+	// 11. Access log in a file, as JSON lines; closed when the server stops.
+	accessLog, err := os.OpenFile("access.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
-		log.Fatal("failed to create the file logger:", err)
+		log.Fatal("failed to open the access log:", err)
 	}
-	if err := app.RegisterPlugin(fileLogger); err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = fileLogger.Close() }()
+	app.Use(aemeath.SlogLogger(slog.New(slog.NewJSONHandler(accessLog, nil))))
+	app.OnShutdown(func(context.Context) error { return accessLog.Close() })
 
 	// 12. OAuth2 plugin (Google login).
 	// NOTE: these routes need a real Client ID and Secret from Google Cloud;
