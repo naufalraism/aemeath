@@ -34,7 +34,7 @@ aemeath.POST(app, "/profile", func(c *aemeath.Ctx, in ProfileIn) (Profile, error
 
 - **The type is detected from the file's bytes**, not from the name or the `Content-Type` the client claims. A script renamed to `.png` is rejected with `accept`.
 - A `*multipart.FileHeader` field takes exactly one file (a second one is a 422); use `[]*multipart.FileHeader` for several.
-- The whole body is limited: `aemeath.DefaultMaxMultipartBytes` (32 MiB) for multipart and `DefaultMaxBodyBytes` (1 MiB) for urlencoded forms. Larger requests get 413. Change them before starting the server. A handler that reads `c.R.Body` itself is capped too, at `aemeath.DefaultMaxRequestBytes` (by default the larger of the two, 32 MiB); for bigger uploads put `aemeath.MaxBodySize(n)` on that group, which replaces the cap.
+- The whole body is limited: 32 MiB for multipart (`app.SetMaxMultipartBytes`) and 1 MiB for urlencoded forms (`app.SetMaxBodyBytes`). Larger requests get 413. Change them before starting the server. A handler that reads `c.R.Body` itself is capped too (`app.SetMaxRequestBytes`; by default the larger of the two, 32 MiB); for bigger uploads put `aemeath.MaxBodySize(n)` on that group, which replaces the cap.
 - Uploads beyond 8 MiB spill to temporary files. They are **deleted when the handler returns**, so copy what you need inside the handler.
 - Never use the client's file name as a path. `aemeath.LocalStorage` generates safe names and stores files mode `0600` (on Linux and macOS; on Windows the folder's permissions apply).
 - Form values come from the request **body only**, never from the URL query, so `?user=attacker` cannot fill a form field.

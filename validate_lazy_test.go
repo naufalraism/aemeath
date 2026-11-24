@@ -43,13 +43,13 @@ func validateBoth(t testing.TB, body []byte) (lazy, eager []FieldError, decoded 
 	plan := planFor(reflect.TypeFor[lazyIn]())
 	v := reflect.ValueOf(&in).Elem()
 
-	plan.validate(v, "", decodeSent(body), &eager, nil)
+	plan.validate(v, "", decodeSent(body), &eager, 0, nil)
 
 	var need bool
-	plan.validate(v, "", nil, &lazy, &need)
+	plan.validate(v, "", nil, &lazy, 0, &need)
 	if need {
 		lazy = nil
-		plan.validate(v, "", decodeSent(body), &lazy, nil)
+		plan.validate(v, "", decodeSent(body), &lazy, 0, nil)
 	}
 	return lazy, eager, need, true
 }

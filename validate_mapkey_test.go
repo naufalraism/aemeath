@@ -64,7 +64,7 @@ func TestMapErrorsAreSortedByKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	var errs []FieldError
-	planFor(reflect.TypeFor[in]()).validate(reflect.ValueOf(v), "", decodeSent(body), &errs, nil)
+	planFor(reflect.TypeFor[in]()).validate(reflect.ValueOf(v), "", decodeSent(body), &errs, 0, nil)
 	var got []string
 	for _, e := range errs {
 		got = append(got, e.Field)

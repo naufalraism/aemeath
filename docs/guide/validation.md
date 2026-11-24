@@ -37,7 +37,7 @@ Every failure is reported at once, with status `422`, up to 100 per request:
 
 Nested fields are named `address.city`, `items[1].qty` or `extra[home].city`.
 
-Validation stops after `aemeath.MaxValidationErrors` errors (100), and only those are listed, in the order of the fields. Without a limit, a 1 MiB body of empty objects made the server build a 25 MB response. Set it to `0` for no limit, before the server starts. The Go client returns it as `*aemeath.HTTPError` with `Errors`, and the generated TypeScript `ApiError` has an `errors` array.
+Validation stops after 100 errors, and only those are listed, in the order of the fields. Without a limit, a 1 MiB body of empty objects made the server build a 25 MB response. Change it with `app.SetMaxValidationErrors(n)` before the server starts; `0` means no limit. The Go client returns it as `*aemeath.HTTPError` with `Errors`, and the generated TypeScript `ApiError` has an `errors` array.
 
 ## Rules to know
 

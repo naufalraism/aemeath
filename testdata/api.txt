@@ -111,6 +111,10 @@ aemeath: method (*App) ReactQueryHooks() string
 aemeath: method (*App) RegisterPlugin(p Plugin) error
 aemeath: method (*App) Serve(srv *http.Server) error
 aemeath: method (*App) ServeHTTP(w http.ResponseWriter, r *http.Request)
+aemeath: method (*App) SetMaxBodyBytes(n int64)
+aemeath: method (*App) SetMaxMultipartBytes(n int64)
+aemeath: method (*App) SetMaxRequestBytes(n int64)
+aemeath: method (*App) SetMaxValidationErrors(n int)
 aemeath: method (*App) SetShutdownDelay(d time.Duration)
 aemeath: method (*App) SetShutdownTimeout(d time.Duration)
 aemeath: method (*App) ShuttingDown() bool
@@ -122,6 +126,7 @@ aemeath: method (*App) Use(m ...Middleware)
 aemeath: method (*App) WriteTypeScript(dir string) error
 aemeath: method (*App) ZodSchemas() string
 aemeath: method (*Ctx) Authenticated() bool
+aemeath: method (*Ctx) BodyLimits() (body, multipart int64)
 aemeath: method (*Ctx) Context() context.Context
 aemeath: method (*Ctx) File(path string) error
 aemeath: method (*Ctx) JSON(code int, v any) error

@@ -19,25 +19,33 @@ import (
 // MaxValidationErrors is the most validation errors one request reports
 // (100). Validation stops once it is reached: without a limit, a 1 MiB body of
 // 349,517 empty objects made the server build and send 349,517 errors, a 25 MB
-// response. Set it to 0 for no limit. Change it before the server starts.
+// response. Set it to 0 for no limit.
+//
+// Deprecated: use App.SetMaxValidationErrors, which sets it for one app. An
+// app that does not call it still reads this variable. It will be removed
+// before v1.0.
 var MaxValidationErrors = 100
 
-// errorsFull reports whether no more validation errors should be collected.
-func errorsFull(errs []FieldError) bool {
-	return MaxValidationErrors > 0 && len(errs) >= MaxValidationErrors
+// errorsFull reports whether no more validation errors should be collected
+// (limit 0 means no limit).
+func errorsFull(errs []FieldError, limit int) bool {
+	return limit > 0 && len(errs) >= limit
 }
 
-// capErrors trims errs to MaxValidationErrors (a field with several failing
-// rules can add more than one past the check).
-func capErrors(errs []FieldError) []FieldError {
-	if MaxValidationErrors > 0 && len(errs) > MaxValidationErrors {
-		return errs[:MaxValidationErrors]
+// capErrors trims errs to the limit (a field with several failing rules can
+// add more than one past the check).
+func capErrors(errs []FieldError, limit int) []FieldError {
+	if limit > 0 && len(errs) > limit {
+		return errs[:limit]
 	}
 	return errs
 }
 
-// DefaultMaxBodyBytes is the default limit for JSON request bodies (1 MiB).
-// It can be changed before the server starts.
+// DefaultMaxBodyBytes is the default limit for JSON request bodies and
+// urlencoded forms (1 MiB).
+//
+// Deprecated: use App.SetMaxBodyBytes, which sets it for one app. An app that
+// does not call it still reads this variable. It will be removed before v1.0.
 var DefaultMaxBodyBytes int64 = 1 << 20
 
 type routeConfig struct {
@@ -322,7 +330,8 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 	}
 	var body []byte // the JSON body as sent, to tell "" from a missing key
 	if bodyMethod(c.R.Method) && c.R.Body != nil {
-		read, err := io.ReadAll(io.LimitReader(c.R.Body, DefaultMaxBodyBytes+1))
+		limit := c.app.bodyBytes()
+		read, err := io.ReadAll(io.LimitReader(c.R.Body, limit+1))
 		if err != nil {
 			var mbe *http.MaxBytesError
 			if errors.As(err, &mbe) {
@@ -330,8 +339,8 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 			}
 			return BadRequest("failed to read request body")
 		}
-		if int64(len(read)) > DefaultMaxBodyBytes {
-			return PayloadTooLarge(fmt.Sprintf("request body exceeds the limit of %d bytes", DefaultMaxBodyBytes))
+		if int64(len(read)) > limit {
+			return PayloadTooLarge(fmt.Sprintf("request body exceeds the limit of %d bytes", limit))
 		}
 		body = read
 		if len(body) > 0 {
@@ -363,14 +372,14 @@ func bind(c *Ctx, in any, info *inputInfo) (err error) {
 	if len(body) > 0 && info.needsSent() {
 		ask = &needSent
 	}
-	info.plan.validate(v, "", nil, &errs, ask)
+	info.plan.validate(v, "", nil, &errs, c.app.validationErrors(), ask)
 	if needSent {
 		// A rule depends on whether a key was sent: decode the body once more
 		// and validate again, now knowing the keys.
 		errs = nil
-		info.plan.validate(v, "", decodeSent(body), &errs, nil)
+		info.plan.validate(v, "", decodeSent(body), &errs, c.app.validationErrors(), nil)
 	}
-	if errs = capErrors(errs); len(errs) > 0 {
+	if errs = capErrors(errs, c.app.validationErrors()); len(errs) > 0 {
 		return ValidationError(errs...)
 	}
 	return nil
