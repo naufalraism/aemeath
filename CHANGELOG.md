@@ -37,6 +37,7 @@ All notable changes to this project are documented here.
 - **Docs, README and examples register group routes with `GET(group, …)`** instead of the deprecated `GroupGET`.
 - **Docs and README set limits with `app.SetMax…`** instead of the deprecated package variables.
 - **Docs, README, SECURITY.md and examples use the `storage` package and `SlogLogger` to a file** instead of the deprecated `LocalStorage`, `StoragePlugin` and `FileLogger`.
+- **`examples/basic` logs in to Google with `oidc` and to GitHub with `oauth2` `Begin`/`Complete`**, instead of Google through plain OAuth2 with a hand-made state cookie; `.env.example` has `GOOGLE_REDIRECT_URL` (was `OAUTH_REDIRECT_URL`) and the GitHub variables. The auth guide, README and plugin list describe the new flow.
 
 ## [0.5.0] - 2026-11-23
 

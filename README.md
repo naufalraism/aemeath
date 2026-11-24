@@ -314,7 +314,7 @@ Import only what you use; each plugin's dependencies are only compiled into your
 | `aemeath/db/postgres`, `aemeath/db/mysql` | PostgreSQL and MySQL/MariaDB drivers for the same plugin | `gorm.io/driver/postgres` / `mysql` |
 | `aemeath/cache` | Redis plugin and Redis session store | `go-redis` |
 | `aemeath/mailer` | SMTP mailer | `gomail` |
-| `aemeath/oauth2` | OAuth2 login (Google, GitHub, ...) | `golang.org/x/oauth2` |
+| `aemeath/oauth2` | OAuth2 login for providers without OpenID Connect (GitHub, ...): state kept and checked in the session | `golang.org/x/oauth2` |
 | `aemeath/jobs` | background jobs: queue, workers, retries, periodic jobs | none |
 
 ### Plugins and typed dependencies
@@ -364,7 +364,7 @@ Other notes:
 
 - `db` and `cache` close their connection when the server shuts down; register your own cleanup with `app.OnShutdown(func(ctx context.Context) error { ... })` (hooks run in reverse order, each with 10 seconds of its own).
 - `storage.Local` (`storage.NewLocal(dir)`, registered with `aemeath.Provide[storage.Storage](app, ...)`) stores uploads on disk. `Save` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part, replaces control and invisible formatting characters with `_`, and appends `.txt` to names a browser would render or run (`.html`, `.svg`, `.js`, ...). `Static` sends every file with `X-Content-Type-Options: nosniff` and a file of unknown type as `application/octet-stream`, so a served upload folder cannot become stored XSS. It does **not** reject file types: use the `accept` tag, which checks the file's bytes. Files are private to the server's user (mode `0600` on Linux and macOS; on Windows, access follows the folder's permissions); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
-- For OAuth2, make the `state` with `oauth2.GenerateState()`, keep it in a cookie, and compare it in the callback. See `examples/basic`.
+- For login, `oidc` (Google, Microsoft, ...) and `oauth2` (GitHub, ...) both keep the `state` in the server-side session and check it: call `Begin` on the login route and `Complete` on the callback, behind `session.Middleware`. See `examples/basic`.
 - WebSockets only accept **same-origin** browser connections by default. To allow others, set `ws.Upgrader.CheckOrigin`. Messages are limited to 1 MiB (`ws.DefaultReadLimit`), and a connection whose client stops answering pings is closed after 60 seconds (`ws.DefaultIdleTimeout`; the server pings every 30 seconds, and browsers answer by themselves).
 
 ---
