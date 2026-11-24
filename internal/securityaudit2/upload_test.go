@@ -4,13 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/naufalraism/aemeath"
+	"github.com/naufalraism/aemeath/storage"
 )
 
 // Control and bidirectional characters were kept in stored names: "\u202e"
 // makes "evil\u202egnp.exe" display as "evilexe.png", "\n" forges log lines.
 func TestUpload_FilenameControlCharactersAreReplaced(t *testing.T) {
-	store := aemeath.NewLocalStorage(t.TempDir())
+	store := storage.NewLocal(t.TempDir())
 	for name, want := range map[string]string{
 		"evil\u202egnp.exe":               "_evil_gnp.exe",
 		"a\nINFO forged log line.png":     "_a_INFO forged log line.png",

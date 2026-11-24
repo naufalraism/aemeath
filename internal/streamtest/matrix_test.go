@@ -55,7 +55,7 @@ var (
 )
 
 func fileLogger(t *testing.T, app *aemeath.App) {
-	p, err := aemeath.NewFileLogger(filepath.Join(t.TempDir(), "app.log"))
+	p, err := aemeath.NewFileLogger(filepath.Join(t.TempDir(), "app.log")) //nolint:staticcheck // deprecated, still tested until v1.0 removes it
 	if err != nil {
 		t.Fatal(err)
 	}

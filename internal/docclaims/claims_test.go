@@ -26,6 +26,7 @@ import (
 	"github.com/naufalraism/aemeath/jobs"
 	"github.com/naufalraism/aemeath/metrics"
 	"github.com/naufalraism/aemeath/session"
+	"github.com/naufalraism/aemeath/storage"
 )
 
 func do(h http.Handler, method, target, body string, hdr ...string) *httptest.ResponseRecorder {
@@ -585,7 +586,7 @@ func TestFormClaims(t *testing.T) {
 
 func TestStorageClaims(t *testing.T) {
 	dir := t.TempDir()
-	name, err := aemeath.NewLocalStorage(dir).Save("../../etc/My File.png", strings.NewReader("x"))
+	name, err := storage.NewLocal(dir).Save("../../etc/My File.png", strings.NewReader("x"))
 	if err != nil {
 		t.Fatal(err)
 	}

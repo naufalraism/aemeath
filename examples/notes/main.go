@@ -126,7 +126,7 @@ func newApp(insecureCookies bool) *aemeath.App {
 		}
 		n := Note{Owner: owner, Title: in.Title, Body: in.Body}
 		if in.Attach != nil {
-			n.Attach = fmt.Sprintf("%d bytes", in.Attach.Size) // store the file with aemeath.Storage in a real app
+			n.Attach = fmt.Sprintf("%d bytes", in.Attach.Size) // store the file with storage.Storage in a real app
 		}
 		st.mu.Lock()
 		st.next++

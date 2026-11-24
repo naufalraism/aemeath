@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/naufalraism/aemeath"
+	"github.com/naufalraism/aemeath/storage"
 )
 
 // Handlers read the storage as the aemeath.Storage interface. StoragePlugin must
@@ -98,5 +99,41 @@ func TestSaveReplacesWindowsReservedCharacters(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(st.UploadDir, name)); err != nil {
 			t.Errorf("Save(%q): the returned name is not the file on disk: %v", tc.in, err)
 		}
+	}
+}
+
+// aemeath.Storage is an alias of storage.Storage, so code written against
+// either name finds a storage provided under the other: an app can move to
+// the storage package one handler at a time.
+func TestOldAndNewStorageNamesAreOneType(t *testing.T) {
+	// New registration, old handler.
+	app := aemeath.New()
+	aemeath.Provide[storage.Storage](app, storage.NewLocal(t.TempDir()))
+	var gotOld bool
+	aemeath.GET(app, "/old", func(c *aemeath.Ctx, _ struct{}) (string, error) {
+		_, gotOld = aemeath.Get[aemeath.Storage](c)
+		return "ok", nil
+	})
+	app.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/old", nil))
+	if !gotOld {
+		t.Error("a handler reading aemeath.Storage did not find a storage.Storage")
+	}
+
+	// Old registration (StoragePlugin, LocalStorage), new handler.
+	app2 := aemeath.New()
+	if err := app2.RegisterPlugin(&aemeath.StoragePlugin{Storage: aemeath.NewLocalStorage(t.TempDir())}); err != nil {
+		t.Fatal(err)
+	}
+	var saved string
+	aemeath.GET(app2, "/new", func(c *aemeath.Ctx, _ struct{}) (string, error) {
+		s := aemeath.MustGet[storage.Storage](c)
+		name, err := s.Save("a.html", strings.NewReader("x"))
+		saved = name
+		return "ok", err
+	})
+	rec := httptest.NewRecorder()
+	app2.ServeHTTP(rec, httptest.NewRequest("GET", "/new", nil))
+	if rec.Code != 200 || !strings.HasSuffix(saved, "_a.html.txt") {
+		t.Errorf("a handler reading storage.Storage from StoragePlugin: %d, saved %q", rec.Code, saved)
 	}
 }

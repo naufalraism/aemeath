@@ -11,13 +11,24 @@ import (
 )
 
 // FileLoggerPlugin writes HTTP access logs to a file.
+//
+// Deprecated: SlogLogger does the same and more (request ID, panics, log
+// levels, JSON): open the file and pass a slog.Logger writing to it,
+//
+//	f, err := os.OpenFile("access.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+//	app.Use(aemeath.SlogLogger(slog.New(slog.NewJSONHandler(f, nil))))
+//	app.OnShutdown(func(context.Context) error { return f.Close() })
+//
+// FileLoggerPlugin will be removed before v1.0.
 type FileLoggerPlugin struct {
 	File   *os.File
 	Logger *log.Logger
 }
 
 // NewFileLogger creates a FileLogger that appends to the file at path.
-// Example: aemeath.NewFileLogger("access.log")
+//
+// Deprecated: use SlogLogger with a slog.Logger writing to the file (see
+// FileLoggerPlugin). NewFileLogger will be removed before v1.0.
 func NewFileLogger(path string) (*FileLoggerPlugin, error) {
 	// Open or create the log file in append mode.
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
