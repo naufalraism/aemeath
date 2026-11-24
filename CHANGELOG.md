@@ -30,6 +30,7 @@ All notable changes to this project are documented here.
 ### Changed
 
 - **Docs, README and examples register group routes with `GET(group, …)`** instead of the deprecated `GroupGET`.
+- **Docs and README set limits with `app.SetMax…`** instead of the deprecated package variables.
 
 ## [0.5.0] - 2026-11-23
 

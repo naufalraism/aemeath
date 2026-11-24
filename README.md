@@ -238,7 +238,7 @@ How it behaves:
 - For **scalars** (`int`, `bool`, `float`) with `required` you **must** use a pointer so "not sent" differs from "sent as zero". Aemeath panics at **startup** for that, for `required`+`omitempty`, and for unknown or misapplied rules (`min` on a bool, `email` on a number, a bad regex, ...). A typo never becomes a silent runtime bug.
 - Nested structs, pointers to structs, slices and maps of structs are validated recursively; recursive types are supported.
 - Checks only your handler can make: `return aemeath.ValidationError(aemeath.FieldError{Field: "email", Rule: "unique", Message: "is already taken"})`.
-- Malformed input (invalid JSON, `?page=abc`) is a `400`; a body over `aemeath.DefaultMaxBodyBytes` (1 MiB) is `413`; every other body, including one a handler reads itself from `c.R.Body`, is capped at `aemeath.DefaultMaxRequestBytes` (32 MiB by default) and returning the read error gives `413`; a non-JSON `Content-Type` is `415`. With `curl -d`, add `-H 'Content-Type: application/json'`.
+- Malformed input (invalid JSON, `?page=abc`) is a `400`; a body over 1 MiB (`app.SetMaxBodyBytes`) is `413`; every other body, including one a handler reads itself from `c.R.Body`, is capped at 32 MiB by default (`app.SetMaxRequestBytes`) and returning the read error gives `413`; a non-JSON `Content-Type` is `415`. With `curl -d`, add `-H 'Content-Type: application/json'`.
 
 ---
 
