@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-24
+
+### Security
+
+- **Upgrade if you use `oauth2` login or MySQL.**
+  - `oauth2` now has `Begin` and `Complete`, which keep the login `state` in the server-side session and check it. Before, every app had to create, store and compare the state itself, and an app that skipped a step accepted a forged callback (login CSRF). Move to `Begin`/`Complete` (see Added); `GenerateState` is deprecated.
+  - `github.com/go-sql-driver/mysql` is upgraded from 1.10.1 to 1.10.2, which fixes a panic on a truncated handshake packet from the server (GHSA-9qjq-77h9-895w) and the reuse of a connection after a failed `LOAD DATA LOCAL INFILE` (GHSA-4v5x-9mc8-gr98). Aemeath does not use the other changed features (`interpolateParams`, `BeforeConnect`).
+- **Two apps in one process no longer share their limits.** The body and validation limits were package variables; one app configuring itself while another served was a data race (see Added).
+
+### Upgrading from 0.5
+
+- The four **Breaking changes** below each need a one-line change where you use them: `jwt.Claims` (a map), `mailer.New` and `cache.New` (a `Config`), and `Client` options instead of fields.
+- Everything listed under **Deprecated** still works, so the rest of your code keeps building; your editor (gopls) and staticcheck mark the calls to move. They will be removed before v1.0.
+- The CLI that generates `aemeath.GET(group, …)` needs this version: update the framework (`go get github.com/naufalraism/aemeath@v0.6.0`) before the CLI.
+
 ### Breaking changes
 
 - **`jwt.Claims`, `Verifier.Verify` and `Verifier.VerifyContext` return `map[string]any`** instead of golang-jwt's `MapClaims`, so the public API no longer depends on that library. Reading a claim is unchanged (`claims["role"].(string)`); only code calling `MapClaims` methods such as `GetSubject` needs to read the map instead (or use `jwt.UserID`).
