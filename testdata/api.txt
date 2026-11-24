@@ -316,7 +316,12 @@ metrics: type Gauge struct
 metrics: type Histogram struct
 metrics: type Registry struct
 metrics: var DefaultBuckets
+oauth2: field Login.Token *xoauth2.Token
+oauth2: field Login.User map[string]any
 oauth2: field Plugin.Config *xoauth2.Config
+oauth2: field Plugin.HTTPClient *http.Client
+oauth2: field Plugin.MaxLoginAge time.Duration
+oauth2: field Plugin.PKCE bool
 oauth2: field Plugin.ProviderName string
 oauth2: field Plugin.UserInfoURL string
 oauth2: func From(c *aemeath.Ctx, name string) (*Plugin, bool)
@@ -324,9 +329,13 @@ oauth2: func GenerateState() (string, error)
 oauth2: func New(providerName string, config *xoauth2.Config, userInfoURL string) *Plugin
 oauth2: method (*Plugin) Apply(app *aemeath.App) error
 oauth2: method (*Plugin) AuthURL(state string) string
+oauth2: method (*Plugin) Begin(c *aemeath.Ctx) error
+oauth2: method (*Plugin) Complete(c *aemeath.Ctx) (*Login, error)
 oauth2: method (*Plugin) Exchange(ctx context.Context, code string) (*xoauth2.Token, error)
 oauth2: method (*Plugin) UserInfo(ctx context.Context, token *xoauth2.Token) (map[string]any, error)
+oauth2: type Login struct
 oauth2: type Plugin struct
+oauth2: var ErrLogin
 oidc: field Config.ClientID string
 oidc: field Config.ClientSecret string
 oidc: field Config.HTTPClient *http.Client

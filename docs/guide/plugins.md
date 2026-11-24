@@ -11,7 +11,7 @@ Plugins live in their own packages, so you only pay for what you import.
 | `aemeath/cache` | Redis (`cache.New`, `cache.From`, `cache.NewSessionStore`) |
 | `aemeath/metrics`, `aemeath/tracing` | Prometheus metrics; W3C tracing exported over OTLP |
 | `aemeath/mailer` | SMTP (`mailer.New`, `mailer.From`) |
-| `aemeath/oauth2` | OAuth2 login (`oauth2.New`, `oauth2.From`, `oauth2.GenerateState`) |
+| `aemeath/oauth2` | OAuth2 login for providers without OpenID Connect (`oauth2.New`, `Begin`, `Complete`) |
 | `aemeath/ws` | WebSockets (`ws.Upgrade`) |
 
 ```go

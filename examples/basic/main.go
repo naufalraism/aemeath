@@ -8,7 +8,6 @@ package main
 
 import (
 	"context"
-	"crypto/subtle"
 	"log"
 	"log/slog"
 	"mime/multipart"
@@ -19,7 +18,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
+	githuboauth "golang.org/x/oauth2/github"
 
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/cache"
@@ -28,6 +27,8 @@ import (
 	"github.com/naufalraism/aemeath/jwt"
 	"github.com/naufalraism/aemeath/mailer"
 	aeoauth "github.com/naufalraism/aemeath/oauth2"
+	"github.com/naufalraism/aemeath/oidc"
+	"github.com/naufalraism/aemeath/session"
 	"github.com/naufalraism/aemeath/storage"
 	"github.com/naufalraism/aemeath/ws"
 )
@@ -232,78 +233,64 @@ func main() {
 	app.Use(aemeath.SlogLogger(slog.New(slog.NewJSONHandler(accessLog, nil))))
 	app.OnShutdown(func(context.Context) error { return accessLog.Close() })
 
-	// 12. OAuth2 plugin (Google login).
-	// NOTE: these routes need a real Client ID and Secret from Google Cloud;
-	// without them Google answers with a 400. Fill in the .env file to try it.
-	googleConfig := &oauth2.Config{
-		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		RedirectURL:  os.Getenv("OAUTH_REDIRECT_URL"),
-		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
-		Endpoint:     google.Endpoint,
-	}
-	googleOAuth := aeoauth.New(
-		"google",
-		googleConfig,
-		"https://www.googleapis.com/oauth2/v2/userinfo",
-	)
-	if err := app.RegisterPlugin(googleOAuth); err != nil {
-		log.Fatal(err)
-	}
+	// 12. Social login. Both flows keep their state in the server-side
+	// session and check it, so the routes need session.Middleware. Cookies
+	// are Secure unless APP_ENV=development (plain http on localhost).
+	auth := app.Group("/auth", session.Middleware(session.Config{
+		Store:    session.NewMemoryStore(),
+		Insecure: os.Getenv("APP_ENV") == "development",
+	}))
 
-	// Step 1: return the Google login URL. A random state value is stored in
-	// a short-lived cookie and checked in the callback to prevent CSRF.
-	aemeath.GET(app, "/auth/google/login", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
-		oauth, ok := aeoauth.From(c, "google")
-		if !ok {
-			return nil, aemeath.InternalError("google oauth is not configured")
-		}
-		state, err := aeoauth.GenerateState()
-		if err != nil {
-			return nil, aemeath.InternalError("could not start the login")
-		}
-		http.SetCookie(c.W, &http.Cookie{
-			Name:     "oauth_state",
-			Value:    state,
-			Path:     "/auth/google",
-			MaxAge:   600,
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
+	// Google speaks OpenID Connect: use package oidc, which also verifies the
+	// ID token. Discover fetches Google's configuration, so it only runs when
+	// the credentials are set (fill in the .env file to try it).
+	if os.Getenv("GOOGLE_CLIENT_ID") != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		google, err := oidc.Discover(ctx, oidc.Config{
+			Issuer:       "https://accounts.google.com",
+			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+			RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"), // e.g. http://localhost:3000/auth/google/callback
 		})
-		return map[string]string{"url": oauth.AuthURL(state)}, nil
-	})
-
-	// Step 2: handle the callback from Google.
-	aemeath.GET(app, "/auth/google/callback", func(c *aemeath.Ctx, _ struct{}) (map[string]any, error) {
-		cookie, err := c.R.Cookie("oauth_state")
-		got := c.Query("state")
-		if err != nil || got == "" || subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(got)) != 1 {
-			return nil, aemeath.BadRequest("invalid state")
-		}
-		code := c.Query("code")
-		if code == "" {
-			return nil, aemeath.BadRequest("code not found")
-		}
-
-		oauth, ok := aeoauth.From(c, "google")
-		if !ok {
-			return nil, aemeath.InternalError("google oauth is not configured")
-		}
-		token, err := oauth.Exchange(c.Context(), code)
+		cancel()
 		if err != nil {
-			return nil, aemeath.Unauthorized("failed to exchange the token")
+			log.Fatal("google login: ", err)
 		}
+		auth.Handle("GET", "/google/login", func(c *aemeath.Ctx) error { return google.Begin(c) })
+		auth.Handle("GET", "/google/callback", func(c *aemeath.Ctx) error {
+			id, err := google.Complete(c)
+			if err != nil {
+				return err
+			}
+			s := session.From(c)
+			if err := s.Renew(c.Context()); err != nil { // a new session id after login
+				return err
+			}
+			s.Set("user", id.Issuer+"|"+id.Subject) // issuer + subject, never the e-mail
+			return c.JSON(200, map[string]any{"message": "Login successful!", "email": id.Email, "name": id.Name})
+		})
+	}
 
-		userInfo, err := oauth.UserInfo(c.Context(), token)
+	// GitHub login is plain OAuth2 (no OpenID Connect): package oauth2.
+	github := aeoauth.New("github", &oauth2.Config{
+		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("GITHUB_REDIRECT_URL"), // e.g. http://localhost:3000/auth/github/callback
+		Scopes:       []string{"read:user"},
+		Endpoint:     githuboauth.Endpoint,
+	}, "https://api.github.com/user")
+	auth.Handle("GET", "/github/login", func(c *aemeath.Ctx) error { return github.Begin(c) })
+	auth.Handle("GET", "/github/callback", func(c *aemeath.Ctx) error {
+		login, err := github.Complete(c)
 		if err != nil {
-			return nil, aemeath.InternalError("failed to fetch the user profile")
+			return err
 		}
-
-		return map[string]any{
-			"message": "Login successful!",
-			"user":    userInfo,
-		}, nil
+		s := session.From(c)
+		if err := s.Renew(c.Context()); err != nil {
+			return err
+		}
+		s.Set("github_id", login.User["id"]) // GitHub's numeric id: logins can be renamed
+		return c.JSON(200, map[string]any{"message": "Login successful!", "login": login.User["login"]})
 	})
 
 	// 13. Documentation and generated client.
