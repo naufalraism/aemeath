@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-24
+
 ### Fixed
 
 - **A `bool` parameter accepts `on` and `off`** (any case), in the query, path, headers, cookies and forms. An HTML checkbox without a `value` attribute submits `on` when ticked, which was refused with 400, so a login form with "remember me" failed as soon as the box was ticked. Other values are still refused.
