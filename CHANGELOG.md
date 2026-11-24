@@ -18,6 +18,7 @@ All notable changes to this project are documented here.
 - **`Route`, `GET`, `POST`, `PUT`, `PATCH`, `DELETE` and `Register` accept a `Group` as well as an `App`**, through the new `Router` interface: `aemeath.GET(api, "/users/{id}", getUser)`. Inside a group the path is relative to its prefix, and its middlewares and options apply, exactly as with the `GroupGET` family. Code that passes an `*App` is unchanged.
 - **Limits per app: `App.SetMaxBodyBytes`, `SetMaxMultipartBytes`, `SetMaxRequestBytes` and `SetMaxValidationErrors`.** They were package variables, so two apps in one process (two parallel tests, say) could not have different limits, and one configuring itself while the other served was a data race (the race detector reported it). Call them before the server starts; they panic afterwards. `Ctx.BodyLimits` gives middleware that reads a form itself the same limits; `csrf` uses it.
 - **Package `storage`**: `storage.Storage` and `storage.Local` (`storage.NewLocal`), the file storage that was in the core package, unchanged in behaviour. Register it with `aemeath.Provide[storage.Storage](app, storage.NewLocal("uploads"))`. The package uses only the standard library. Its errors start with `storage:` instead of `aemeath:`.
+- **`oauth2.Plugin.Begin` and `Complete`**: a login that keeps the state in the server-side session and checks it (constant time, once, within `MaxLoginAge`), like `oidc`. `Complete` returns the token and the user info. Optional `PKCE`; `HTTPClient` (10-second timeout by default) for the exchange and user info. Before, each app created, stored and compared the state itself, and forgetting a step left the login open to CSRF.
 
 ### Deprecated
 
@@ -25,6 +26,7 @@ All notable changes to this project are documented here.
 - **`DefaultMaxBodyBytes`, `DefaultMaxMultipartBytes`, `DefaultMaxRequestBytes` and `MaxValidationErrors`**: use the `App.SetMax…` methods. An app that does not call them still reads these variables, even when they change after `New`, so existing code behaves as before. They will be removed before v1.0.
 - **`Storage`, `StoragePlugin`, `LocalStorage` and `NewLocalStorage`**: use the `storage` package. `aemeath.Storage` is an alias of `storage.Storage`, so a storage provided under one name is found under the other, and `LocalStorage` now calls `storage.Local`. They will be removed before v1.0.
 - **`FileLoggerPlugin` and `NewFileLogger`**: `SlogLogger` does the same and more (request ID, panics, levels, JSON). Write to a file with `app.Use(aemeath.SlogLogger(slog.New(slog.NewJSONHandler(f, nil))))` and close it with `app.OnShutdown`. They will be removed before v1.0.
+- **`oauth2.GenerateState`**: `Begin` and `Complete` handle the state. It will be removed before v1.0.
 
 ### Fixed
 
