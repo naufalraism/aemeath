@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/naufalraism/aemeath"
+	"github.com/naufalraism/aemeath/storage"
 )
 
 // A PNG header followed by HTML: http.DetectContentType sees image/png.
@@ -32,7 +33,7 @@ func multipartBody(t *testing.T, field, filename string, content []byte) (*bytes
 // app.Static: the documented way to build an avatar upload.
 func TestUpload_PolyglotServedAsHTML(t *testing.T) {
 	dir := t.TempDir()
-	store := aemeath.NewLocalStorage(dir)
+	store := storage.NewLocal(dir)
 	app := aemeath.New()
 	app.Use(aemeath.SecurityHeaders())
 	app.Static("/uploads", dir)
@@ -93,7 +94,7 @@ func TestUpload_AcceptChecksOnlyMagicBytes(t *testing.T) {
 // The client's file name must never escape the upload directory.
 func TestUpload_FilenameTraversal(t *testing.T) {
 	dir := t.TempDir()
-	store := aemeath.NewLocalStorage(dir)
+	store := storage.NewLocal(dir)
 	for _, name := range []string{"../../etc/passwd", `..\..\win.ini`, "/abs/path.txt", "..", ".", "", "a/../../b.txt"} {
 		stored, err := store.Save(name, strings.NewReader("x"))
 		if err != nil {

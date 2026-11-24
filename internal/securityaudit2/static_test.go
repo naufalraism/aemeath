@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/naufalraism/aemeath"
+	"github.com/naufalraism/aemeath/storage"
 )
 
 // LocalStorage neutralizes .html, .svg, .js ... but a name with no extension
@@ -15,7 +16,7 @@ import (
 // the content: an uploaded page ran as HTML on the site's own origin.
 func TestStatic_UploadWithoutKnownExtensionIsNotServedAsHTML(t *testing.T) {
 	dir := t.TempDir()
-	store := aemeath.NewLocalStorage(dir)
+	store := storage.NewLocal(dir)
 	app := aemeath.New()
 	app.Static("/uploads", dir)
 	page := "<!doctype html><script>alert(document.cookie)</script>"

@@ -93,8 +93,6 @@ aemeath: func WithHeader(k, v string) ClientOption
 aemeath: imethod Plugin.Apply(app *App) error
 aemeath: imethod Router.Handle(method, path string, h HandlerFunc)
 aemeath: imethod Router.target(path string, opts []RouteOption) (a *App, full string, merged []RouteOption)
-aemeath: imethod Storage.Delete(filename string) error
-aemeath: imethod Storage.Save(filename string, src io.Reader) (string, error)
 aemeath: method (*App) AddReadyCheck(name string, fn HealthCheck)
 aemeath: method (*App) EnableClient()
 aemeath: method (*App) EnableDocs(info Info)
@@ -174,7 +172,7 @@ aemeath: type Plugin interface
 aemeath: type RouteOption func(*routeConfig)
 aemeath: type Router interface
 aemeath: type SSE struct
-aemeath: type Storage interface
+aemeath: type Storage = storage.Storage
 aemeath: type StoragePlugin struct
 aemeath: var DefaultMaxBodyBytes int64
 aemeath: var DefaultMaxMultipartBytes int64
@@ -389,6 +387,16 @@ session: type MemoryStore struct
 session: type Session struct
 session: type Store interface
 session: var ErrStoreFull
+storage: field Local.DirMode os.FileMode
+storage: field Local.FileMode os.FileMode
+storage: field Local.UploadDir string
+storage: func NewLocal(uploadDir string) *Local
+storage: imethod Storage.Delete(filename string) error
+storage: imethod Storage.Save(filename string, src io.Reader) (string, error)
+storage: method (*Local) Delete(filename string) error
+storage: method (*Local) Save(filename string, src io.Reader) (string, error)
+storage: type Local struct
+storage: type Storage interface
 tracing: field Config.BatchSize int
 tracing: field Config.Client *http.Client
 tracing: field Config.Endpoint string
