@@ -165,7 +165,7 @@ func TestStoreContract(t *testing.T) {
 	d, ok, _ := s.Load(ctx, "x")
 	d["a"] = 2 // must not alias the stored copy
 	d2, _, _ := s.Load(ctx, "x")
-	if !ok || d2["a"] != 1 {
+	if !ok || d2["a"] != 1.0 { // numbers come back as float64, as from every store
 		t.Fatal("store aliases data")
 	}
 }

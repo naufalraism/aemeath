@@ -172,7 +172,7 @@ curl "http://localhost:3000/hello/Aemeath?lang=fr"
 | `json:"name"` | JSON request body | `POST`, `PUT`, `PATCH` |
 
 - Path/query/header/cookie values override anything with the same name in the body.
-- Supported parameter types: `string`, integers, floats, `bool`, pointers and slices of those (slices: query only), and any type implementing `encoding.TextUnmarshaler` (`time.Time` as RFC 3339, UUID types, ...).
+- Supported parameter types: `string`, integers, floats, `bool` (`true`/`false`, `1`/`0`, and `on`/`off`, which an HTML checkbox sends), pointers and slices of those (slices: query only), and any type implementing `encoding.TextUnmarshaler` (`time.Time` as RFC 3339, UUID types, ...).
 - Embedded structs are flattened, exactly like `encoding/json` does, and can carry path/query/header tags (handy for shared pagination structs).
 - A `json`-tagged field on a `GET`/`DELETE` route is **never bound** (no body). Aemeath logs a warning at startup; use `query:"..."`.
 - Unknown paths return `404`; known paths with the wrong method return `405` with an `Allow` header. Both pass through your global middlewares.

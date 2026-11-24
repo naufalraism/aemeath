@@ -19,3 +19,7 @@ func TestMemoryStoreContract(t *testing.T) {
 func TestMemoryStoreConcurrentRequests(t *testing.T) {
 	storetest.RunConcurrentRequests(t, func(*testing.T) session.Store { return session.NewMemoryStore() })
 }
+
+func TestMemoryStoreValueTypes(t *testing.T) {
+	storetest.RunValueTypes(t, func(*testing.T) session.Store { return session.NewMemoryStore() })
+}

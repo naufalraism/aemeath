@@ -489,7 +489,7 @@ func setField(fv reflect.Value, raw string) error {
 		}
 		fv.SetFloat(n)
 	case reflect.Bool:
-		b, err := strconv.ParseBool(raw)
+		b, err := parseBool(raw)
 		if err != nil {
 			return err
 		}
@@ -505,4 +505,17 @@ func setField(fv reflect.Value, raw string) error {
 // Inside a Group, e.Path is relative to the group's prefix.
 func Register[In, Out any](r Router, e Endpoint[In, Out], fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
 	return Route(r, e.Method, e.Path, fn, opts...)
+}
+
+// parseBool reads a bool parameter: what strconv.ParseBool accepts, plus "on"
+// and "off" in any case. An HTML checkbox without a value attribute submits
+// "on" when ticked (and nothing when not).
+func parseBool(raw string) (bool, error) {
+	switch {
+	case strings.EqualFold(raw, "on"):
+		return true, nil
+	case strings.EqualFold(raw, "off"):
+		return false, nil
+	}
+	return strconv.ParseBool(raw)
 }

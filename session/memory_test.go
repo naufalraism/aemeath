@@ -74,7 +74,9 @@ func TestMemoryStoreDefaultCap(t *testing.T) {
 
 // A map or slice stored in a session used to be shared by every request of
 // that session (the copy was one level deep); two requests writing to it at
-// the same time crashed the program with "concurrent map writes".
+// the same time crashed the program with "concurrent map writes". The store
+// now keeps JSON, so every Load decodes fresh maps and slices (as JSON
+// values: map[string]any, []any, float64).
 func TestMemoryStoreCopiesNestedValues(t *testing.T) {
 	s := NewMemoryStore()
 	ctx := context.Background()
@@ -91,7 +93,7 @@ func TestMemoryStoreCopiesNestedValues(t *testing.T) {
 
 	a, _, _ := s.Load(ctx, "id")
 	b, _, _ := s.Load(ctx, "id")
-	if a["cart"].(map[string]int)["a"] != 1 {
+	if a["cart"].(map[string]any)["a"] != 1.0 {
 		t.Fatal("Save kept a reference to the caller's map")
 	}
 	var wg sync.WaitGroup
@@ -100,15 +102,15 @@ func TestMemoryStoreCopiesNestedValues(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < 1000; i++ {
-				d["cart"].(map[string]int)["a"]++
-				d["tags"].([]string)[0] = "y"
+				d["cart"].(map[string]any)["a"] = float64(i)
+				d["tags"].([]any)[0] = "y"
 				d["deep"].(map[string]any)["list"].([]any)[0].(map[string]any)["n"] = i
 			}
 		}()
 	}
 	wg.Wait()
 	c, _, _ := s.Load(ctx, "id")
-	if c["cart"].(map[string]int)["a"] != 1 || c["tags"].([]string)[0] != "x" || c["count"] != 3 {
+	if c["cart"].(map[string]any)["a"] != 1.0 || c["tags"].([]any)[0] != "x" || c["count"] != 3.0 {
 		t.Fatalf("a loaded copy changed the stored session: %v", c)
 	}
 }

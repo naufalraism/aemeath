@@ -22,6 +22,8 @@ aemeath.POST(app, "/profile", func(c *aemeath.Ctx, in ProfileIn) (Profile, error
 })
 ```
 
+A `bool` field reads an HTML checkbox: ticked sends `on` (`true`), unticked sends nothing (`false`).
+
 `validate` rules work as usual, and errors name the form field: `{"field":"avatar","rule":"accept",...}`. You can still mix in `path:`, `query:`, `header:` and `cookie:` fields.
 
 ## Upload rules
