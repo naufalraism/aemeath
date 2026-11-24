@@ -27,3 +27,12 @@ func TestRedisSessionStoreConcurrentRequests(t *testing.T) {
 		return cache.NewSessionStore(p, "")
 	})
 }
+
+func TestRedisSessionStoreValueTypes(t *testing.T) {
+	storetest.RunValueTypes(t, func(t *testing.T) session.Store {
+		mr := miniredis.RunT(t)
+		p := cache.New(cache.Config{Addr: mr.Addr()})
+		t.Cleanup(func() { _ = p.Close() })
+		return cache.NewSessionStore(p, "")
+	})
+}

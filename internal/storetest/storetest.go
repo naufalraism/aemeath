@@ -50,6 +50,55 @@ func Run(t *testing.T, newStore func(t *testing.T) Store) {
 		sameJSON(t, got, data())
 	})
 
+	// Values come back as encoding/json decodes them, whatever the store:
+	// numbers as float64, objects as map[string]any, arrays as []any. A store
+	// that kept Go types (MemoryStore did) let s.Get("n").(int) work on a
+	// laptop and fail in production on Redis.
+	t.Run("values come back as JSON values", func(t *testing.T) {
+		s := newStore(t)
+		type point struct{ X, Y int }
+		in := map[string]any{"int": 3, "uint": uint(42), "int64": int64(-7), "float": 0.5,
+			"bool": true, "nil": nil, "str": "x", "slice": []int{1, 2}, "struct": point{1, 2}}
+		if err := s.Save(ctx, "a", in, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+		got, ok, err := s.Load(ctx, "a")
+		if err != nil || !ok {
+			t.Fatalf("Load = %v, %v", ok, err)
+		}
+		want := map[string]string{"int": "float64", "uint": "float64", "int64": "float64", "float": "float64",
+			"bool": "bool", "nil": "<nil>", "str": "string", "slice": "[]interface {}", "struct": "map[string]interface {}"}
+		for k, typ := range want {
+			if g := fmt.Sprintf("%T", got[k]); g != typ {
+				t.Errorf("%s: loaded as %s (%v), want %s", k, g, got[k], typ)
+			}
+		}
+		sameJSON(t, got, in)
+	})
+
+	// A value JSON cannot encode is refused when saving, by every store, so
+	// it fails on a laptop as it would in production.
+	t.Run("a value JSON cannot encode is refused", func(t *testing.T) {
+		s := newStore(t)
+		if err := s.Save(ctx, "a", map[string]any{"ch": make(chan int)}, time.Hour); err == nil {
+			t.Fatal("Save accepted a channel")
+		}
+		if _, ok, _ := s.Load(ctx, "a"); ok {
+			t.Fatal("a refused save left a session behind")
+		}
+	})
+
+	// What Load returns is the caller's: changing it changes nothing stored.
+	t.Run("loaded values are independent of the store", func(t *testing.T) {
+		s := newStore(t)
+		_ = s.Save(ctx, "a", data(), time.Hour)
+		got, _, _ := s.Load(ctx, "a")
+		got["prefs"].(map[string]any)["theme"] = "light"
+		got["tags"].([]any)[0] = "z"
+		again, _, _ := s.Load(ctx, "a")
+		sameJSON(t, again, data())
+	})
+
 	t.Run("save replaces the whole session", func(t *testing.T) {
 		s := newStore(t)
 		_ = s.Save(ctx, "a", data(), time.Hour)

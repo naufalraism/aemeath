@@ -7,6 +7,8 @@ All notable changes to this project are documented here.
 ### Fixed
 
 - **A `bool` parameter accepts `on` and `off`** (any case), in the query, path, headers, cookies and forms. An HTML checkbox without a `value` attribute submits `on` when ticked, which was refused with 400, so a login form with "remember me" failed as soon as the box was ticked. Other values are still refused.
+- **`session.MemoryStore` keeps values as JSON, like the Redis store.** On the next request `s.Get("count").(int)` worked with `MemoryStore` and failed on Redis, which returns `float64`: code that passed on a laptop broke in production. Every store now returns numbers as `float64`, structs as `map[string]any` and slices as `[]any`, and refuses a value JSON cannot encode when saving. **If you type-assert session numbers with `MemoryStore`, use `s.Int(key)`.**
+- **`Session.Int` reads every integer type.** It understood only `int` and `float64`, so `s.Int("uid")` of a `uint` (a GORM primary key) gave `0` with `MemoryStore`. It now reads `int8`…`int64`, `uint`…`uint64` and a whole `float64`, and gives `0` for a fraction (it used to round `2.5` down to `2`) or a number that does not fit in an `int`.
 
 ## [0.6.0] - 2026-11-24
 

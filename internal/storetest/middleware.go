@@ -1,6 +1,7 @@
 package storetest
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -150,5 +151,58 @@ func RunConcurrentRequests(t *testing.T, newStore func(t *testing.T) session.Sto
 				}
 			}
 		})
+	}
+}
+
+// RunValueTypes checks what a handler reads back from the session on the
+// next request: the same types with every store, and Int for any integer.
+func RunValueTypes(t *testing.T, newStore func(t *testing.T) session.Store) {
+	app := aemeath.New()
+	app.Use(session.Middleware(session.Config{Store: newStore(t), Insecure: true}))
+	app.Handle("POST", "/set", func(c *aemeath.Ctx) error {
+		s := session.From(c)
+		s.Set("count", 3)
+		s.Set("uid", uint(42)) // a GORM primary key
+		s.Set("big", int64(1)<<40)
+		s.Set("neg", int8(-5))
+		s.Set("half", 2.5)
+		s.Set("huge", uint64(1)<<63) // does not fit in an int
+		s.Set("name", "ann")
+		// In the same request a value reads back as it was set.
+		// Int reads every integer type as it was set, before any store.
+		if s.Int("uid") != 42 || s.Int("neg") != -5 || s.Int("big") != 1<<40 {
+			return c.Text(500, fmt.Sprintf("same request: Int = %d, %d, %d", s.Int("uid"), s.Int("neg"), s.Int("big")))
+		}
+		if s.Int("huge") != 0 {
+			return c.Text(500, "same request: Int of 2^63 is not 0")
+		}
+		if v, _ := s.Get("count"); v != 3 {
+			return c.Text(500, fmt.Sprintf("same request: count = %#v", v))
+		}
+		return c.Text(200, "ok")
+	})
+	app.Handle("GET", "/get", func(c *aemeath.Ctx) error {
+		s := session.From(c)
+		count, _ := s.Get("count")
+		return c.JSON(200, map[string]any{
+			"countType": fmt.Sprintf("%T", count),
+			"count":     s.Int("count"), "uid": s.Int("uid"), "big": s.Int("big"),
+			"neg": s.Int("neg"), "half": s.Int("half"), "huge": s.Int("huge"), "name": s.Int("name"), "missing": s.Int("missing"),
+		})
+	})
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, httptest.NewRequest("POST", "/set", nil))
+	if w.Code != 200 {
+		t.Fatalf("set: %d %s", w.Code, w.Body.String())
+	}
+	r := httptest.NewRequest("GET", "/get", nil)
+	for _, ck := range w.Result().Cookies() {
+		r.AddCookie(&http.Cookie{Name: ck.Name, Value: ck.Value})
+	}
+	w = httptest.NewRecorder()
+	app.ServeHTTP(w, r)
+	want := `{"big":1099511627776,"count":3,"countType":"float64","half":0,"huge":0,"missing":0,"name":0,"neg":-5,"uid":42}`
+	if got := strings.TrimSpace(w.Body.String()); got != want {
+		t.Errorf("next request read\n got %s\nwant %s", got, want)
 	}
 }

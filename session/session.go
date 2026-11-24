@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"reflect"
 	"strings"
@@ -347,13 +348,33 @@ func (s *Session) Get(key string) (any, bool) {
 // String returns a string value, or "".
 func (s *Session) String(key string) string { v, _ := s.Get(key); str, _ := v.(string); return str }
 
-// Int returns an int value, or 0 (also accepts float64 as produced by JSON stores).
+// Int returns an integer value as an int, or 0 when the key is missing or
+// does not hold a whole number that fits. Every store gives numbers back as
+// float64 on later requests (they are kept as JSON), so prefer Int to a type
+// assertion such as s.Get("n").(int), which only works in the request that
+// set the value. It accepts every Go integer type and a whole float64.
 func (s *Session) Int(key string) int {
 	v, _ := s.Get(key)
 	switch n := v.(type) {
 	case int:
 		return n
+	case int8, int16, int32, int64:
+		i := reflect.ValueOf(n).Int()
+		if i < math.MinInt || i > math.MaxInt {
+			return 0
+		}
+		return int(i)
+	case uint, uint8, uint16, uint32, uint64, uintptr:
+		u := reflect.ValueOf(n).Uint()
+		if u > math.MaxInt {
+			return 0
+		}
+		return int(u)
 	case float64:
+		// float64(math.MaxInt) rounds up to 2^63, which does not fit.
+		if n != math.Trunc(n) || n < math.MinInt || n >= math.MaxInt {
+			return 0
+		}
 		return int(n)
 	}
 	return 0
@@ -431,8 +452,12 @@ type MemoryStore struct {
 	lastSweep time.Time
 }
 
+// entry keeps a session encoded as JSON, as a shared store such as Redis
+// does: values come back as encoding/json decodes them (numbers as float64),
+// a value JSON cannot encode is refused when saving, and every Load returns
+// fresh maps and slices, so two requests of one session never share one.
 type entry struct {
-	data    map[string]any
+	data    []byte
 	expires time.Time
 }
 
@@ -476,66 +501,6 @@ func (s *MemoryStore) Len() int {
 	return n
 }
 
-// copyMap copies session data deeply: maps and slices at any depth are
-// duplicated, so two requests of the same session never share one (writing
-// to a shared map from both crashes the program with "concurrent map
-// writes"). Values behind pointers are not copied; store values, not
-// pointers, in a session.
-func copyMap(m map[string]any) map[string]any {
-	o := make(map[string]any, len(m))
-	for k, v := range m {
-		o[k] = deepCopy(v)
-	}
-	return o
-}
-
-func deepCopy(v any) any {
-	switch x := v.(type) {
-	case nil, string, bool, int, int64, float64:
-		return v // the common cases, without reflection
-	case map[string]any:
-		return copyMap(x)
-	case []any:
-		o := make([]any, len(x))
-		for i, e := range x {
-			o[i] = deepCopy(e)
-		}
-		return o
-	}
-	return cloneValue(reflect.ValueOf(v)).Interface()
-}
-
-func cloneValue(v reflect.Value) reflect.Value {
-	switch v.Kind() {
-	case reflect.Map:
-		if v.IsNil() {
-			return v
-		}
-		o := reflect.MakeMapWithSize(v.Type(), v.Len())
-		for it := v.MapRange(); it.Next(); {
-			o.SetMapIndex(it.Key(), cloneValue(it.Value()))
-		}
-		return o
-	case reflect.Slice:
-		if v.IsNil() {
-			return v
-		}
-		o := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
-		for i := 0; i < v.Len(); i++ {
-			o.Index(i).Set(cloneValue(v.Index(i)))
-		}
-		return o
-	case reflect.Interface:
-		if v.IsNil() {
-			return v
-		}
-		o := reflect.New(v.Type()).Elem()
-		o.Set(cloneValue(v.Elem()))
-		return o
-	}
-	return v
-}
-
 // sweep drops every expired entry. The caller holds s.mu.
 func (s *MemoryStore) sweep(now time.Time) {
 	for id, e := range s.m {
@@ -554,10 +519,18 @@ func (s *MemoryStore) Load(_ context.Context, id string) (map[string]any, bool, 
 		delete(s.m, id)
 		return nil, false, nil
 	}
-	return copyMap(e.data), true, nil
+	var data map[string]any
+	if err := json.Unmarshal(e.data, &data); err != nil {
+		return nil, false, nil // cannot happen: Save stored what Marshal wrote
+	}
+	return data, true, nil
 }
 
 func (s *MemoryStore) Save(_ context.Context, id string, d map[string]any, ttl time.Duration) error {
+	raw, err := json.Marshal(d)
+	if err != nil {
+		return fmt.Errorf("session: a value cannot be stored: %w", err)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -570,7 +543,7 @@ func (s *MemoryStore) Save(_ context.Context, id string, d map[string]any, ttl t
 	if !exists && len(s.m) >= s.max {
 		return ErrStoreFull
 	}
-	s.m[id] = entry{data: copyMap(d), expires: now.Add(ttl)}
+	s.m[id] = entry{data: raw, expires: now.Add(ttl)}
 	return nil
 }
 
