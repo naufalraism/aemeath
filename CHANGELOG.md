@@ -24,6 +24,7 @@ All notable changes to this project are documented here.
 - **`GroupRoute`, `GroupGET`, `GroupPOST`, `GroupPUT`, `GroupPATCH`, `GroupDELETE` and `RegisterGroup`**: use `Route`, `GET`, `POST`, `PUT`, `PATCH`, `DELETE` and `Register` with the group. They still work and will be removed before v1.0.
 - **`DefaultMaxBodyBytes`, `DefaultMaxMultipartBytes`, `DefaultMaxRequestBytes` and `MaxValidationErrors`**: use the `App.SetMax…` methods. An app that does not call them still reads these variables, even when they change after `New`, so existing code behaves as before. They will be removed before v1.0.
 - **`Storage`, `StoragePlugin`, `LocalStorage` and `NewLocalStorage`**: use the `storage` package. `aemeath.Storage` is an alias of `storage.Storage`, so a storage provided under one name is found under the other, and `LocalStorage` now calls `storage.Local`. They will be removed before v1.0.
+- **`FileLoggerPlugin` and `NewFileLogger`**: `SlogLogger` does the same and more (request ID, panics, levels, JSON). Write to a file with `app.Use(aemeath.SlogLogger(slog.New(slog.NewJSONHandler(f, nil))))` and close it with `app.OnShutdown`. They will be removed before v1.0.
 
 ### Fixed
 
