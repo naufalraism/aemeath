@@ -13,8 +13,11 @@ import (
 )
 
 // DefaultMaxMultipartBytes is the default limit for a whole multipart/form-data
-// request body (32 MiB). Urlencoded forms use DefaultMaxBodyBytes. Both can be
-// changed before the server starts.
+// request body (32 MiB). Urlencoded forms use the JSON body limit.
+//
+// Deprecated: use App.SetMaxMultipartBytes, which sets it for one app. An app
+// that does not call it still reads this variable. It will be removed before
+// v1.0.
 var DefaultMaxMultipartBytes int64 = 32 << 20
 
 // formMemoryBytes is how much of a multipart body is kept in memory before
@@ -97,10 +100,10 @@ func checkFormTags(t reflect.Type, f reflect.StructField) {
 func bindForm(c *Ctx, v reflect.Value, info *inputInfo) (cleanup func(), errs []FieldError, err error) {
 	ct := c.R.Header.Get("Content-Type")
 	mt, _, _ := mime.ParseMediaType(ct)
-	limit := DefaultMaxBodyBytes
+	limit := c.app.bodyBytes()
 	switch mt {
 	case "multipart/form-data":
-		limit = DefaultMaxMultipartBytes
+		limit = c.app.multipartBytes()
 	case "application/x-www-form-urlencoded":
 		if info.hasFileField() {
 			return nil, nil, UnsupportedMediaType("Content-Type must be multipart/form-data")
@@ -281,10 +284,11 @@ func bindWithForm(c *Ctx, in any, info *inputInfo) error {
 		return err
 	}
 	errs := formErrs
-	if !errorsFull(errs) {
-		info.plan.validate(v, "", nil, &errs, nil) // a form always submits its empty inputs: presence adds nothing
+	maxErrs := c.app.validationErrors()
+	if !errorsFull(errs, maxErrs) {
+		info.plan.validate(v, "", nil, &errs, maxErrs, nil) // a form always submits its empty inputs: presence adds nothing
 	}
-	if errs = capErrors(errs); len(errs) > 0 {
+	if errs = capErrors(errs, maxErrs); len(errs) > 0 {
 		return ValidationError(errs...)
 	}
 	return nil

@@ -268,3 +268,41 @@ func TestOriginSchemeOnTLS(t *testing.T) {
 	// Plain-HTTP servers (and TLS-terminating proxies) keep comparing the host
 	// only: see TestOriginCheck.
 }
+
+// The form token is read with the app's own body limits, like typed routes,
+// not with the package variables.
+func TestFormTokenUsesTheAppsLimits(t *testing.T) {
+	app := aemeath.New()
+	app.SetMaxBodyBytes(100)
+	app.SetMaxMultipartBytes(400)
+	app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore(), Insecure: true}), csrf.Middleware(csrf.Config{}))
+	aemeath.GET(app, "/token", func(c *aemeath.Ctx, _ none) (tok, error) { return tok{csrf.Token(c)}, nil })
+	// A plain route: only csrf reads the body, so only its limit applies.
+	app.Handle("POST", "/plain", func(c *aemeath.Ctx) error { return c.JSON(200, "ok") })
+	sess, token := start(app)
+
+	post := func(contentType, body string) int {
+		r := httptest.NewRequest("POST", "/plain", strings.NewReader(body))
+		r.Host = "app.test"
+		r.Header.Set("Content-Type", contentType)
+		r.AddCookie(&http.Cookie{Name: "aemeath_session", Value: sess})
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, r)
+		return w.Code
+	}
+
+	if code := post("application/x-www-form-urlencoded", "csrf_token="+token); code != 200 {
+		t.Fatalf("small urlencoded form: %d, want 200", code)
+	}
+	if code := post("application/x-www-form-urlencoded", "csrf_token="+token+"&pad="+strings.Repeat("p", 200)); code != 413 {
+		t.Errorf("urlencoded form over the app's 100-byte limit: %d, want 413", code)
+	}
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	_ = mw.WriteField("csrf_token", token)
+	_ = mw.WriteField("pad", strings.Repeat("p", 600))
+	_ = mw.Close()
+	if code := post(mw.FormDataContentType(), buf.String()); code != 413 {
+		t.Errorf("multipart form over the app's 400-byte limit: %d, want 413", code)
+	}
+}

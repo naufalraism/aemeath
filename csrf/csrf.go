@@ -110,13 +110,14 @@ func Middleware(cfg Config) aemeath.Middleware {
 // request, so the route can still bind it.
 func formToken(c *aemeath.Ctx, field string) (string, error) {
 	mt, _, _ := mime.ParseMediaType(c.R.Header.Get("Content-Type"))
+	bodyLimit, multipartLimit := c.BodyLimits()
 	var err error
 	switch mt {
 	case "application/x-www-form-urlencoded":
-		c.R.Body = http.MaxBytesReader(c.W, c.R.Body, aemeath.DefaultMaxBodyBytes)
+		c.R.Body = http.MaxBytesReader(c.W, c.R.Body, bodyLimit)
 		err = c.R.ParseForm()
 	case "multipart/form-data":
-		c.R.Body = http.MaxBytesReader(c.W, c.R.Body, aemeath.DefaultMaxMultipartBytes)
+		c.R.Body = http.MaxBytesReader(c.W, c.R.Body, multipartLimit)
 		err = c.R.ParseMultipartForm(8 << 20) // same memory limit as typed routes
 	default:
 		return "", nil

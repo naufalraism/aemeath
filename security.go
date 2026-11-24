@@ -35,7 +35,7 @@ func SecurityHeaders() Middleware {
 }
 
 // MaxBodySize sets the limit for request bodies (e.g. 2 MiB), in place of the
-// default cap (see DefaultMaxRequestBytes); use it on a group or route to
+// default cap (see App.SetMaxRequestBytes); use it on a group or route to
 // raise the cap for large uploads. A negative value removes the cap. Reading
 // past the limit fails with *http.MaxBytesError, which becomes 413.
 func MaxBodySize(bytes int64) Middleware {
@@ -56,10 +56,14 @@ func MaxBodySize(bytes int64) Middleware {
 
 // DefaultMaxRequestBytes caps every request body, including the ones a
 // handler reads itself from c.R.Body, so a client cannot stream gigabytes
-// into a route that forgot a limit. 0 means the larger of DefaultMaxBodyBytes
-// and DefaultMaxMultipartBytes (32 MiB by default); a negative value turns
-// the cap off. MaxBodySize on a group or route replaces it. Typed routes keep
-// their own, smaller limits.
+// into a route that forgot a limit. 0 means the larger of the JSON and
+// multipart limits (32 MiB by default); a negative value turns the cap off.
+// MaxBodySize on a group or route replaces it. Typed routes keep their own,
+// smaller limits.
+//
+// Deprecated: use App.SetMaxRequestBytes, which sets it for one app. An app
+// that does not call it still reads this variable. It will be removed before
+// v1.0.
 var DefaultMaxRequestBytes int64
 
 // defaultBodyLimit is the default cap, marked so MaxBodySize can replace it
@@ -69,16 +73,16 @@ type defaultBodyLimit struct {
 	orig io.ReadCloser
 }
 
-func limitBody(w http.ResponseWriter, r *http.Request) {
+func (a *App) limitBody(w http.ResponseWriter, r *http.Request) {
 	if r.Body == nil || r.Body == http.NoBody || r.ContentLength == 0 {
 		return
 	}
-	n := DefaultMaxRequestBytes
+	n := a.requestBytes()
 	if n < 0 {
 		return
 	}
 	if n == 0 {
-		n = max(DefaultMaxBodyBytes, DefaultMaxMultipartBytes)
+		n = max(a.bodyBytes(), a.multipartBytes())
 	}
 	r.Body = &defaultBodyLimit{ReadCloser: http.MaxBytesReader(w, r.Body, n), orig: r.Body}
 }

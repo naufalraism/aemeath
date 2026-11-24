@@ -435,11 +435,11 @@ func (r rule) checkNumber(x float64) string {
 // rule is skipped only because the keys are unknown; most bodies never reach
 // that point, and the caller decodes and validates again only when it happens.
 // In the second run needSent is nil, so there is no third run.
-func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]FieldError, needSent *bool) {
+func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]FieldError, limit int, needSent *bool) {
 	keys, _ := sent.(map[string]any)
 	for _, fp := range p.fields {
-		if errorsFull(*errs) {
-			return // MaxValidationErrors reached: the rest is not looked at
+		if errorsFull(*errs, limit) {
+			return // the validation error limit is reached: the rest is not looked at
 		}
 		path := fp.name
 		if prefix != "" {
@@ -479,7 +479,7 @@ func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]Fi
 			return
 		}
 		if fp.nested != nil {
-			fp.nested.validateNested(fv, path, sentValue, errs, needSent)
+			fp.nested.validateNested(fv, path, sentValue, errs, limit, needSent)
 			if needSent != nil && *needSent {
 				return
 			}
@@ -489,14 +489,14 @@ func (p *typePlan) validate(v reflect.Value, prefix string, sent any, errs *[]Fi
 
 // validateNested descends into structs reached through pointers, slices and
 // maps, keeping the matching part of the JSON body alongside.
-func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *[]FieldError, needSent *bool) {
+func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *[]FieldError, limit int, needSent *bool) {
 	v = deref(v)
 	if !v.IsValid() {
 		return
 	}
 	switch v.Kind() {
 	case reflect.Struct:
-		p.validate(v, path, sent, errs, needSent)
+		p.validate(v, path, sent, errs, limit, needSent)
 	case reflect.Slice, reflect.Array:
 		items, _ := sent.([]any)
 		for i := 0; i < v.Len(); i++ {
@@ -504,8 +504,8 @@ func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *
 			if i < len(items) {
 				item = items[i]
 			}
-			p.validateNested(v.Index(i), path+"["+strconv.Itoa(i)+"]", item, errs, needSent)
-			if (needSent != nil && *needSent) || errorsFull(*errs) {
+			p.validateNested(v.Index(i), path+"["+strconv.Itoa(i)+"]", item, errs, limit, needSent)
+			if (needSent != nil && *needSent) || errorsFull(*errs, limit) {
 				return
 			}
 		}
@@ -524,8 +524,8 @@ func (p *typePlan) validateNested(v reflect.Value, path string, sent any, errs *
 		}
 		sort.Slice(list, func(i, j int) bool { return list[i].name < list[j].name })
 		for _, e := range list {
-			p.validateNested(v.MapIndex(e.key), path+"["+e.name+"]", entries[e.name], errs, needSent)
-			if (needSent != nil && *needSent) || errorsFull(*errs) {
+			p.validateNested(v.MapIndex(e.key), path+"["+e.name+"]", entries[e.name], errs, limit, needSent)
+			if (needSent != nil && *needSent) || errorsFull(*errs, limit) {
 				return
 			}
 		}

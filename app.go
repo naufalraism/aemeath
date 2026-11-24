@@ -37,6 +37,10 @@ type App struct {
 	hooksMu       sync.Mutex
 	shutdownHooks []func(context.Context) error
 
+	// Set by SetMaxBodyBytes and the others; nil reads the package variable.
+	maxBody, maxMultipart, maxRequest *int64
+	maxValidation                     *int
+
 	shutdownDelay   time.Duration
 	shutdownTimeout time.Duration
 	shuttingDown    atomic.Bool
@@ -216,7 +220,7 @@ func (a *App) Use(m ...Middleware) {
 // later Use would apply to some routes and silently not to others.
 func (a *App) mustNotBeServing(what string) {
 	if a.serving.Load() {
-		panic("aemeath: " + what + " was called after the app started serving requests; add all middlewares during startup")
+		panic("aemeath: " + what + " was called after the app started serving requests; set up middlewares and limits during startup")
 	}
 }
 
@@ -257,7 +261,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !a.serving.Load() {
 		a.serving.Store(true)
 	}
-	limitBody(w, r)
+	a.limitBody(w, r)
 	// "*" is the request target of "OPTIONS *" (a question about the server,
 	// not a resource). ServeMux.ServeHTTP answers it 400 before routing;
 	// asking mux.Handler directly would skip that and answer 404 or 405.
