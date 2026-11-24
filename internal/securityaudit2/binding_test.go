@@ -52,7 +52,7 @@ func TestBinding_ValidationErrorsAreCapped(t *testing.T) {
 	if rec.Code != 422 {
 		t.Fatalf("status %d", rec.Code)
 	}
-	if n > aemeath.MaxValidationErrors || rec.Body.Len() > len(body) {
+	if n > 100 || rec.Body.Len() > len(body) { // 100: the default limit (App.SetMaxValidationErrors)
 		t.Errorf("a single request makes the server build and send %d validation errors (%d bytes for a %d-byte request)", n, rec.Body.Len(), len(body))
 	}
 }
