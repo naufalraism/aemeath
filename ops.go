@@ -144,7 +144,23 @@ type namedCheck struct {
 func (a *App) AddReadyCheck(name string, fn HealthCheck) {
 	a.readyMu.Lock()
 	defer a.readyMu.Unlock()
-	a.readyChecks = append(a.readyChecks, namedCheck{name, fn})
+	// Two checks with one name (two databases) would share one entry in the
+	// /readyz output, which could read "ok" next to a failure: number them.
+	unique := name
+	for n := 2; ; n++ {
+		taken := false
+		for _, ch := range a.readyChecks {
+			if ch.name == unique {
+				taken = true
+				break
+			}
+		}
+		if !taken {
+			break
+		}
+		unique = fmt.Sprintf("%s (%d)", name, n)
+	}
+	a.readyChecks = append(a.readyChecks, namedCheck{unique, fn})
 }
 
 // EnableHealth registers two endpoints for load balancers and Kubernetes:

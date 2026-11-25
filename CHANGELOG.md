@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-25
+
+### Breaking changes
+
+- **`RegisterPlugin` refuses the same plugin twice** with an error. Before, `Apply` ran again and added a second readiness check and shutdown hook (closing the same database twice). Two different plugins of the same type are still two plugins.
+
+### Fixed
+
+- **`Provide` warns when it replaces a value of the same type.** With a main and an analytics database registered in that order, every handler silently read the analytics one. The warning, through the app's logger, names the type and suggests a type of its own for each (`type AnalyticsDB struct{ *gorm.DB }`).
+- **`/readyz` shows every readiness check**, numbering checks that share a name (`database`, `database (2)`). Two checks with one name shared one entry, which could read `"ok"` next to a 503.
+
+### Changed
+
+- **Docs check the error of every `RegisterPlugin`**, and the database guide shows how to use two databases (a type of its own for the second).
+
 ## [0.8.0] - 2026-11-25
 
 ### Added

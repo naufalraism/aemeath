@@ -19,7 +19,9 @@ plugin, err := postgres.Open(os.Getenv("DATABASE_URL"), db.WithModels(&User{}))
 if err != nil {
 	log.Fatal(err)
 }
-app.RegisterPlugin(plugin)
+if err := app.RegisterPlugin(plugin); err != nil {
+	log.Fatal(err)
+}
 ```
 
 Registering the plugin does three things: handlers can call `db.From(c)`, `/readyz` pings the database (see `EnableHealth`), and the connection pool is closed on graceful shutdown.
@@ -48,6 +50,37 @@ aemeath.POST(app, "/users", func(c *aemeath.Ctx, in CreateUser) (User, error) {
 	return u, nil
 })
 ```
+
+## Two databases
+
+`db.From(c)` and `aemeath.Get[*gorm.DB](c)` find the database by its type, `*gorm.DB`, so a second database registered the same way replaces the first: Aemeath logs a warning (`Provide replaces the value provided earlier`) and every handler reads the last one. Give the second database a type of its own:
+
+```go
+type AnalyticsDB struct{ *gorm.DB }
+
+primary, err := db.Open(os.Getenv("DATABASE_URL"), &User{})
+if err != nil {
+	log.Fatal(err)
+}
+if err := app.RegisterPlugin(primary); err != nil { // db.From(c), and /readyz "database"
+	log.Fatal(err)
+}
+analytics, err := db.Open(os.Getenv("ANALYTICS_URL"))
+if err != nil {
+	log.Fatal(err)
+}
+aemeath.Provide(app, AnalyticsDB{analytics.DB})
+app.AddReadyCheck("analytics", func(ctx context.Context) error {
+	sqlDB, err := analytics.DB.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
+})
+app.OnShutdown(func(context.Context) error { return analytics.Close() })
+```
+
+A handler reads it with `aemeath.MustGet[AnalyticsDB](c)`. Registering the same plugin twice is refused with an error, and readiness checks that share a name are numbered in `/readyz` (`database`, `database (2)`), so a failing one is always visible.
 
 ## Migrations
 

@@ -67,7 +67,9 @@ tr := tracing.New(tracing.Config{
 	Endpoint:    "http://localhost:4318/v1/traces", // OTLP/HTTP, JSON encoding
 })
 app.Use(tr.Middleware())
-app.RegisterPlugin(tr) // flushes pending spans on graceful shutdown
+if err := app.RegisterPlugin(tr); err != nil { // flushes pending spans on graceful shutdown
+	log.Fatal(err)
+}
 ```
 
 Every request becomes a server span named `GET /users/{id}`. An incoming `traceparent` header continues the caller's trace (including its sampled flag); a malformed one starts a fresh trace. Create child spans around slow work:

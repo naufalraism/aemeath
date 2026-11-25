@@ -57,7 +57,9 @@ Safety properties, each covered by a test:
 
 ```go
 cachePlugin := cache.New(cache.Config{Addr: "localhost:6379"})
-app.RegisterPlugin(cachePlugin)
+if err := app.RegisterPlugin(cachePlugin); err != nil {
+	log.Fatal(err)
+}
 app.Use(session.Middleware(session.Config{Store: cache.NewSessionStore(cachePlugin, "")}))
 ```
 
