@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 )
 
@@ -57,13 +56,23 @@ func toHTTPError(err error) *HTTPError {
 	if errors.As(err, &mbe) {
 		return PayloadTooLarge(fmt.Sprintf("request body exceeds the limit of %d bytes", mbe.Limit))
 	}
-	log.Printf("aemeath: internal error: %v", err)
 	return NewError(http.StatusInternalServerError, "internal server error")
+}
+
+// unexpected reports whether err becomes a 500 whose cause the client never
+// sees (not an *HTTPError, a client that left, or a body over its limit):
+// the error responder logs those.
+func unexpected(err error) bool {
+	var he *HTTPError
+	var mbe *http.MaxBytesError
+	return !errors.As(err, &he) && !errors.Is(err, context.Canceled) && !errors.As(err, &mbe)
 }
 
 // AsHTTPError converts any error into an *HTTPError: an *HTTPError is returned
 // as is, an error wrapping context.Canceled becomes 499 (the client left),
-// anything else becomes a generic 500 (and is logged, never leaked).
+// anything else becomes a generic 500 (never leaked). It logs nothing, so
+// middleware may call it freely: the error responder logs the cause of a 500
+// once, with the request (see App.SetLogger).
 func AsHTTPError(err error) *HTTPError { return toHTTPError(err) }
 
 // statusOf is the status an error will produce, without logging anything.

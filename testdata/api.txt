@@ -101,6 +101,7 @@ aemeath: method (*App) Group(prefix string, mws ...Middleware) *Group
 aemeath: method (*App) Handle(method, path string, h HandlerFunc)
 aemeath: method (*App) Listen(addr string) error
 aemeath: method (*App) ListenTLS(addr, certFile, keyFile string) error
+aemeath: method (*App) Logger() *slog.Logger
 aemeath: method (*App) NewServer(addr string) *http.Server
 aemeath: method (*App) OnError(fn func(*Ctx, error))
 aemeath: method (*App) OnShutdown(fn func(context.Context) error)
@@ -109,6 +110,7 @@ aemeath: method (*App) ReactQueryHooks() string
 aemeath: method (*App) RegisterPlugin(p Plugin) error
 aemeath: method (*App) Serve(srv *http.Server) error
 aemeath: method (*App) ServeHTTP(w http.ResponseWriter, r *http.Request)
+aemeath: method (*App) SetLogger(l *slog.Logger)
 aemeath: method (*App) SetMaxBodyBytes(n int64)
 aemeath: method (*App) SetMaxMultipartBytes(n int64)
 aemeath: method (*App) SetMaxRequestBytes(n int64)
@@ -128,6 +130,7 @@ aemeath: method (*Ctx) BodyLimits() (body, multipart int64)
 aemeath: method (*Ctx) Context() context.Context
 aemeath: method (*Ctx) File(path string) error
 aemeath: method (*Ctx) JSON(code int, v any) error
+aemeath: method (*Ctx) Logger() *slog.Logger
 aemeath: method (*Ctx) MarkAuthenticated()
 aemeath: method (*Ctx) Param(name string) string
 aemeath: method (*Ctx) Query(name string) string
@@ -413,6 +416,7 @@ tracing: field Config.Endpoint string
 tracing: field Config.FlushInterval time.Duration
 tracing: field Config.Headers map[string]string
 tracing: field Config.IgnoreIncomingSampling bool
+tracing: field Config.Logger *slog.Logger
 tracing: field Config.QueueSize int
 tracing: field Config.SampleRatio float64
 tracing: field Config.ServiceName string

@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -174,7 +173,7 @@ func (a *App) EnableHealth() {
 		status, code := "ok", http.StatusOK
 		for _, ch := range checks {
 			if err := ch.fn(ctx); err != nil {
-				log.Printf("aemeath: readiness check %q failed: %v", ch.name, err)
+				c.Logger().Error("aemeath: readiness check failed", "check", ch.name, "error", err)
 				results[ch.name] = "failed"
 				status, code = "unavailable", http.StatusServiceUnavailable
 				continue

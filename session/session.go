@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"reflect"
@@ -252,7 +252,7 @@ func (s *Session) commit(c *aemeath.Ctx) error {
 	if s.destroy {
 		if s.id != "" {
 			if err := s.cfg.Store.Delete(ctx, s.id); err != nil {
-				log.Printf("aemeath/session: deleting the session failed: %v", err)
+				c.Logger().Error("aemeath/session: deleting the session failed", "error", err)
 				return err
 			}
 		}
@@ -268,7 +268,7 @@ func (s *Session) commit(c *aemeath.Ctx) error {
 		// session (logout, Renew, expiry), which must not be undone.
 		current, ok, err := s.cfg.Store.Load(ctx, s.id)
 		if err != nil {
-			log.Printf("aemeath/session: reloading the session before saving failed: %v", err)
+			c.Logger().Error("aemeath/session: reloading the session before saving failed", "error", err)
 			return err
 		}
 		if !ok {
@@ -300,10 +300,10 @@ func (s *Session) commit(c *aemeath.Ctx) error {
 			// and the response stays as the handler wrote it. (Answering 500
 			// made clients retry requests whose work was already done.)
 			s.id = ""
-			s.full.note()
+			s.full.note(c.Logger())
 			return nil
 		}
-		log.Printf("aemeath/session: saving the session failed: %v", err)
+		c.Logger().Error("aemeath/session: saving the session failed", "error", err)
 		return err
 	}
 	http.SetCookie(c.W, s.cookie(s.id, int(ttl.Seconds())))
@@ -318,14 +318,14 @@ type fullLog struct {
 	dropped int
 }
 
-func (f *fullLog) note() {
+func (f *fullLog) note(logger *slog.Logger) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.dropped++
 	if !f.last.IsZero() && time.Since(f.last) < time.Minute {
 		return
 	}
-	log.Printf("aemeath/session: the memory store is full: %d new visitor(s) got no session since the last message (raise WithMaxSessions, or use a shared store such as Redis)", f.dropped)
+	logger.Warn("aemeath/session: the memory store is full: new visitors get no session (raise WithMaxSessions, or use a shared store such as Redis)", "dropped_since_last_message", f.dropped)
 	f.last, f.dropped = time.Now(), 0
 }
 

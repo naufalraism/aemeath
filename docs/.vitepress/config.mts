@@ -25,7 +25,7 @@ export default defineConfig({
           { text: 'Forms & uploads', link: '/guide/forms' },
           { text: 'Authentication', link: '/guide/auth' },
           { text: 'Databases', link: '/guide/database' },
-          { text: 'Metrics & tracing', link: '/guide/observability' },
+          { text: 'Logging, metrics & tracing', link: '/guide/observability' },
           { text: 'Plugins', link: '/guide/plugins' },
           { text: 'Background jobs', link: '/guide/jobs' },
           { text: 'TypeScript, Zod & hooks', link: '/guide/typescript' },

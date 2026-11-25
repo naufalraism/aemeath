@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -118,7 +119,7 @@ var tsModeNotice sync.Once
 // whatever SQL dialect the models' tags assume.
 func typeScriptMode(cfg *gorm.Config) (gorm.Dialector, *gorm.Config, *poolConfig) {
 	tsModeNotice.Do(func() {
-		log.Printf("aemeath/db: %s is set: using an in-memory SQLite database in dry-run mode instead of connecting", aemeath.EnvTypeScriptOut)
+		slog.Default().Info("aemeath/db: " + aemeath.EnvTypeScriptOut + " is set: using an in-memory SQLite database in dry-run mode instead of connecting")
 	})
 	c := *cfg
 	c.DryRun = true

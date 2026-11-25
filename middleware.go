@@ -2,6 +2,7 @@ package aemeath
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -91,7 +92,7 @@ func Recover() Middleware {
 		return func(c *Ctx) (err error) {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("aemeath: panic: %v\n%s", r, debug.Stack())
+					c.Logger().Error("aemeath: panic", "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
 					err = NewError(http.StatusInternalServerError, "internal server error")
 				}
 			}()
