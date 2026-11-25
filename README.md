@@ -25,7 +25,7 @@ Aemeath is a Go web framework built on the standard `net/http` (Go 1.22+ `ServeM
 - **Rich validation**: `required`, `min`, `max`, `len`, `gt/gte/lt/lte`, `oneof`, `email`, `url`, `uuid`, `pattern`. Every failure (up to 100 per request) is reported at once as a `422` with per-field errors.
 - **One source of truth**: the same tags drive the server, the OpenAPI document (`$ref` components, constraints, security, error schemas), the TypeScript client, the Zod schemas and the React Query hooks.
 - **Binding** from path, query (including repeated keys), headers, cookies, JSON, and **forms and file uploads** (`form:` tag, type detected from the file's bytes, size limits); embedded structs; `time.Time`, UUIDs and any `encoding.TextUnmarshaler`.
-- **Typed dependencies**: `aemeath.Get[*gorm.DB](c)` instead of `c.State["db"].(*gorm.DB)`.
+- **Typed dependencies**: `aemeath.Get[*gorm.DB](c)`, checked by the compiler, instead of a value looked up by a string key and cast.
 - **Operations**: request IDs, structured logging (`slog`), gzip, timeouts, `/healthz` and `/readyz`, graceful shutdown.
 - **Authentication**: sessions (memory or Redis), CSRF protection, JWT with shared secret, public key or JWKS (RS256, ES256, EdDSA), and OpenID Connect login with PKCE.
 - **Databases**: SQLite, PostgreSQL and MySQL/MariaDB through one plugin API.
@@ -71,8 +71,8 @@ Allocation counts do not depend on the machine (they do depend on the Go version
 
 | Route | Allocations | Memory |
 | :--- | :--- | :--- |
-| plain `GET`, no input | 16 | 1,528 B |
-| JSON `POST`, two validated fields | 32 | 7.3 KB |
+| plain `GET`, no input | 15 | 1,496 B |
+| JSON `POST`, two validated fields | 31 | 7.2 KB |
 
 Both include the cost of building the test request. To tell `{"website": ""}` from a missing key, Aemeath reads the JSON body a second time, but only when a validated value turns out to be empty; a body whose validated values are all filled in is decoded once. Measure your own routes:
 
@@ -274,10 +274,10 @@ app.Use(
 
 | Middleware | What it does |
 | :--- | :--- |
-| `Logger()` / `SlogLogger(l)` | access log (plain text / structured `slog`: method, path, status, duration_ms, request_id); keeps `http.Flusher`/`Hijacker` working |
+| `Logger()` / `SlogLogger(l)` | access log, one structured record per request (method, path, status, duration_ms, request_id), to the app's logger (`app.SetLogger`) / to `l`, for example a file of its own; keeps `http.Flusher`/`Hijacker` working |
 | `Recover()` | recovers panics, logs the stack, answers `500` |
 | `RequestID()` | reads a safe `X-Request-Id` or makes one; echoed in the response and the logs |
-| `CORS(cfg...)` | CORS headers and preflight. Credentials cannot be combined with the `*` origin (panics at startup) |
+| `CORS(cfg...)` | CORS headers and preflight; `CORS()` allows any origin without credentials. One `CORSConfig` at most; an empty `AllowOrigins`, or credentials with the `*` origin, panics at startup |
 | `SecurityHeaders()` | `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, HSTS (only over TLS) |
 | `Gzip(min...)` | compresses JSON/text for clients that accept it; leaves streams, tiny bodies and WebSockets alone. Keep it off pages that hold a secret next to what a visitor typed ([BREACH](docs/guide/auth.md#compression-and-secrets-breach)) |
 | `Timeout(d)` | deadline on `c.Context()`; `504` when a handler that honors the context runs out |
@@ -491,6 +491,7 @@ Plugins moved to their own packages and now provide typed dependencies instead o
 | `aemeath.NewOAuth2(...)`, `aemeath.OAuthFrom(c, "google")` | `oauth2.New(...)`, `oauth2.From(c, "google")` |
 | `c.Upgrade()` | `ws.Upgrade(c)` |
 | `c.State["storage"].(aemeath.Storage)` | `aemeath.MustGet[storage.Storage](c)` (package `storage`) |
+| `c.State[key] = v`, `c.State[key]` (a value for one request) | `c.Set(key, v)`, `c.Value(key)` |
 
 Validation failures are now `422` with a list of field errors (they were `400` with a single message).
 

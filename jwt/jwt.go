@@ -24,7 +24,7 @@ import (
 
 // verified is what Middleware stores in the request context for Claims and
 // UserID. The key is a private type, so no other code can set or replace it
-// (it used to live in Ctx.State under "user_id", which application code
+// (it used to live in the per-request values under "user_id", which application code
 // could overwrite).
 type verified struct{ claims map[string]any }
 

@@ -34,6 +34,13 @@
 - **A smaller validation rule set** than `go-playground/validator`, by design: every rule has to work in Go, OpenAPI and Zod.
 - **No typed SSE in the TypeScript client** yet, and no OpenTelemetry SDK: `aemeath/tracing` exports OTLP/HTTP itself and `aemeath/metrics` serves Prometheus metrics, so auto-instrumentation of other libraries needs the official SDK alongside them.
 
+## Two choices made on purpose
+
+- **Errors are `{"error": "...", "errors": [...]}`, not RFC 9457 (`application/problem+json`).** Huma uses RFC 9457 by default; Spring supports it when you turn it on; Gin, Echo and FastAPI use a shape of their own. Aemeath's shape is small, documented, and what the generated TypeScript client, the Zod schemas and the Go client are typed against. Only errors you create (`aemeath.NotFound("...")`) show their message; any other error is answered `500 {"error":"internal server error"}` and its cause goes to the log only. `app.OnError` lets you write any other shape, RFC 9457 included.
+- **OpenAPI 3.0.3, not 3.1.** Code generators still support 3.0 more widely than 3.1, so the document works with whichever generator a client team uses.
+
+Either can be added later as an option without changing what existing apps send.
+
 ## Where Aemeath aims to win
 
 1. **One source of truth for validation.** The same `validate` tags drive the server, OpenAPI, the TypeScript types and the Zod schemas; a parity test checks that the server and the generated Zod schemas agree.

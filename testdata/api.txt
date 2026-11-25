@@ -12,7 +12,6 @@ aemeath: field CORSConfig.ExposeHeaders []string
 aemeath: field CORSConfig.MaxAge int
 aemeath: field Client.BaseURL string
 aemeath: field Ctx.R *http.Request
-aemeath: field Ctx.State map[string]any
 aemeath: field Ctx.W http.ResponseWriter
 aemeath: field Endpoint.Method string
 aemeath: field Endpoint.Path string
@@ -137,9 +136,11 @@ aemeath: method (*Ctx) Query(name string) string
 aemeath: method (*Ctx) Redirect(code int, url string) error
 aemeath: method (*Ctx) RequestID() string
 aemeath: method (*Ctx) SSE() (*SSE, error)
+aemeath: method (*Ctx) Set(key string, v any)
 aemeath: method (*Ctx) SetCookie(ck *http.Cookie)
 aemeath: method (*Ctx) Stopping() <-chan struct{}
 aemeath: method (*Ctx) Text(code int, s string) error
+aemeath: method (*Ctx) Value(key string) any
 aemeath: method (*FileLoggerPlugin) Apply(app *App) error
 aemeath: method (*FileLoggerPlugin) Close() error
 aemeath: method (*Group) EnableClient()

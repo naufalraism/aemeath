@@ -6,7 +6,7 @@ package securityaudit2
 import (
 	"bytes"
 	"context"
-	"log"
+	"log/slog"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
@@ -19,14 +19,15 @@ import (
 
 func TestClean_LoggerCannotBeMadeToForgeLines(t *testing.T) {
 	var buf bytes.Buffer
-	defer log.SetOutput(log.Writer()) // restore: a nil writer makes every later log.Printf panic
-	log.SetOutput(&buf)
 	app := aemeath.New()
+	app.SetLogger(slog.New(slog.NewTextHandler(&buf, nil))) // the access log goes to the app's logger
 	app.Use(aemeath.Logger())
 	app.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/a%0d%0a2026/01/01%20GET%20/admin%20200%201ms", nil))
-	lines := strings.Count(strings.TrimSpace(buf.String()), "\n") + 1
 	t.Logf("log output: %q", buf.String())
-	if lines != 1 {
+	if buf.Len() == 0 {
+		t.Fatal("nothing was logged: the test checks nothing")
+	}
+	if lines := strings.Count(strings.TrimSpace(buf.String()), "\n") + 1; lines != 1 {
 		t.Errorf("one request wrote %d log lines", lines)
 	}
 }

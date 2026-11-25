@@ -277,7 +277,6 @@ func (t *Tracer) Middleware() aemeath.Middleware {
 				span.sampled = t.cfg.SampleRatio >= 1 || randFloat() < t.cfg.SampleRatio
 			}
 			c.R = c.R.WithContext(context.WithValue(c.R.Context(), ctxKey{}, span))
-			c.State["trace_id"] = span.TraceID
 			sw := &statusCapture{ResponseWriter: c.W, status: 200}
 			c.W = sw
 			err := next(c)

@@ -160,7 +160,7 @@ func Middleware(cfg Config) aemeath.Middleware {
 				}
 			}
 			// An id we did not issue is never adopted: s.id stays empty.
-			c.State[stateKey] = s
+			c.Set(stateKey, s)
 			cw := &commitWriter{ResponseWriter: c.W, commit: func() error { return s.commit(c) }}
 			c.W = cw
 			err := next(c)
@@ -331,7 +331,7 @@ func (f *fullLog) note(logger *slog.Logger) {
 
 // From returns the request's session; it panics if Middleware is not installed.
 func From(c *aemeath.Ctx) *Session {
-	s, ok := c.State[stateKey].(*Session)
+	s, ok := c.Value(stateKey).(*Session)
 	if !ok {
 		panic("session: Middleware is not installed")
 	}

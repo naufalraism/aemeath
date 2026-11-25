@@ -56,20 +56,27 @@ func (c *Ctx) RequestID() string {
 
 // ---------------------------------------------------------------- slog
 
-// SlogLogger logs every request as one structured record (method, path,
-// status, duration, remote address and request id). 5xx are logged at Error
-// level, 4xx at Warn, everything else at Info. A nil logger uses slog.Default().
+// SlogLogger logs every request like Logger, to l instead of the app's
+// logger: for example an access log in a file of its own, apart from the
+// app's other messages. A nil logger uses slog.Default().
 func SlogLogger(l *slog.Logger) Middleware {
+	return accessLog(func(*Ctx) *slog.Logger {
+		if l == nil {
+			return slog.Default()
+		}
+		return l
+	})
+}
+
+// accessLog writes one record per request to the logger that logger returns.
+func accessLog(logger func(*Ctx) *slog.Logger) Middleware {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c *Ctx) (err error) {
 			start := time.Now()
 			sw := &statusWriter{ResponseWriter: c.W, status: http.StatusOK}
 			c.W = sw
-			logger := l
-			if logger == nil {
-				logger = slog.Default()
-			}
 			defer func() {
+				l := logger(c)
 				attrs := []any{
 					"method", c.R.Method,
 					"path", c.R.URL.Path,
@@ -80,21 +87,21 @@ func SlogLogger(l *slog.Logger) Middleware {
 					attrs = append(attrs, "request_id", id)
 				}
 				if r := recover(); r != nil {
-					logger.Error("request panicked", append(attrs, "status", http.StatusInternalServerError, "panic", fmt.Sprint(r))...)
+					l.Error("request panicked", append(attrs, "status", http.StatusInternalServerError, "panic", fmt.Sprint(r))...)
 					panic(r)
 				}
 				status := sw.status
 				if err != nil {
-					status = AsHTTPError(err).Code
+					status = statusOf(err)
 				}
 				attrs = append(attrs, "status", status)
 				switch {
 				case status >= 500:
-					logger.Error("request", attrs...)
+					l.Error("request", attrs...)
 				case status >= 400:
-					logger.Warn("request", attrs...)
+					l.Warn("request", attrs...)
 				default:
-					logger.Info("request", attrs...)
+					l.Info("request", attrs...)
 				}
 			}()
 			return next(c)
@@ -342,6 +349,9 @@ func (w *gzipWriter) finish() error {
 // a group whose responses may be compressed. CSRF tokens are safe: each
 // response carries a different one.
 func Gzip(minSize ...int) Middleware {
+	if len(minSize) > 1 {
+		panic("aemeath: Gzip takes one minimum size in bytes, not several")
+	}
 	min := 1024
 	if len(minSize) > 0 && minSize[0] > 0 {
 		min = minSize[0]

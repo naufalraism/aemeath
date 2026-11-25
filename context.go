@@ -16,13 +16,13 @@ import (
 	"time"
 )
 
-// Ctx wraps the request and response together with per-request state that
-// middlewares and handlers can share.
+// Ctx wraps the request and response together with per-request values that
+// middlewares and handlers can share (Set, Value).
 type Ctx struct {
-	W     http.ResponseWriter
-	R     *http.Request
-	State map[string]any
+	W http.ResponseWriter
+	R *http.Request
 
+	values    map[string]any // made by the first Set
 	app       *App
 	cleanups  []func()
 	authed    bool            // set by MarkAuthenticated; checked by routes with RequireAuth
@@ -33,7 +33,7 @@ type Ctx struct {
 // newCtx creates the Ctx of a request. Its writer records whether the
 // response has started, so an error returned afterwards is not appended to it.
 func newCtx(w http.ResponseWriter, r *http.Request, a *App) *Ctx {
-	c := &Ctx{R: r, State: make(map[string]any), app: a}
+	c := &Ctx{R: r, app: a}
 	c.rw.ResponseWriter = w
 	c.W = &c.rw
 	return c
@@ -104,6 +104,20 @@ func (c *Ctx) Authenticated() bool { return c.authed }
 //		return aemeath.Handled{}, c.Redirect(http.StatusMovedPermanently, "/new")
 //	})
 type Handled struct{}
+
+// Set stores v under key for the rest of the request: a middleware can pass
+// a value to the handlers after it. Prefix keys with your package name
+// ("auth.user") so they do not collide with another middleware's. For a
+// service the whole app shares, such as a database, use Provide and Get.
+func (c *Ctx) Set(key string, v any) {
+	if c.values == nil {
+		c.values = make(map[string]any)
+	}
+	c.values[key] = v
+}
+
+// Value returns the value Set stored under key, or nil.
+func (c *Ctx) Value(key string) any { return c.values[key] }
 
 // Context returns the request's context.
 func (c *Ctx) Context() context.Context { return c.R.Context() }

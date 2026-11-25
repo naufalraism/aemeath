@@ -9,7 +9,7 @@ Aemeath writes its own messages (the cause of a `500`, a panic, a failed readine
 ```go
 app := aemeath.New()
 app.SetLogger(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
-app.Use(aemeath.RequestID(), aemeath.SlogLogger(app.Logger()))
+app.Use(aemeath.RequestID(), aemeath.Logger()) // the access log goes to the app's logger too
 ```
 
 The cause of a `500` is logged **once**, with `request_id`, `method` and `path`, so it can be matched with the access log line of the same request:
@@ -26,7 +26,7 @@ In a handler, `c.Logger()` is the app's logger with the request's method, path a
 c.Logger().Info("payment accepted", "order", in.ID, "amount", in.Amount)
 ```
 
-A tracer registered with `RegisterPlugin` logs through the app's logger too; `tracing.Config{Logger: ...}` sets one for a tracer used only as middleware. `Logger()`, the plain-text access log middleware, keeps writing through the standard `log` package; `SlogLogger(l)` is its structured counterpart.
+A tracer registered with `RegisterPlugin` logs through the app's logger too; `tracing.Config{Logger: ...}` sets one for a tracer used only as middleware. `SlogLogger(l)` writes the same access log to another logger, for example a file of its own.
 
 ## Metrics (Prometheus)
 
