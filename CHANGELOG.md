@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-25
+
 ### Breaking changes
 
 - **`RegisterPlugin` refuses the same plugin twice** with an error. Before, `Apply` ran again and added a second readiness check and shutdown hook (closing the same database twice). Two different plugins of the same type are still two plugins.
