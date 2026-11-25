@@ -24,6 +24,7 @@ type Middleware func(HandlerFunc) HandlerFunc
 // App is the main Aemeath application.
 type App struct {
 	logger     *slog.Logger
+	plugins    map[uintptr]bool // registered plugin pointers, guarded by depsMu
 	mux        *http.ServeMux
 	mws        []Middleware
 	specs      []routeSpec
@@ -168,7 +169,13 @@ func Provide[T any](a *App, v T) {
 	if a.deps == nil {
 		a.deps = map[reflect.Type]any{}
 	}
-	a.deps[reflect.TypeFor[T]()] = v
+	t := reflect.TypeFor[T]()
+	if _, ok := a.deps[t]; ok {
+		// Usually a mistake: two plugins of the same kind (say a main and an
+		// analytics database), and every handler now reads the last one.
+		a.Logger().Warn("aemeath: Provide replaces the value provided earlier for this type; give each a type of its own (for example type AnalyticsDB struct{ *gorm.DB }) to keep both", "type", t.String())
+	}
+	a.deps[t] = v
 }
 
 // Lookup is like Get, but for use during startup, when there is no request yet
