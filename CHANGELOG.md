@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-25
+
 ### Breaking changes
 
 - **SQLite moved to its own package: `db.Open(file, models...)` is now `sqlite.Open(file, db.WithModels(models...))`** (`github.com/naufalraism/aemeath/db/sqlite`). `db` imported the SQLite driver, and `db/postgres` and `db/mysql` import `db`, so every PostgreSQL and MySQL project compiled SQLite too (about 1.9 MB of a 25.9 MB binary, measured on Windows). Now a project compiles only the driver it imports, and the three drivers take the same options (`db.WithModels`, `db.WithPool`, `db.WithConfig`). A test checks that `db`, `db/postgres` and `db/mysql` do not compile SQLite.
