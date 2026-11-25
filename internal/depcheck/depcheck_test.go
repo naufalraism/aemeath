@@ -50,3 +50,21 @@ func TestPublicPackageTestsNeedNoExtraModules(t *testing.T) {
 		t.Fatalf("only %d public packages checked; the filter is wrong", checked)
 	}
 }
+
+// A PostgreSQL or MySQL project must not compile the SQLite driver (a large
+// pure-Go translation of SQLite): db/postgres and db/mysql import db, so db
+// itself must not import it. The SQLite opener lives in db/sqlite.
+func TestServerDriversDoNotCompileSQLite(t *testing.T) {
+	for _, pkg := range []string{
+		"github.com/naufalraism/aemeath/db",
+		"github.com/naufalraism/aemeath/db/postgres",
+		"github.com/naufalraism/aemeath/db/mysql",
+	} {
+		for _, dep := range goList(t, "-deps", pkg) {
+			if strings.HasPrefix(dep, "github.com/glebarez/") || strings.HasPrefix(dep, "modernc.org/") {
+				t.Errorf("%s compiles %s", pkg, dep)
+				break
+			}
+		}
+	}
+}

@@ -1,12 +1,15 @@
-// Package db is the GORM plugin. Open uses SQLite; the postgres and mysql
-// sub-packages connect to those servers. All of them return a *Plugin, so the
-// rest of your code does not depend on the database you picked.
+// Package db is the GORM plugin. Open a database with the package of its
+// driver: db/sqlite, db/postgres or db/mysql. All of them return a *Plugin,
+// so the rest of your code does not depend on the database you picked, and
+// a project only compiles the driver it imports.
 //
 // When the program only runs to write its TypeScript files ("aemeath ts",
-// "aemeath dev --ts-out", see aemeath.GeneratingTypeScript), every Open and
-// New uses an in-memory SQLite database in GORM's dry-run mode instead: no
-// server is needed, nothing is written to your database file, and migrations
-// do not run. The types come from your Go structs, not from the database.
+// "aemeath dev --ts-out", see aemeath.GeneratingTypeScript), New puts GORM in
+// dry-run mode: statements are built but never executed, no server is
+// needed, nothing is written to your database file, and migrations do not
+// run. The types come from your Go structs, not from the database. The three
+// drivers of this module open no connection then; a dialector of your own
+// given to New must not connect while it is initialized either.
 package db
 
 import (
@@ -19,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -66,8 +68,8 @@ func WithConfig(cfg *gorm.Config) Option {
 	return func(o *options) { o.gormCfg = cfg }
 }
 
-// New connects with any GORM dialector. It is what Open and the postgres and
-// mysql packages are built on.
+// New connects with any GORM dialector. The sqlite, postgres and mysql
+// packages are built on it.
 func New(d gorm.Dialector, opts ...Option) (*Plugin, error) {
 	var o options
 	for _, opt := range opts {
@@ -86,7 +88,7 @@ func New(d gorm.Dialector, opts ...Option) (*Plugin, error) {
 		}
 	}
 	if aemeath.GeneratingTypeScript() {
-		d, cfg, o.pool = typeScriptMode(cfg)
+		cfg, o.pool = typeScriptMode(d, cfg)
 	}
 	g, err := gorm.Open(d, cfg)
 	if err != nil {
@@ -113,24 +115,18 @@ func New(d gorm.Dialector, opts ...Option) (*Plugin, error) {
 
 var tsModeNotice sync.Once
 
-// typeScriptMode replaces the real database with an in-memory SQLite one in
-// dry-run mode: GORM builds statements but never executes them, so
-// AutoMigrate and queries made at startup succeed without touching anything,
-// whatever SQL dialect the models' tags assume.
-func typeScriptMode(cfg *gorm.Config) (gorm.Dialector, *gorm.Config, *poolConfig) {
+// typeScriptMode keeps the dialector but switches GORM to dry-run mode: it
+// builds statements and never executes them, so AutoMigrate and queries made
+// at startup succeed without a server, whatever SQL the models' tags assume.
+func typeScriptMode(d gorm.Dialector, cfg *gorm.Config) (*gorm.Config, *poolConfig) {
 	tsModeNotice.Do(func() {
-		slog.Default().Info("aemeath/db: " + aemeath.EnvTypeScriptOut + " is set: using an in-memory SQLite database in dry-run mode instead of connecting")
+		slog.Default().Info("aemeath/db: " + aemeath.EnvTypeScriptOut + " is set: " + d.Name() + " in dry-run mode, no connection")
 	})
 	c := *cfg
 	c.DryRun = true
 	c.DisableAutomaticPing = true
 	c.Logger = logger.Discard
-	return sqlite.Open(":memory:"), &c, &poolConfig{maxOpen: 1, maxIdle: 1}
-}
-
-// Open opens a SQLite database file and auto-migrates the given models.
-func Open(filename string, models ...any) (*Plugin, error) {
-	return New(sqlite.Open(filename), WithModels(models...))
+	return &c, &poolConfig{maxOpen: 1, maxIdle: 1}
 }
 
 // Translate turns the errors every database reports differently into HTTP

@@ -9,6 +9,7 @@ import (
 	"github.com/naufalraism/aemeath/db"
 	"github.com/naufalraism/aemeath/db/mysql"
 	"github.com/naufalraism/aemeath/db/postgres"
+	"github.com/naufalraism/aemeath/db/sqlite"
 )
 
 // Uses tags that only PostgreSQL understands: migrating it on a real SQLite
@@ -55,9 +56,9 @@ func TestOpenNeedsNoDatabaseWhileGeneratingTypeScript(t *testing.T) {
 
 	// The SQLite file of the project is not created or touched.
 	file := filepath.Join(t.TempDir(), "app.db")
-	p, err := db.Open(file, &pgOnly{})
+	p, err := sqlite.Open(file, db.WithModels(&pgOnly{}))
 	if err != nil {
-		t.Fatalf("db.Open: %v", err)
+		t.Fatalf("sqlite.Open: %v", err)
 	}
 	_ = p.Close()
 	if _, err := os.Stat(file); !os.IsNotExist(err) {

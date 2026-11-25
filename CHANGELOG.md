@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **SQLite moved to its own package: `db.Open(file, models...)` is now `sqlite.Open(file, db.WithModels(models...))`** (`github.com/naufalraism/aemeath/db/sqlite`). `db` imported the SQLite driver, and `db/postgres` and `db/mysql` import `db`, so every PostgreSQL and MySQL project compiled SQLite too (about 1.9 MB of a 25.9 MB binary, measured on Windows). Now a project compiles only the driver it imports, and the three drivers take the same options (`db.WithModels`, `db.WithPool`, `db.WithConfig`). A test checks that `db`, `db/postgres` and `db/mysql` do not compile SQLite.
+- **While only TypeScript is written, `db.New` keeps your dialector in GORM's dry-run mode** instead of swapping in an in-memory SQLite database. `sqlite.Open`, `postgres.Open` and `mysql.Open` open no connection then (MySQL no longer asks the server for its version). A dialector of your own given to `db.New` must not connect while it is initialized, or `aemeath ts` needs its server.
+
 ### Fixed
 
 - **Docs: the "Two databases" example opened PostgreSQL URLs with `db.Open`**, the SQLite opener, which would have created a file named after the URL instead of connecting. It uses `postgres.Open` now, and a test checks that no example passes a URL from the environment to the SQLite opener.
