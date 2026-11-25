@@ -5,6 +5,8 @@ app.EnableClient()                   // serves /client.ts, /schemas.ts, /hooks.t
 app.WriteTypeScript("web/src/api")   // or write the files to disk
 ```
 
+`admin.EnableClient()` on a group serves the same files under the group's prefix, behind its middlewares (see [API docs in production](./auth.md#api-docs-in-production)).
+
 ## With the CLI
 
 ```bash

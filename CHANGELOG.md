@@ -12,6 +12,10 @@ All notable changes to this project are documented here.
 
 - **`/docs` loads its OpenAPI document by a relative URL** (`openapi.json`). Behind a reverse proxy that mounts the app under a prefix (`/api/docs` outside, `/docs` inside), the page asked for `/openapi.json` at the root of the host, outside the app, and showed nothing.
 
+### Changed
+
+- **Docs: "API docs in production"** in the authentication guide: why `/docs` is public by default, why hiding it is not a protection by itself, and how to put it behind a login (`group.EnableDocs`) or turn it off in production. The README and the TypeScript guide link to it.
+
 ## [0.9.0] - 2026-11-25
 
 ### Breaking changes

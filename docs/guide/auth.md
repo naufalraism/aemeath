@@ -196,3 +196,37 @@ app.Handle("GET", "/auth/github/callback", func(c *aemeath.Ctx) error {
 ```
 
 Like `oidc`, it needs `session.Middleware`: `Begin` keeps the state in the server-side session and `Complete` checks it once, within `MaxLoginAge` (10 minutes). Set `PKCE: true` on the plugin when the provider supports PKCE. Identify users by the provider's stable id (`id` on GitHub), not by login name or e-mail, which can change hands. `AuthURL`, `Exchange` and `UserInfo` remain for apps that keep the state themselves.
+
+## API docs in production
+
+`app.EnableDocs` and `app.EnableClient` are public: anyone can read your routes and their input and output types at `/docs`, `/openapi.json` and `/client.ts`. FastAPI and springdoc do the same by default. This is not a hole by itself, since hiding the docs does not protect a route: the check in the route does (`aemeath.RequireAuth()`, a session check). But a map of the API makes it quicker to find the one route you forgot to protect, so decide what fits:
+
+**Public.** Fine for an API other people are meant to use. Nothing to change.
+
+**Behind a login.** Register them on a group: they sit under its prefix and run its middlewares. The document and the client still cover every route of the app.
+
+```go
+func requireAdmin(next aemeath.HandlerFunc) aemeath.HandlerFunc {
+	return func(c *aemeath.Ctx) error {
+		if session.From(c).String("role") != "admin" {
+			return aemeath.Forbidden("admins only")
+		}
+		return next(c)
+	}
+}
+
+admin := app.Group("/admin", requireAdmin)
+admin.EnableDocs(aemeath.Info{Title: "My API", Version: "1.0.0"}) // /admin/docs, /admin/openapi.json
+admin.EnableClient()                                              // /admin/client.ts, /admin/schemas.ts, /admin/hooks.ts
+```
+
+**Off in production.** Register them only outside production, and let your frontend build write the TypeScript files with `app.WriteTypeScript("web/src/api")` instead of fetching `/client.ts`:
+
+```go
+if os.Getenv("APP_ENV") != "production" {
+	app.EnableDocs(aemeath.Info{Title: "My API", Version: "1.0.0"})
+	app.EnableClient()
+}
+```
+
+The docs page loads `openapi.json` by a relative URL, so it also works behind a reverse proxy that serves the app under a prefix (`/api/docs`).
