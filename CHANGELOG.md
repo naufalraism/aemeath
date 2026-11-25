@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-25
+
 ### Added
 
 - **`group.EnableDocs(info)` and `group.EnableClient()`** register `/docs`, `/openapi.json`, `/client.ts`, `/schemas.ts` and `/hooks.ts` under the group's prefix, behind its middlewares: for example API docs that only signed-in admins can open (`/admin/docs`). The document and the client still cover the whole app. `app.EnableDocs` and `app.EnableClient` are unchanged and stay public.
