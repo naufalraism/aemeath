@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **Session fixation is much harder.** An attacker who planted a real session id in a victim's browser (from a sibling subdomain or a plain-http page) shared the victim's session after a login that did not call `Renew`; nothing warned about the missing call. Over HTTPS the session cookie is now named `__Host-aemeath_session`, which a browser accepts only from the site itself over HTTPS, so the id cannot be planted. New `s.Login(ctx, key, value)` renews the id and sets the value in one call.
+
+### Breaking changes
+
+- **The session cookie is named `__Host-aemeath_session` over HTTPS** (Secure, Path `/`, no `Domain`), instead of `aemeath_session`. **Users who are logged in when you upgrade log in once more.** With `Insecure`, a `Domain` or another `Path` the name stays `aemeath_session`; a `CookieName` you set is kept. A `__Host-` or `__Secure-` `CookieName` that browsers would refuse now panics at startup.
+
 ## [0.6.1] - 2026-11-24
 
 ### Fixed

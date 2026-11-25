@@ -238,7 +238,7 @@ func TestOriginSchemeOnTLS(t *testing.T) {
 			r.Method = "POST"
 		}
 		if sess != "" {
-			r.AddCookie(&http.Cookie{Name: "aemeath_session", Value: sess})
+			r.AddCookie(&http.Cookie{Name: "__Host-aemeath_session", Value: sess})
 		}
 		for k, v := range h {
 			r.Header.Set(k, v)

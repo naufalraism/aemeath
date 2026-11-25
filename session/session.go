@@ -31,8 +31,13 @@ type Store interface {
 
 // Config configures Middleware.
 type Config struct {
-	Store      Store
-	CookieName string        // default "aemeath_session"
+	Store Store
+	// CookieName defaults to "__Host-aemeath_session" when the cookie can
+	// carry that prefix (Secure, Path "/", no Domain) and to
+	// "aemeath_session" otherwise (Insecure, a Domain or another Path). A
+	// browser refuses a __Host- cookie set by another subdomain or over plain
+	// http, so nobody can plant a session id in it (session fixation).
+	CookieName string
 	TTL        time.Duration // default 24h
 	Sliding    bool          // extend the TTL on every request
 	Insecure   bool          // allow the cookie over plain HTTP (development only)
@@ -117,8 +122,16 @@ func Middleware(cfg Config) aemeath.Middleware {
 		}
 	}
 	full := &fullLog{}
-	if cfg.CookieName == "" {
+	hostOK := !cfg.Insecure && cfg.Domain == "" && (cfg.Path == "" || cfg.Path == "/")
+	switch {
+	case cfg.CookieName == "" && hostOK:
+		cfg.CookieName = "__Host-aemeath_session"
+	case cfg.CookieName == "":
 		cfg.CookieName = "aemeath_session"
+	case strings.HasPrefix(cfg.CookieName, "__Host-") && !hostOK:
+		panic("session: Config.CookieName " + cfg.CookieName + ": a __Host- cookie must be Secure (no Insecure), with Path \"/\" and no Domain, or browsers drop it")
+	case strings.HasPrefix(cfg.CookieName, "__Secure-") && cfg.Insecure:
+		panic("session: Config.CookieName " + cfg.CookieName + ": a __Secure- cookie must be Secure (no Insecure), or browsers drop it")
 	}
 	if cfg.TTL <= 0 {
 		cfg.TTL = 24 * time.Hour
@@ -408,6 +421,19 @@ func (s *Session) Renew(ctx context.Context) error {
 	}
 	s.id = newID()
 	s.dirty, s.renewed = true, true
+	return nil
+}
+
+// Login starts a logged-in session: it renews the id (see Renew) and sets
+// key to value, for example s.Login(c.Context(), "user_id", user.ID). Use it
+// where a login succeeds instead of Set alone: keeping the id lets an
+// attacker who planted that id in the victim's browser share the logged-in
+// session (session fixation).
+func (s *Session) Login(ctx context.Context, key string, value any) error {
+	if err := s.Renew(ctx); err != nil {
+		return err
+	}
+	s.Set(key, value)
 	return nil
 }
 

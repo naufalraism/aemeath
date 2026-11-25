@@ -25,7 +25,7 @@ func TestSession_FixationAndCookieFlags(t *testing.T) {
 	// Attacker plants a 43-character id of their choice before the victim logs in.
 	planted := strings.Repeat("A", 43)
 	r := httptest.NewRequest("POST", "/login", nil)
-	r.AddCookie(&http.Cookie{Name: "aemeath_session", Value: planted})
+	r.AddCookie(&http.Cookie{Name: "__Host-aemeath_session", Value: planted})
 	w := httptest.NewRecorder()
 	app.ServeHTTP(w, r)
 	set := w.Header().Get("Set-Cookie")
@@ -40,7 +40,7 @@ func TestSession_FixationAndCookieFlags(t *testing.T) {
 	}
 	// The planted id must not give access afterwards.
 	r = httptest.NewRequest("GET", "/me", nil)
-	r.AddCookie(&http.Cookie{Name: "aemeath_session", Value: planted})
+	r.AddCookie(&http.Cookie{Name: "__Host-aemeath_session", Value: planted})
 	w = httptest.NewRecorder()
 	app.ServeHTTP(w, r)
 	t.Logf("GET /me with the planted id -> %q", w.Body.String())
