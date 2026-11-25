@@ -1,6 +1,32 @@
-# Metrics and tracing
+# Logging, metrics and tracing
 
 Neither package adds a third-party dependency, and both speak open standards, so they work with Prometheus, Grafana, Jaeger, Tempo, Honeycomb and any OpenTelemetry Collector.
+
+## Logging
+
+Aemeath writes its own messages (the cause of a `500`, a panic, a failed readiness check, the server starting and stopping, warnings at startup, session and tracing failures) to one `*slog.Logger`. By default that is `slog.Default()`, which prints through the standard `log` package. Choose another with `SetLogger`, before registering routes:
+
+```go
+app := aemeath.New()
+app.SetLogger(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+app.Use(aemeath.RequestID(), aemeath.SlogLogger(app.Logger()))
+```
+
+The cause of a `500` is logged **once**, with `request_id`, `method` and `path`, so it can be matched with the access log line of the same request:
+
+```json
+{"level":"ERROR","msg":"aemeath: internal error","method":"GET","path":"/orders/7","request_id":"req-42","error":"db connection refused"}
+```
+
+`AsHTTPError` logs nothing, so middleware and `OnError` handlers may call it freely.
+
+In a handler, `c.Logger()` is the app's logger with the request's method, path and request id already attached:
+
+```go
+c.Logger().Info("payment accepted", "order", in.ID, "amount", in.Amount)
+```
+
+A tracer registered with `RegisterPlugin` logs through the app's logger too; `tracing.Config{Logger: ...}` sets one for a tracer used only as middleware. `Logger()`, the plain-text access log middleware, keeps writing through the standard `log` package; `SlogLogger(l)` is its structured counterpart.
 
 ## Metrics (Prometheus)
 

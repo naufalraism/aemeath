@@ -344,7 +344,7 @@ group.Options(aemeath.RequireAuth()) // 401 unless a middleware authenticated th
 
 Tokens must carry `exp` unless `AllowNoExpiry` is set; an empty secret panics at startup.
 
-Sessions, CSRF, OpenID Connect, PostgreSQL/MySQL, forms, metrics and tracing have their own pages in the [documentation](https://naufalraism.github.io/aemeath/): [Authentication](docs/guide/auth.md), [Databases](docs/guide/database.md), [Forms and uploads](docs/guide/forms.md), [Metrics and tracing](docs/guide/observability.md), and a [step-by-step tutorial](docs/guide/tutorial.md) whose finished code is [`examples/notes`](examples/notes).
+Sessions, CSRF, OpenID Connect, PostgreSQL/MySQL, forms, logging, metrics and tracing have their own pages in the [documentation](https://naufalraism.github.io/aemeath/): [Authentication](docs/guide/auth.md), [Databases](docs/guide/database.md), [Forms and uploads](docs/guide/forms.md), [Logging, metrics and tracing](docs/guide/observability.md), and a [step-by-step tutorial](docs/guide/tutorial.md) whose finished code is [`examples/notes`](examples/notes).
 
 ```go
 // A form with a validated image upload

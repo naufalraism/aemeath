@@ -16,6 +16,7 @@ All notable changes to this project are documented here.
 ### Changed
 
 - **The framework's log lines are `slog` lines.** Without `SetLogger` they still go through the standard log package, but read like `ERROR aemeath: internal error method=GET path=/x error="..."` instead of `aemeath: internal error: ...`. A search for an exact old line needs updating. `Logger()` (the plain request log middleware) is unchanged.
+- **Docs: a Logging section** in "Logging, metrics and tracing" (`SetLogger`, the one-line 500, `c.Logger()`).
 
 ## [0.7.0] - 2026-11-25
 
