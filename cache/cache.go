@@ -21,7 +21,8 @@ type Plugin struct {
 type Config struct {
 	// URL is the form managed services hand out:
 	// "redis://user:password@host:6379/0", or "rediss://..." for TLS. When
-	// set, Addr, Password and DB are taken from it.
+	// set, Addr, Password and DB are taken from it and must be left empty
+	// (New panics otherwise, so a setting is never ignored).
 	URL string
 
 	Addr     string // host:port; "localhost:6379" when empty
@@ -42,6 +43,11 @@ type Config struct {
 func New(cfg Config) *Plugin {
 	opts := &redis.Options{Addr: cfg.Addr, Password: cfg.Password, DB: cfg.DB}
 	if cfg.URL != "" {
+		for name, set := range map[string]bool{"Addr": cfg.Addr != "", "Password": cfg.Password != "", "DB": cfg.DB != 0} {
+			if set {
+				panic("cache: Config.URL and Config." + name + " are both set; the URL replaces " + name + ": put it in the URL, or leave URL empty")
+			}
+		}
 		var err error
 		if opts, err = redis.ParseURL(cfg.URL); err != nil {
 			panic(fmt.Sprintf("cache: Config.URL: %v", err))
