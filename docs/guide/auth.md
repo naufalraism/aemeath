@@ -94,6 +94,8 @@ For a plain HTML form, which cannot send headers, put the token in a hidden fiel
 
 The token is only created when something asks for it (`csrf.Token`), so visitors who never do, such as crawlers, get no session.
 
+Every call to `csrf.Token` returns a different string: fresh random bytes and the session's secret masked with them. All of them stay valid until the secret changes at login. A page that holds the token and also shows back what a visitor typed can therefore be compressed safely (BREACH). Do not compare two tokens with each other; a token issued before v0.11.0 (the secret itself) is still accepted.
+
 Set `Cookie: "XSRF-TOKEN"` to also publish the token in a readable cookie for front-end libraries that read it automatically. That creates a session for every visitor who loads a page, so use a store that can hold them (Redis) rather than `MemoryStore`.
 
 `session.Middleware` already refuses cross-origin writes on its own, without a token: a `POST`, `PUT`, `PATCH` or `DELETE` that the browser marks as coming from another site (`Sec-Fetch-Site`, or `Origin` on browsers that do not send it) gets 403. Your own pages, reads, and clients that are not browsers (curl, mobile apps, webhooks) are not affected. A front end on another origin, such as `https://app.example.com` calling `https://api.example.com` with cookies, must be listed:

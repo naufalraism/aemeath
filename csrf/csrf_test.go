@@ -49,10 +49,14 @@ func start(app *aemeath.App) (sess, token string) {
 			sess = c.Value
 		}
 	}
-	b := w.Body.String()
-	i := strings.Index(b, `"token":"`) + 9
-	token = b[i : i+43]
+	token = tokenIn(w.Body.String())
 	return
+}
+
+// tokenIn returns the value of "token" in a JSON body.
+func tokenIn(body string) string {
+	i := strings.Index(body, `"token":"`) + len(`"token":"`)
+	return body[i : i+strings.IndexByte(body[i:], '"')]
 }
 
 func TestSafeMethodsPassUnsafeNeedToken(t *testing.T) {
@@ -208,9 +212,7 @@ func TestTokenChangesAtLogin(t *testing.T) {
 	if code := call(app, "POST", "/act", newSess, map[string]string{"X-CSRF-Token": before}).Code; code != 403 {
 		t.Fatalf("the token from before login still works after login: %d", code)
 	}
-	b := call(app, "GET", "/token", newSess, nil).Body.String()
-	i := strings.Index(b, `"token":"`) + 9
-	after := b[i : i+43]
+	after := tokenIn(call(app, "GET", "/token", newSess, nil).Body.String())
 	if after == before {
 		t.Fatal("the token did not change at login")
 	}
@@ -252,9 +254,7 @@ func TestOriginSchemeOnTLS(t *testing.T) {
 	for _, c := range w.Result().Cookies() {
 		sess = c.Value
 	}
-	b := w.Body.String()
-	i := strings.Index(b, `"token":"`) + 9
-	token := b[i : i+43]
+	token := tokenIn(w.Body.String())
 
 	for origin, want := range map[string]int{
 		"https://bank.example": 200,

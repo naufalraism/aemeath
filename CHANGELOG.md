@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **The CSRF token is different in every response.** `csrf.Token` (and the `XSRF-TOKEN` cookie) returned the session's secret itself, the same string every time. In a compressed page that also shows back what a visitor typed, an attacker who can measure response sizes could recover it byte by byte (BREACH). The token is now 32 random bytes followed by the secret XOR those bytes, as in Django and Rails; every such token, and a token in the old format, stays valid until the secret changes at login. Tokens are longer (86 characters instead of 43).
+
 ## [0.10.1] - 2026-11-25
 
 ### Fixed
