@@ -76,7 +76,7 @@ func TestClean_SessionCookieOfWrongShapeNeverReachesTheStore(t *testing.T) {
 	app.Handle("GET", "/", func(c *aemeath.Ctx) error { _ = session.From(c).String("x"); return nil })
 	for _, v := range []string{strings.Repeat("A", 100_000), "short", "*", strings.Repeat("A", 43)} {
 		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Cookie", "aemeath_session="+v)
+		req.Header.Set("Cookie", "__Host-aemeath_session="+v)
 		app.ServeHTTP(httptest.NewRecorder(), req)
 	}
 	t.Logf("4 requests (100 KB, short, '*', 43 chars) -> store.Load called %d time(s)", store.loads.Load())

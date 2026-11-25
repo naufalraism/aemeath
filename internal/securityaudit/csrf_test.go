@@ -36,7 +36,7 @@ func newCSRF() csrfEnv {
 func (e csrfEnv) do(method, path, sess string, h map[string]string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "https://bank.example"+path, nil)
 	if sess != "" {
-		r.AddCookie(&http.Cookie{Name: "aemeath_session", Value: sess})
+		r.AddCookie(&http.Cookie{Name: "__Host-aemeath_session", Value: sess})
 	}
 	for k, v := range h {
 		r.Header.Set(k, v)
@@ -48,7 +48,7 @@ func (e csrfEnv) do(method, path, sess string, h map[string]string) *httptest.Re
 
 func cookieOf(w *httptest.ResponseRecorder) string {
 	for _, c := range w.Result().Cookies() {
-		if c.Name == "aemeath_session" {
+		if c.Name == "__Host-aemeath_session" {
 			return c.Value
 		}
 	}

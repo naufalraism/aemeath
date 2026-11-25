@@ -22,11 +22,10 @@ app.Use(session.Middleware(session.Config{
 
 aemeath.POST(app, "/login", func(c *aemeath.Ctx, in LoginIn) (Me, error) {
 	// ... check the password ...
-	s := session.From(c)
-	if err := s.Renew(c.Context()); err != nil { // ALWAYS renew at login
+	// Login gives the session a new id, then sets the user: never Set alone at login.
+	if err := session.From(c).Login(c.Context(), "user", in.Name); err != nil {
 		return Me{}, err
 	}
-	s.Set("user", in.Name)
 	return Me{Name: in.Name}, nil
 })
 
@@ -47,8 +46,9 @@ If saving fails for another reason (Redis is down), the request is answered `500
 
 Safety properties, each covered by a test:
 
-- An id the server did not issue is **never adopted**, so an attacker cannot plant a known id in a victim's browser (session fixation).
-- `Renew` issues a new id **and deletes the old one**. Call it whenever the user's privilege changes (login, password change).
+- An id the server did not issue is **never adopted**.
+- Over HTTPS the cookie is named **`__Host-aemeath_session`**. A browser accepts a `__Host-` cookie only from the site itself, over HTTPS, with `Path=/` and no `Domain`, so a sibling subdomain or a plain-http page cannot plant a real session id in a visitor's browser (session fixation). With `Insecure`, a `Domain` or another `Path` the cookie is named `aemeath_session`; a `CookieName` you set is kept, and one with a `__Host-` or `__Secure-` prefix that browsers would refuse panics at startup.
+- **`s.Login(ctx, key, value)`** issues a new id, deletes the old one and sets the value: use it where a login succeeds, never `Set` alone, so an id planted before the login does not share the logged-in session. `oidc` and `oauth2` `Complete` renew the id themselves. Call `Renew` whenever the user's privilege changes otherwise (a password change, becoming admin).
 - A cookie is only sent when the session was touched, so anonymous visitors get none.
 - A session ended by `Destroy` or `Renew` stays ended: a request of the same visitor that was still running does not store it again.
 - `Config.Insecure` exists for `http://localhost` development only. The default is `Secure`.
@@ -152,11 +152,8 @@ app.Handle("GET", "/auth/callback", func(c *aemeath.Ctx) error {
 	if err != nil {
 		return err // always a 401
 	}
-	s := session.From(c)
-	if err := s.Renew(c.Context()); err != nil {
-		return err
-	}
-	s.Set("sub", id.Issuer+"|"+id.Subject)
+	// Complete has already given the session a new id.
+	session.From(c).Set("sub", id.Issuer+"|"+id.Subject)
 	return c.Redirect(http.StatusFound, "/")
 })
 ```
@@ -191,11 +188,7 @@ app.Handle("GET", "/auth/github/callback", func(c *aemeath.Ctx) error {
 	if err != nil {
 		return err
 	}
-	s := session.From(c)
-	if err := s.Renew(c.Context()); err != nil {
-		return err
-	}
-	s.Set("github_id", login.User["id"])
+	session.From(c).Set("github_id", login.User["id"]) // Complete renewed the id
 	return c.Redirect(302, "/")
 })
 ```

@@ -388,6 +388,7 @@ session: method (*Session) Get(key string) (any, bool)
 session: method (*Session) ID() string
 session: method (*Session) Int(key string) int
 session: method (*Session) IsNew() bool
+session: method (*Session) Login(ctx context.Context, key string, value any) error
 session: method (*Session) Renew(ctx context.Context) error
 session: method (*Session) Set(key string, v any)
 session: method (*Session) String(key string) string

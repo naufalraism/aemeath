@@ -531,7 +531,7 @@ func TestSessionClaims(t *testing.T) {
 	})
 	t.Run("An id the server did not issue is never adopted", func(t *testing.T) {
 		planted := strings.Repeat("A", 43)
-		cs := do(a, "GET", "/login", "", "Cookie", "aemeath_session="+planted).Result().Cookies()
+		cs := do(a, "GET", "/login", "", "Cookie", "__Host-aemeath_session="+planted).Result().Cookies()
 		if len(cs) != 1 || cs[0].Value == planted {
 			t.Errorf("%+v", cs)
 		}
