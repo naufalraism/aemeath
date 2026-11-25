@@ -71,12 +71,20 @@ func newPKCEProvider(t *testing.T) *pkceProvider {
 	return p
 }
 
-func (p *pkceProvider) plugin(name string) *oauth2.Plugin {
-	return oauth2.New(name, &xoauth2.Config{
-		ClientID: "client-id", ClientSecret: "client-secret",
-		RedirectURL: "http://app.test/callback",
-		Endpoint:    xoauth2.Endpoint{AuthURL: p.URL + "/auth", TokenURL: p.URL + "/token"},
-	}, p.URL+"/user")
+func (p *pkceProvider) plugin(name string, edit ...func(*oauth2.Config)) *oauth2.Plugin {
+	cfg := oauth2.Config{
+		Name: name,
+		OAuth2: &xoauth2.Config{
+			ClientID: "client-id", ClientSecret: "client-secret",
+			RedirectURL: "http://app.test/callback",
+			Endpoint:    xoauth2.Endpoint{AuthURL: p.URL + "/auth", TokenURL: p.URL + "/token"},
+		},
+		UserInfoURL: p.URL + "/user",
+	}
+	for _, e := range edit {
+		e(&cfg)
+	}
+	return oauth2.New(cfg)
 }
 
 // loginApp serves /login/{name} (Begin) and /callback/{name} (Complete) for
@@ -87,8 +95,8 @@ func loginApp(t *testing.T, plugins ...*oauth2.Plugin) (*httptest.Server, *http.
 	app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore(), Insecure: true}))
 	for _, p := range plugins {
 		p := p
-		app.Handle("GET", "/login/"+p.ProviderName, func(c *aemeath.Ctx) error { return p.Begin(c) })
-		app.Handle("GET", "/callback/"+p.ProviderName, func(c *aemeath.Ctx) error {
+		app.Handle("GET", "/login/"+p.Name(), func(c *aemeath.Ctx) error { return p.Begin(c) })
+		app.Handle("GET", "/callback/"+p.Name(), func(c *aemeath.Ctx) error {
 			login, err := p.Complete(c)
 			if err != nil {
 				return err
@@ -208,8 +216,7 @@ func TestEachProviderHasItsOwnState(t *testing.T) {
 
 func TestLoginTakingTooLongIsRefused(t *testing.T) {
 	prov := newPKCEProvider(t)
-	gh := prov.plugin("gh")
-	gh.MaxLoginAge = time.Nanosecond
+	gh := prov.plugin("gh", func(c *oauth2.Config) { c.MaxLoginAge = time.Nanosecond })
 	// A visitor without a session gets one that expires with the login, so
 	// start the session through another provider first: the login, not the
 	// session, must be what is too old.
@@ -223,8 +230,7 @@ func TestLoginTakingTooLongIsRefused(t *testing.T) {
 
 func TestPKCEWhenTurnedOn(t *testing.T) {
 	prov := newPKCEProvider(t)
-	gh := prov.plugin("gh")
-	gh.PKCE = true
+	gh := prov.plugin("gh", func(c *oauth2.Config) { c.PKCE = true })
 	srv, client := loginApp(t, gh)
 	u := begin(t, srv, client, "gh")
 	if u.Query().Get("code_challenge") == "" || u.Query().Get("code_challenge_method") != "S256" {
@@ -297,5 +303,26 @@ func TestCompleteRenewsTheSessionID(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != 401 || !strings.Contains(string(b), "no login in progress") {
 		t.Errorf("the pre-login id: %d %s", resp.StatusCode, b)
+	}
+}
+
+// The state Begin sends is random, long and URL-safe (it used to be checked
+// on GenerateState, which Begin made unnecessary).
+func TestBeginSendsARandomURLSafeState(t *testing.T) {
+	const urlSafe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+	prov := newPKCEProvider(t)
+	srv, client := loginApp(t, prov.plugin("gh"))
+	seen := map[string]bool{}
+	for range 20 {
+		s := begin(t, srv, client, "gh").Query().Get("state")
+		if len(s) < 30 || seen[s] {
+			t.Fatalf("state %q is too short or repeated", s)
+		}
+		for _, r := range s {
+			if !strings.ContainsRune(urlSafe, r) {
+				t.Fatalf("state %q is not URL-safe", s)
+			}
+		}
+		seen[s] = true
 	}
 }

@@ -1,6 +1,7 @@
 package oauth2_test
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -50,13 +51,17 @@ func fakeProvider(t *testing.T) *httptest.Server {
 }
 
 func newPlugin(provider *httptest.Server, userInfoPath string) *oauth2.Plugin {
-	return oauth2.New("fake", &xoauth2.Config{
-		ClientID:     "client-id",
-		ClientSecret: "client-secret",
-		RedirectURL:  "http://app.test/auth/callback",
-		Scopes:       []string{"openid", "email"},
-		Endpoint:     xoauth2.Endpoint{AuthURL: provider.URL + "/auth", TokenURL: provider.URL + "/token"},
-	}, provider.URL+userInfoPath)
+	return oauth2.New(oauth2.Config{
+		Name: "fake",
+		OAuth2: &xoauth2.Config{
+			ClientID:     "client-id",
+			ClientSecret: "client-secret",
+			RedirectURL:  "http://app.test/auth/callback",
+			Scopes:       []string{"openid", "email"},
+			Endpoint:     xoauth2.Endpoint{AuthURL: provider.URL + "/auth", TokenURL: provider.URL + "/token"},
+		},
+		UserInfoURL: provider.URL + userInfoPath,
+	})
 }
 
 func TestAuthURLCarriesTheStateAndTheClient(t *testing.T) {
@@ -110,10 +115,7 @@ func TestLoginFlowChecksTheState(t *testing.T) {
 
 	aemeath.GET(app, "/auth/login", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
 		p, _ := oauth2.From(c, "fake")
-		state, err := oauth2.GenerateState()
-		if err != nil {
-			return nil, err
-		}
+		state := rand.Text() // an app that keeps the state itself makes it however it likes
 		http.SetCookie(c.W, &http.Cookie{Name: "oauth_state", Value: state, Path: "/auth", HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		return map[string]string{"url": p.AuthURL(state)}, nil
 	})

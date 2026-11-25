@@ -2,7 +2,6 @@ package oauth2_test
 
 import (
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	xoauth2 "golang.org/x/oauth2"
@@ -11,37 +10,16 @@ import (
 	"github.com/naufalraism/aemeath/oauth2"
 )
 
-const urlSafe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
-
-func TestGenerateStateIsRandomAndURLSafe(t *testing.T) {
-	seen := map[string]bool{}
-	for i := 0; i < 50; i++ {
-		s, err := oauth2.GenerateState()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(s) < 30 || seen[s] {
-			t.Fatalf("state %q is too short or repeated", s)
-		}
-		for _, r := range s {
-			if !strings.ContainsRune(urlSafe, r) {
-				t.Fatalf("state %q is not URL-safe", s)
-			}
-		}
-		seen[s] = true
-	}
-}
-
 func TestSeveralProvidersCoexist(t *testing.T) {
 	app := aemeath.New()
-	google := oauth2.New("google", &xoauth2.Config{ClientID: "g"}, "https://example.com/g")
-	github := oauth2.New("github", &xoauth2.Config{ClientID: "h"}, "https://example.com/h")
+	google := oauth2.New(oauth2.Config{Name: "google", OAuth2: &xoauth2.Config{ClientID: "g"}, UserInfoURL: "https://example.com/g"})
+	github := oauth2.New(oauth2.Config{Name: "github", OAuth2: &xoauth2.Config{ClientID: "h"}, UserInfoURL: "https://example.com/h"})
 	for _, p := range []*oauth2.Plugin{google, github} {
 		if err := app.RegisterPlugin(p); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := app.RegisterPlugin(oauth2.New("google", &xoauth2.Config{}, "")); err == nil {
+	if err := app.RegisterPlugin(oauth2.New(oauth2.Config{Name: "google", OAuth2: &xoauth2.Config{}, UserInfoURL: "https://example.com/g2"})); err == nil {
 		t.Fatal("registering the same provider twice must fail")
 	}
 
@@ -49,7 +27,7 @@ func TestSeveralProvidersCoexist(t *testing.T) {
 		g, okG := oauth2.From(c, "google")
 		h, okH := oauth2.From(c, "github")
 		_, okX := oauth2.From(c, "nope")
-		if !okG || !okH || okX || g.Config.ClientID != "g" || h.Config.ClientID != "h" {
+		if !okG || !okH || okX || g != google || h != github {
 			t.Errorf("lookup failed: %v %v %v", okG, okH, okX)
 		}
 		return nil

@@ -10,6 +10,7 @@ All notable changes to this project are documented here.
 - **Removed the deprecated `aemeath.Storage`, `StoragePlugin`, `LocalStorage` and `NewLocalStorage`** (deprecated since v0.6.0): use `storage.Storage`, `storage.Local` and `storage.NewLocal`, provided with `aemeath.Provide[storage.Storage](app, storage.NewLocal("uploads"))`.
 - **`cache.New` panics when `Config.URL` is set together with `Addr`, `Password` or `DB`.** The URL replaced them without a word, so a URL without a password next to `Password` connected without it. The message names the field, not its value.
 - **`tracing.Span` exposes its identity through methods**: `TraceID()`, `SpanID()`, `ParentID()`, `Name()` and `Start()` replace the exported fields, which any code could overwrite halfway through a request and so break the exported trace. `Name()` is safe to call while the middleware names the span after its route.
+- **`oauth2.New` takes one `oauth2.Config`** (`Name`, `OAuth2`, `UserInfoURL`, `PKCE`, `MaxLoginAge`, `HTTPClient`), like `oidc.Config`. The plugin's settings were exported fields read on every request, so changing one after the server started raced with logins; they are set once now. `New` panics when `Name`, `OAuth2` or `UserInfoURL` is missing. `p.Name()` returns the provider's name. The deprecated `GenerateState` is removed: `Begin` and `Complete` keep the state.
 
 ## [0.13.0] - 2026-11-25
 
