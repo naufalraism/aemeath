@@ -262,11 +262,8 @@ func main() {
 			if err != nil {
 				return err
 			}
-			s := session.From(c)
-			if err := s.Renew(c.Context()); err != nil { // a new session id after login
-				return err
-			}
-			s.Set("user", id.Issuer+"|"+id.Subject) // issuer + subject, never the e-mail
+			// Complete has already given the session a new id.
+			session.From(c).Set("user", id.Issuer+"|"+id.Subject) // issuer + subject, never the e-mail
 			return c.JSON(200, map[string]any{"message": "Login successful!", "email": id.Email, "name": id.Name})
 		})
 	}
@@ -285,11 +282,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		s := session.From(c)
-		if err := s.Renew(c.Context()); err != nil {
-			return err
-		}
-		s.Set("github_id", login.User["id"]) // GitHub's numeric id: logins can be renamed
+		session.From(c).Set("github_id", login.User["id"]) // GitHub's numeric id: logins can be renamed; Complete renewed the id
 		return c.JSON(200, map[string]any{"message": "Login successful!", "login": login.User["login"]})
 	})
 

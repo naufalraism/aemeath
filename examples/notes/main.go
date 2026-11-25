@@ -72,12 +72,8 @@ func newApp(insecureCookies bool) *aemeath.App {
 	app.Handle("GET", "/metrics", reg.Handler()) // keep this internal in production
 
 	login := func(c *aemeath.Ctx, name string) error {
-		s := session.From(c)
-		if err := s.Renew(c.Context()); err != nil { // new id at login: no session fixation
-			return err
-		}
-		s.Set("user", name)
-		return nil
+		// A new session id at login, then the user: no session fixation.
+		return session.From(c).Login(c.Context(), "user", name)
 	}
 	current := func(c *aemeath.Ctx) (string, error) {
 		u := session.From(c).String("user")

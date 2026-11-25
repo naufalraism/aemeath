@@ -13,6 +13,10 @@ All notable changes to this project are documented here.
 
 - **The session cookie is named `__Host-aemeath_session` over HTTPS** (Secure, Path `/`, no `Domain`), instead of `aemeath_session`. **Users who are logged in when you upgrade log in once more.** With `Insecure`, a `Domain` or another `Path` the name stays `aemeath_session`; a `CookieName` you set is kept. A `__Host-` or `__Secure-` `CookieName` that browsers would refuse now panics at startup.
 
+### Changed
+
+- **Docs and examples log in with `s.Login(...)`**, and no longer call `Renew` after `oidc`/`oauth2` `Complete`, which renews the id itself. The auth guide explains the `__Host-` cookie.
+
 ## [0.6.1] - 2026-11-24
 
 ### Fixed

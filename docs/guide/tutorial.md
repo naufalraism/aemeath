@@ -46,12 +46,8 @@ Add the session middleware, then renew the session id at login:
 app.Use(session.Middleware(session.Config{Store: session.NewMemoryStore()}))
 
 login := func(c *aemeath.Ctx, name string) error {
-	s := session.From(c)
-	if err := s.Renew(c.Context()); err != nil { // a new id at login: no session fixation
-		return err
-	}
-	s.Set("user", name)
-	return nil
+	// A new session id at login, then the user: no session fixation.
+	return session.From(c).Login(c.Context(), "user", name)
 }
 ```
 
