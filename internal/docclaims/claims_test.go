@@ -4,9 +4,11 @@ package docclaims
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
+	"html"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -747,6 +749,57 @@ func TestCSRFTokenIsLazy(t *testing.T) {
 		}
 		if r := do(a, "POST", "/save", "", "X-CSRF-Token", "wrong"); r.Code != 403 {
 			t.Errorf("wrong token: %d", r.Code)
+		}
+	})
+}
+
+func TestBREACHClaims(t *testing.T) {
+	t.Run("CSRF tokens are safe: csrf.Token returns a different string in every response, even compressed", func(t *testing.T) {
+		a := aemeath.New()
+		a.Use(aemeath.Gzip(), session.Middleware(session.Config{Store: session.NewMemoryStore()}), csrf.Middleware(csrf.Config{}))
+		// A page over 1024 bytes that holds the token and shows back ?q=.
+		a.Handle("GET", "/search", func(c *aemeath.Ctx) error {
+			return c.Text(200, "<p>"+html.EscapeString(c.Query("q"))+"</p><input name=csrf_token value="+csrf.Token(c)+">"+strings.Repeat("<p>result</p>", 100))
+		})
+		first := do(a, "GET", "/search?q=x", "", "Accept-Encoding", "gzip")
+		if first.Header().Get("Content-Encoding") != "gzip" {
+			t.Fatal("the page was not compressed: the test proves nothing")
+		}
+		var cookie string
+		for _, ck := range first.Result().Cookies() {
+			cookie = ck.Name + "=" + ck.Value
+		}
+		token := func(r *httptest.ResponseRecorder) string {
+			zr, err := gzip.NewReader(r.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, _ := io.ReadAll(zr)
+			m := regexp.MustCompile(`csrf_token value=([A-Za-z0-9_-]+)`).FindSubmatch(b)
+			if m == nil {
+				t.Fatalf("no token in %s", b)
+			}
+			return string(m[1])
+		}
+		t1 := token(first)
+		second := do(a, "GET", "/search?q=x", "", "Accept-Encoding", "gzip", "Cookie", cookie)
+		if len(second.Result().Cookies()) != 0 {
+			t.Fatal("the second request got a new session: the test proves nothing")
+		}
+		t2 := token(second)
+		if t1 == t2 {
+			t.Errorf("two compressed pages of one session carried the same token %q", t1)
+		}
+	})
+	t.Run("Responses smaller than 1024 bytes are not compressed", func(t *testing.T) {
+		a := aemeath.New()
+		a.Use(aemeath.Gzip(), session.Middleware(session.Config{Store: session.NewMemoryStore()}), csrf.Middleware(csrf.Config{}))
+		aemeath.GET(a, "/api/csrf", func(c *aemeath.Ctx, _ struct{}) (map[string]string, error) {
+			return map[string]string{"token": csrf.Token(c)}, nil
+		})
+		r := do(a, "GET", "/api/csrf", "", "Accept-Encoding", "gzip")
+		if r.Header().Get("Content-Encoding") != "" || !strings.Contains(r.Body.String(), `"token"`) {
+			t.Errorf("the token endpoint was compressed: %q", r.Header().Get("Content-Encoding"))
 		}
 	})
 }

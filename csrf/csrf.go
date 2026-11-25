@@ -31,19 +31,66 @@ type Config struct {
 
 const sessionKey = "aemeath.csrf"
 
-// Token returns the request's CSRF token, creating it in the session if needed.
+// enc decodes strictly: a last character with stray low bits is refused
+// rather than read as the same bytes.
+var enc = base64.RawURLEncoding.Strict()
+
+// Token returns a CSRF token for the request, creating the session's secret
+// if needed.
+//
+// Every call returns a different string: 32 random bytes followed by the
+// secret XOR those bytes. A page that holds the token and also echoes what
+// a visitor sent can then be compressed safely: an attacker who measures the
+// size of responses (BREACH) finds nothing that repeats. Every token of the
+// session stays valid until the secret changes (at login, with Renew).
 func Token(c *aemeath.Ctx) string {
 	s := session.From(c)
-	if t := s.String(sessionKey); t != "" {
-		return t
+	secret, err := enc.DecodeString(s.String(sessionKey))
+	if err != nil || len(secret) != secretSize {
+		secret = make([]byte, secretSize)
+		if _, err := rand.Read(secret); err != nil {
+			panic("csrf: crypto/rand failed: " + err.Error())
+		}
+		s.Set(sessionKey, enc.EncodeToString(secret))
 	}
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
+	return mask(secret)
+}
+
+const secretSize = 32
+
+func mask(secret []byte) string {
+	out := make([]byte, 2*secretSize)
+	if _, err := rand.Read(out[:secretSize]); err != nil {
 		panic("csrf: crypto/rand failed: " + err.Error())
 	}
-	t := base64.RawURLEncoding.EncodeToString(b)
-	s.Set(sessionKey, t)
-	return t
+	for i := range secretSize {
+		out[secretSize+i] = secret[i] ^ out[i]
+	}
+	return enc.EncodeToString(out)
+}
+
+// valid reports whether got is a token of the session's secret: a masked
+// token, or the secret itself, which tokens were before they were masked
+// (a page opened before an upgrade still sends one).
+func valid(got, stored string) bool {
+	secret, err := enc.DecodeString(stored)
+	if err != nil || len(secret) != secretSize {
+		return false
+	}
+	b, err := enc.DecodeString(got)
+	if err != nil {
+		return false
+	}
+	switch len(b) {
+	case secretSize:
+		return subtle.ConstantTimeCompare(b, secret) == 1
+	case 2 * secretSize:
+		for i := range secretSize {
+			b[secretSize+i] ^= b[i]
+		}
+		return subtle.ConstantTimeCompare(b[secretSize:], secret) == 1
+	}
+	return false
 }
 
 func safe(m string) bool {
@@ -97,7 +144,7 @@ func Middleware(cfg Config) aemeath.Middleware {
 				}
 				got = v
 			}
-			if subtle.ConstantTimeCompare([]byte(got), []byte(tok)) != 1 {
+			if !valid(got, tok) {
 				return aemeath.Forbidden("csrf: missing or invalid token")
 			}
 			return next(c)
