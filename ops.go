@@ -349,6 +349,9 @@ func (w *gzipWriter) finish() error {
 // a group whose responses may be compressed. CSRF tokens are safe: each
 // response carries a different one.
 func Gzip(minSize ...int) Middleware {
+	if len(minSize) > 1 {
+		panic("aemeath: Gzip takes one minimum size in bytes, not several")
+	}
 	min := 1024
 	if len(minSize) > 0 && minSize[0] > 0 {
 		min = minSize[0]

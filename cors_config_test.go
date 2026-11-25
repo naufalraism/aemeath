@@ -69,3 +69,15 @@ func TestCORSMaxAgeDefaultsLikeTheOtherFields(t *testing.T) {
 		t.Errorf("MaxAge -1: headers %v, want no Max-Age and the origin allowed", h)
 	}
 }
+
+// Gzip takes one minimum size; a second value was ignored silently.
+func TestGzipTakesOneMinimumSize(t *testing.T) {
+	if msg := panicMessage(func() { aemeath.Gzip(512, 2048) }); !strings.Contains(msg, "one") {
+		t.Errorf("Gzip(512, 2048): panic %q, want a message saying it takes one size", msg)
+	}
+	for _, args := range [][]int{nil, {512}} {
+		if msg := panicMessage(func() { aemeath.Gzip(args...) }); msg != "" {
+			t.Errorf("Gzip(%v) panicked: %q", args, msg)
+		}
+	}
+}
