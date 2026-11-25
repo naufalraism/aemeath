@@ -455,6 +455,8 @@ app.EnableDocs(aemeath.Info{Title: "My API", Version: "1.0.0"})
 
 `GET /openapi.json` (OpenAPI 3.0.3) and `GET /docs` (the Scalar UI, loaded from a CDN). Named structs reached from an output, and named structs reached *inside* an input (a shared `Address`, for example), become `components.schemas` entries (`$ref`), the latter named `<Type>Input`; the input struct of the operation itself is written into the operation rather than as a component, validation rules become constraints (`minLength`, `enum`, `format`, ...), `description`/`example` struct tags are used, and every operation documents `400`/`422`/`500` (plus `401` with `aemeath.RequireAuth()`). Extra route options: `Description`, `Deprecated`, `Tags`, `Summary`, `OperationID`.
 
+Both are public. To show them only to admins, register them on a group: `admin := app.Group("/admin", requireAdmin); admin.EnableDocs(info)` serves `/admin/docs` behind the group's middlewares (`admin.EnableClient()` works the same way). See [API docs in production](docs/guide/auth.md#api-docs-in-production) for the trade-off.
+
 ## 📂 Static files & server
 
 ```go

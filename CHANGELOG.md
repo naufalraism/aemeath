@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-25
+
+### Added
+
+- **`group.EnableDocs(info)` and `group.EnableClient()`** register `/docs`, `/openapi.json`, `/client.ts`, `/schemas.ts` and `/hooks.ts` under the group's prefix, behind its middlewares: for example API docs that only signed-in admins can open (`/admin/docs`). The document and the client still cover the whole app. `app.EnableDocs` and `app.EnableClient` are unchanged and stay public.
+
+### Fixed
+
+- **`/docs` loads its OpenAPI document by a relative URL** (`openapi.json`). Behind a reverse proxy that mounts the app under a prefix (`/api/docs` outside, `/docs` inside), the page asked for `/openapi.json` at the root of the host, outside the app, and showed nothing.
+
+### Changed
+
+- **Docs: "API docs in production"** in the authentication guide: why `/docs` is public by default, why hiding it is not a protection by itself, and how to put it behind a login (`group.EnableDocs`) or turn it off in production. The README and the TypeScript guide link to it.
+
 ## [0.9.0] - 2026-11-25
 
 ### Breaking changes

@@ -95,18 +95,36 @@ func (a *App) OpenAPI(info Info) map[string]any {
 }
 
 // EnableDocs registers GET /openapi.json and GET /docs.
+//
+// They are public. To serve them only to some users, use Group.EnableDocs on
+// a group whose middleware checks them.
 func (a *App) EnableDocs(info Info) {
-	a.Handle("GET", "/openapi.json", func(c *Ctx) error {
+	a.enableDocs(a.Handle, info)
+}
+
+// EnableDocs registers GET <prefix>/openapi.json and GET <prefix>/docs inside
+// the group, behind the group's middlewares: for example docs that only
+// signed-in admins can open. The document still describes the whole app.
+func (g *Group) EnableDocs(info Info) {
+	g.app.enableDocs(g.Handle, info)
+}
+
+func (a *App) enableDocs(handle func(method, path string, h HandlerFunc), info Info) {
+	handle("GET", "/openapi.json", func(c *Ctx) error {
 		return c.JSON(200, a.OpenAPI(info))
 	})
-	a.Handle("GET", "/docs", func(c *Ctx) error {
+	handle("GET", "/docs", func(c *Ctx) error {
 		c.W.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, err := io.WriteString(c.W, fmt.Sprintf(docsHTML, html.EscapeString(info.Title)))
 		return err
 	})
 }
 
-// docsHTML loads Scalar from a CDN at a pinned version, with a Subresource
+// docsHTML loads the OpenAPI document by a relative URL ("openapi.json"), so
+// the page finds it next to itself behind a reverse proxy that adds a path
+// prefix, and inside a Group.
+//
+// It loads Scalar from a CDN at a pinned version, with a Subresource
 // Integrity hash: the browser refuses to run the file if the CDN serves
 // anything else, so neither a new upstream release nor a compromised CDN can
 // change what runs on your origin. To bump the version, update both the URL
@@ -119,7 +137,7 @@ const docsHTML = `<!doctype html>
 <html><head><meta charset="utf-8"><title>%s</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body>
-<script id="api-reference" data-url="/openapi.json"></script>
+<script id="api-reference" data-url="openapi.json"></script>
 <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4/dist/browser/standalone.js" integrity="sha384-hwB9WroDTpZaI38gr+u9CXA6ksz5gUYgD2GxXazKl/agT1L2GWUiRFWGJYNiFu4Q" crossorigin="anonymous"></script>
 </body></html>`
 
