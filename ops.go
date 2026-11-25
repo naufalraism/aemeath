@@ -336,6 +336,11 @@ func (w *gzipWriter) finish() error {
 // "Accept-Encoding: gzip". Responses smaller than minSize bytes (default
 // 1024), streams (text/event-stream), WebSocket upgrades, partial content
 // and already-encoded responses are left alone.
+//
+// Do not compress a response that holds a secret next to something a visitor
+// chose (BREACH): the compressed size gives the secret away. Register Gzip on
+// a group whose responses may be compressed. CSRF tokens are safe: each
+// response carries a different one.
 func Gzip(minSize ...int) Middleware {
 	min := 1024
 	if len(minSize) > 0 && minSize[0] > 0 {

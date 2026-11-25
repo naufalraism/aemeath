@@ -94,7 +94,7 @@ For a plain HTML form, which cannot send headers, put the token in a hidden fiel
 
 The token is only created when something asks for it (`csrf.Token`), so visitors who never do, such as crawlers, get no session.
 
-Every call to `csrf.Token` returns a different string: fresh random bytes and the session's secret masked with them. All of them stay valid until the secret changes at login. A page that holds the token and also shows back what a visitor typed can therefore be compressed safely (BREACH). Do not compare two tokens with each other; a token issued before v0.11.0 (the secret itself) is still accepted.
+Every call to `csrf.Token` returns a different string: fresh random bytes and the session's secret masked with them. All of them stay valid until the secret changes at login. A page that holds the token and also shows back what a visitor typed can therefore be compressed safely ([BREACH](#compression-and-secrets-breach)). Do not compare two tokens with each other; a token issued before v0.11.0 (the secret itself) is still accepted.
 
 Set `Cookie: "XSRF-TOKEN"` to also publish the token in a readable cookie for front-end libraries that read it automatically. That creates a session for every visitor who loads a page, so use a store that can hold them (Redis) rather than `MemoryStore`.
 
@@ -232,3 +232,16 @@ if os.Getenv("APP_ENV") != "production" {
 ```
 
 The docs page loads `openapi.json` by a relative URL, so it also works behind a reverse proxy that serves the app under a prefix (`/api/docs`).
+
+## Compression and secrets (BREACH)
+
+`aemeath.Gzip()` makes responses smaller, and the size of a compressed response depends on what is in it. When one response holds a **secret** and also **shows back something the attacker chose** (a search term from the URL, a name from a form), an attacker who can make a victim's browser send many requests and can watch the size of the encrypted responses can recover the secret byte by byte, even over HTTPS. That attack is called BREACH.
+
+- **CSRF tokens are safe:** `csrf.Token` returns a different string in every response (see [CSRF](#csrf)).
+- **Other secrets are not**, for example an API key shown on a settings page, or personal data on a page that also shows back the search term. Do not compress those pages: register `Gzip()` on a group that serves only what may be compressed, instead of on the whole app.
+
+```go
+api := app.Group("/api", aemeath.Gzip()) // JSON that holds no secret next to the visitor's own input
+```
+
+Responses smaller than 1024 bytes are not compressed (`Gzip(min)` changes the limit), so an endpoint that returns only a short value, such as `{"token": "..."}`, does not leak through its size.
