@@ -9,6 +9,7 @@ All notable changes to this project are documented here.
 - **`storage.Storage` takes a context: `Save(ctx, filename, src)` and `Delete(ctx, filename)`.** A backend over the network (S3, a CDN) needs the request's context to stop when the client leaves or a deadline passes, and adding it to the interface after v1.0 would break every backend. `storage.Local` returns `ctx.Err()` before it writes or deletes. Pass `c.Context()`.
 - **Removed the deprecated `aemeath.Storage`, `StoragePlugin`, `LocalStorage` and `NewLocalStorage`** (deprecated since v0.6.0): use `storage.Storage`, `storage.Local` and `storage.NewLocal`, provided with `aemeath.Provide[storage.Storage](app, storage.NewLocal("uploads"))`.
 - **`cache.New` panics when `Config.URL` is set together with `Addr`, `Password` or `DB`.** The URL replaced them without a word, so a URL without a password next to `Password` connected without it. The message names the field, not its value.
+- **`tracing.Span` exposes its identity through methods**: `TraceID()`, `SpanID()`, `ParentID()`, `Name()` and `Start()` replace the exported fields, which any code could overwrite halfway through a request and so break the exported trace. `Name()` is safe to call while the middleware names the span after its route.
 
 ## [0.13.0] - 2026-11-25
 

@@ -411,17 +411,17 @@ tracing: field Config.Logger *slog.Logger
 tracing: field Config.QueueSize int
 tracing: field Config.SampleRatio float64
 tracing: field Config.ServiceName string
-tracing: field Span.Name string
-tracing: field Span.ParentID string
-tracing: field Span.SpanID string
-tracing: field Span.Start time.Time
-tracing: field Span.TraceID string
 tracing: func FromContext(ctx context.Context) *Span
 tracing: func New(cfg Config) *Tracer
 tracing: method (*Span) End()
+tracing: method (*Span) Name() string
+tracing: method (*Span) ParentID() string
 tracing: method (*Span) Sampled() bool
 tracing: method (*Span) SetAttr(k, v string)
 tracing: method (*Span) SetError()
+tracing: method (*Span) SpanID() string
+tracing: method (*Span) Start() time.Time
+tracing: method (*Span) TraceID() string
 tracing: method (*Span) Traceparent() string
 tracing: method (*Tracer) Apply(app *aemeath.App) error
 tracing: method (*Tracer) Dropped() uint64

@@ -62,11 +62,11 @@ type Config struct {
 // methods (SetAttr, SetError, End), which are safe to call from several
 // goroutines.
 type Span struct {
-	TraceID, SpanID, ParentID string
-	Name                      string
-	Start                     time.Time
+	traceID, spanID, parentID string
+	start                     time.Time
 
-	mu      sync.Mutex // guards attrs, failed and end
+	mu      sync.Mutex // guards name, attrs, failed and end
+	name    string
 	attrs   map[string]string
 	failed  bool
 	end     time.Time
@@ -74,6 +74,25 @@ type Span struct {
 	kind    int
 	tracer  *Tracer
 }
+
+// TraceID returns the 32-hex-digit id the span shares with every span of
+// its trace (taken from an incoming traceparent header when there is one).
+func (s *Span) TraceID() string { return s.traceID }
+
+// SpanID returns the span's own 16-hex-digit id.
+func (s *Span) SpanID() string { return s.spanID }
+
+// ParentID returns the id of the span this one is a child of, or "".
+func (s *Span) ParentID() string { return s.parentID }
+
+// Start returns when the span started.
+func (s *Span) Start() time.Time { return s.start }
+
+// Name returns the span's name: for a request, its method and route
+// pattern ("GET /users/{id}") once the route is known.
+func (s *Span) Name() string { s.mu.Lock(); defer s.mu.Unlock(); return s.name }
+
+func (s *Span) setName(n string) { s.mu.Lock(); s.name = n; s.mu.Unlock() }
 
 // Sampled reports whether the span is recorded and exported.
 func (s *Span) Sampled() bool { return s.sampled }
@@ -205,7 +224,7 @@ func (s *Span) Traceparent() string {
 	if s.sampled {
 		f = "01"
 	}
-	return "00-" + s.TraceID + "-" + s.SpanID + "-" + f
+	return "00-" + s.traceID + "-" + s.spanID + "-" + f
 }
 
 type ctxKey struct{}
@@ -231,7 +250,7 @@ func (t *Tracer) newSpan(name string, kind int, traceID, parentID string, sample
 		traceID = randHex(16)
 		sampled = t.cfg.SampleRatio >= 1 || randFloat() < t.cfg.SampleRatio
 	}
-	return &Span{TraceID: traceID, SpanID: randHex(8), ParentID: parentID, Name: name, Start: time.Now(), attrs: map[string]string{}, sampled: sampled, kind: kind, tracer: t}
+	return &Span{traceID: traceID, spanID: randHex(8), parentID: parentID, name: name, start: time.Now(), attrs: map[string]string{}, sampled: sampled, kind: kind, tracer: t}
 }
 
 // Start begins a child span of the span in ctx (or a new trace when there is none).
@@ -239,7 +258,7 @@ func (t *Tracer) newSpan(name string, kind int, traceID, parentID string, sample
 func (t *Tracer) Start(ctx context.Context, name string) (context.Context, *Span) {
 	var s *Span
 	if p := FromContext(ctx); p != nil {
-		s = t.newSpan(name, 1, p.TraceID, p.SpanID, p.sampled)
+		s = t.newSpan(name, 1, p.traceID, p.spanID, p.sampled)
 	} else {
 		s = t.newSpan(name, 1, "", "", false)
 	}
@@ -289,9 +308,9 @@ func (t *Tracer) Middleware() aemeath.Middleware {
 				route = rest
 			}
 			if route == "" {
-				span.Name = c.R.Method + " unmatched"
+				span.setName(c.R.Method + " unmatched")
 			} else {
-				span.Name = c.R.Method + " " + route
+				span.setName(c.R.Method + " " + route)
 				span.SetAttr("http.route", route)
 			}
 			span.SetAttr("http.request.method", c.R.Method)
@@ -472,13 +491,13 @@ func (t *Tracer) payload(spans []*Span) ([]byte, error) {
 			attrs = append(attrs, str(k, s.attrs[k]))
 		}
 		sp := map[string]any{
-			"traceId": s.TraceID, "spanId": s.SpanID, "name": s.Name, "kind": s.kind,
-			"startTimeUnixNano": strconv.FormatInt(s.Start.UnixNano(), 10),
+			"traceId": s.traceID, "spanId": s.spanID, "name": s.name, "kind": s.kind, // s.mu is held
+			"startTimeUnixNano": strconv.FormatInt(s.start.UnixNano(), 10),
 			"endTimeUnixNano":   strconv.FormatInt(s.end.UnixNano(), 10),
 			"attributes":        attrs,
 		}
-		if s.ParentID != "" {
-			sp["parentSpanId"] = s.ParentID
+		if s.parentID != "" {
+			sp["parentSpanId"] = s.parentID
 		}
 		if s.failed {
 			sp["status"] = map[string]any{"code": 2}
