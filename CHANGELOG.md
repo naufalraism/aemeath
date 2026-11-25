@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-26
+
 ### Breaking changes
 
 - **`ws` uses [`coder/websocket`](https://github.com/coder/websocket) instead of `gorilla/websocket`.** gorilla/websocket was archived in December 2022, revived by volunteers in 2023, and has had no release since June 2024; its type is part of `ws.Upgrade's result, so it could not be replaced after v1.0 without a v2. coder/websocket is maintained by Coder, has no dependencies, and takes a context on every call. `ws.Upgrade` keeps its signature and returns a `*websocket.Conn` of the new package: `conn.Read(ctx)` and `conn.Write(ctx, kind, data)` replace `ReadMessage` and `WriteMessage`, `conn.CloseNow()` (or `Close(code, reason)`) replaces `Close()`, and `errors.Is(err, websocket.ErrMessageTooBig)` replaces `websocket.ErrReadLimit`. A handler that only writes calls `conn.CloseRead(ctx)` once, so pings and the close handshake are still answered. Compression stays off. A refused origin returns `ws.ErrOriginNotAllowed` after answering 403. On shutdown the client still gets close code 1001; a client that does not answer within a second is disconnected.
