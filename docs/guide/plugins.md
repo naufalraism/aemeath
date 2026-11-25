@@ -17,7 +17,9 @@ Plugins live in their own packages, so you only pay for what you import.
 ```go
 plugin, err := db.Open("app.db", &User{})
 if err != nil { log.Fatal(err) }
-app.RegisterPlugin(plugin) // also registers a readiness check for /readyz
+if err := app.RegisterPlugin(plugin); err != nil { // also registers a readiness check for /readyz
+	log.Fatal(err)
+}
 
 aemeath.GET(app, "/users", func(c *aemeath.Ctx, _ struct{}) ([]User, error) {
 	var users []User

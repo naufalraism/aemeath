@@ -324,7 +324,7 @@ A plugin provides a service once at startup; handlers read it with a type-safe g
 ```go
 plugin, err := db.Open("app.db", &User{}) // migrates your models
 if err != nil { log.Fatal(err) }
-app.RegisterPlugin(plugin)                 // also adds a "database" readiness check
+if err := app.RegisterPlugin(plugin); err != nil { log.Fatal(err) } // also adds a "database" readiness check
 
 aemeath.GET(app, "/users", func(c *aemeath.Ctx, _ struct{}) ([]User, error) {
 	var users []User
@@ -379,7 +379,7 @@ type SendWelcomeEmail struct{ To string }
 func (j *SendWelcomeEmail) Run(ctx context.Context) error { /* ... */ return nil }
 
 runner := jobs.New(jobs.WithWorkers(4), jobs.WithRetries(2))
-app.RegisterPlugin(runner)                          // starts the workers; stops them on shutdown
+if err := app.RegisterPlugin(runner); err != nil { log.Fatal(err) } // starts the workers; stops them on shutdown
 
 // in a handler:
 if err := jobs.From(c).Enqueue(&SendWelcomeEmail{To: user.Email}); err != nil { // never blocks
