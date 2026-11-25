@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Added
 
 - **`app.SetLogger(*slog.Logger)`, `app.Logger()` and `c.Logger()`.** The framework's own messages (the cause of a 500, panics, failed readiness checks, the server starting and stopping, warnings at startup) go to one logger you choose, for example JSON for a log collector, instead of the standard `log` package, which only `log.SetOutput` could redirect, for the whole program. Default: `slog.Default()`. `c.Logger()` adds the request's method, path and `request_id`, for a handler's own messages.
+- **`session` and `tracing` log through the app's logger.** Session save failures and the "memory store is full" warning carry the request; a tracer registered with `RegisterPlugin` logs export failures through `App.Logger()`, and `tracing.Config.Logger` sets one for a tracer used only as middleware.
 
 ### Fixed
 

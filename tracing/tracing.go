@@ -22,7 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -51,6 +51,10 @@ type Config struct {
 	// exported. Leave it off behind your own services, so a trace sampled
 	// upstream is complete.
 	IgnoreIncomingSampling bool
+	// Logger receives export failures. Default: the logger of the app the
+	// tracer is registered with (App.SetLogger), or slog.Default() for a
+	// tracer that is only used as middleware.
+	Logger *slog.Logger
 }
 
 // Span is one unit of work. The identifying fields are set when the span
@@ -83,6 +87,8 @@ type Tracer struct {
 	dropped atomic.Uint64
 	flushCh chan chan struct{}
 
+	logger atomic.Pointer[slog.Logger] // set by Config.Logger or Apply
+
 	mu      sync.Mutex // guards started and closed
 	started bool       // the exporter goroutine runs
 	closed  bool
@@ -113,11 +119,26 @@ func New(cfg Config) *Tracer {
 	}
 	// The exporter goroutine starts with the first span to export, so a
 	// Tracer that is created but never used, or has no Endpoint, costs nothing.
-	return &Tracer{cfg: cfg, queue: make(chan *Span, cfg.QueueSize), done: make(chan struct{}), flushCh: make(chan chan struct{})}
+	t := &Tracer{cfg: cfg, queue: make(chan *Span, cfg.QueueSize), done: make(chan struct{}), flushCh: make(chan chan struct{})}
+	if cfg.Logger != nil {
+		t.logger.Store(cfg.Logger)
+	}
+	return t
 }
 
-// Apply flushes pending spans when the server shuts down.
+func (t *Tracer) log() *slog.Logger {
+	if l := t.logger.Load(); l != nil {
+		return l
+	}
+	return slog.Default()
+}
+
+// Apply flushes pending spans when the server shuts down, and logs export
+// failures through the app's logger unless Config.Logger is set.
 func (t *Tracer) Apply(app *aemeath.App) error {
+	if t.cfg.Logger == nil {
+		t.logger.Store(app.Logger())
+	}
 	aemeath.Provide(app, t)
 	app.OnShutdown(t.Shutdown)
 	return nil
@@ -483,13 +504,13 @@ func sortStrings(s []string) {
 func (t *Tracer) export(spans []*Span) {
 	body, err := t.payload(spans)
 	if err != nil {
-		log.Printf("aemeath/tracing: encoding %d spans failed: %v", len(spans), err)
+		t.log().Error("aemeath/tracing: encoding spans failed", "spans", len(spans), "error", err)
 		t.dropped.Add(uint64(len(spans)))
 		return
 	}
 	req, err := http.NewRequest(http.MethodPost, t.cfg.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		log.Printf("aemeath/tracing: cannot build the export request for %q: %v", t.cfg.Endpoint, err)
+		t.log().Error("aemeath/tracing: cannot build the export request", "endpoint", t.cfg.Endpoint, "error", err)
 		t.dropped.Add(uint64(len(spans)))
 		return
 	}
@@ -499,14 +520,14 @@ func (t *Tracer) export(spans []*Span) {
 	}
 	resp, err := t.cfg.Client.Do(req)
 	if err != nil {
-		log.Printf("aemeath/tracing: export of %d spans failed: %v", len(spans), err)
+		t.log().Error("aemeath/tracing: export failed", "spans", len(spans), "error", err)
 		t.dropped.Add(uint64(len(spans)))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 	if resp.StatusCode/100 != 2 {
-		log.Printf("aemeath/tracing: collector answered %s for %d spans", resp.Status, len(spans))
+		t.log().Error("aemeath/tracing: the collector refused the spans", "status", resp.Status, "spans", len(spans))
 		t.dropped.Add(uint64(len(spans)))
 	}
 }

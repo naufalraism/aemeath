@@ -416,6 +416,7 @@ tracing: field Config.Endpoint string
 tracing: field Config.FlushInterval time.Duration
 tracing: field Config.Headers map[string]string
 tracing: field Config.IgnoreIncomingSampling bool
+tracing: field Config.Logger *slog.Logger
 tracing: field Config.QueueSize int
 tracing: field Config.SampleRatio float64
 tracing: field Config.ServiceName string
