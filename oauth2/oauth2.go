@@ -13,9 +13,7 @@
 //	app.Handle("GET", "/auth/github/callback", func(c *aemeath.Ctx) error {
 //		login, err := gh.Complete(c)
 //		if err != nil { return err }
-//		s := session.From(c)
-//		if err := s.Renew(c.Context()); err != nil { return err }
-//		s.Set("github_id", login.User["id"])
+//		session.From(c).Set("github_id", login.User["id"]) // Complete renewed the id
 //		return c.Redirect(302, "/")
 //	})
 //
@@ -216,7 +214,9 @@ func fail(format string, a ...any) error {
 // Complete finishes the login on the callback request: it checks the state
 // (constant time) against the one Begin stored, exchanges the code (with the
 // PKCE verifier when PKCE is on) and fetches UserInfoURL. A login can be
-// completed once: the stored state is removed whatever happens.
+// completed once: the stored state is removed whatever happens. On success it
+// renews the session id (see session.Session.Renew), so the app only sets
+// who logged in.
 func (p *Plugin) Complete(c *aemeath.Ctx) (*Login, error) {
 	s, err := sessionOf(c)
 	if err != nil {
@@ -268,6 +268,11 @@ func (p *Plugin) Complete(c *aemeath.Ctx) (*Login, error) {
 		if login.User, err = p.UserInfo(ctx, tok); err != nil {
 			return nil, err
 		}
+	}
+	// A successful login gets a new session id, so an id planted in the
+	// browser before the login cannot share it (session fixation).
+	if err := s.Renew(c.Context()); err != nil {
+		return nil, err
 	}
 	return login, nil
 }

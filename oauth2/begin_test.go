@@ -261,3 +261,41 @@ func TestBeginWithoutSessionMiddlewareSaysSo(t *testing.T) {
 		}
 	}
 }
+
+// A successful Complete is a login, so it renews the session id itself (see
+// the oidc test of the same name).
+func TestCompleteRenewsTheSessionID(t *testing.T) {
+	prov := newPKCEProvider(t)
+	gh := prov.plugin("gh")
+	srv, client := loginApp(t, gh)
+	u := begin(t, srv, client, "gh")
+	base, _ := url.Parse(srv.URL)
+	idOf := func() string {
+		for _, c := range client.Jar.Cookies(base) {
+			if c.Name == "aemeath_session" {
+				return c.Value
+			}
+		}
+		return ""
+	}
+	before := idOf()
+	if code, body := callback(t, srv, client, "gh", "state="+url.QueryEscape(u.Query().Get("state"))+"&code=good-code"); code != 200 {
+		t.Fatalf("Complete: %d %s", code, body)
+	}
+	if after := idOf(); after == "" || after == before {
+		t.Fatalf("the session id was not renewed: before %q, after %q", before, after)
+	}
+	// The old id no longer finds a session: a login started with it is gone.
+	old := &http.Client{CheckRedirect: client.CheckRedirect}
+	req, _ := http.NewRequest("GET", srv.URL+"/callback/gh?state=x&code=good-code", nil)
+	req.AddCookie(&http.Cookie{Name: "aemeath_session", Value: before})
+	resp, err := old.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != 401 || !strings.Contains(string(b), "no login in progress") {
+		t.Errorf("the pre-login id: %d %s", resp.StatusCode, b)
+	}
+}

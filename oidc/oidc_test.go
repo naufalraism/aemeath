@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -298,4 +299,37 @@ func TestCrawlerCannotKeepTheSessionStoreFull(t *testing.T) {
 		t.Fatalf("after the login the session must last Config.TTL (24 h), cookie: %+v", after)
 	}
 	t.Logf("11 minutes later: real user logged in, session cookie MaxAge %d s", after.MaxAge)
+}
+
+// A successful Complete is a login, so it renews the session id itself: the
+// session id from before the login (which an attacker may have planted in the
+// victim's browser) is no longer valid, and the app does not have to remember
+// to call Renew.
+func TestCompleteRenewsTheSessionID(t *testing.T) {
+	f := newIdP(t)
+	app, _ := f.app(t)
+	app.Handle("GET", "/whoami", func(c *aemeath.Ctx) error {
+		return c.Text(200, "new="+strconv.FormatBool(session.From(c).IsNew()))
+	})
+	before, state := f.login(t, app)
+	w := callback(app, before, "code=abc&state="+state)
+	if w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	var after *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "aemeath_session" {
+			after = c
+		}
+	}
+	if after == nil || after.Value == before.Value {
+		t.Fatalf("the session id was not renewed: before %q, after %v", before.Value, after)
+	}
+	r := httptest.NewRequest("GET", "/whoami", nil)
+	r.AddCookie(before)
+	w = httptest.NewRecorder()
+	app.ServeHTTP(w, r)
+	if w.Body.String() != "new=true" {
+		t.Errorf("the pre-login session id still finds a session: %s", w.Body.String())
+	}
 }

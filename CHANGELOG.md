@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Security
 
 - **Session fixation is much harder.** An attacker who planted a real session id in a victim's browser (from a sibling subdomain or a plain-http page) shared the victim's session after a login that did not call `Renew`; nothing warned about the missing call. Over HTTPS the session cookie is now named `__Host-aemeath_session`, which a browser accepts only from the site itself over HTTPS, so the id cannot be planted. New `s.Login(ctx, key, value)` renews the id and sets the value in one call.
+- **`oidc.Complete` and `oauth2.Complete` renew the session id on success.** A successful `Complete` is a login, so the app no longer has to remember `Renew`: the id from before the login (which may have been planted) stops working. Calling `Renew` yourself as well is harmless.
 
 ### Breaking changes
 

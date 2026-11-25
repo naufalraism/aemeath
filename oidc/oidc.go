@@ -11,7 +11,6 @@
 //		id, err := p.Complete(c)
 //		if err != nil { return err }
 //		s := session.From(c)
-//		if err := s.Renew(c.Context()); err != nil { return err }
 //		s.Set("sub", id.Issuer+"|"+id.Subject)
 //		return c.Redirect(302, "/")
 //	})
@@ -234,6 +233,8 @@ func fail(format string, a ...any) error {
 // (constant time), exchanges the code with the PKCE verifier, verifies the ID
 // token (signature through the provider's JWKS, issuer, audience, expiry and
 // the nonce) and returns the Identity. The login can only be completed once.
+// On success it renews the session id (see session.Session.Renew), so the app
+// only sets who logged in.
 func (p *Provider) Complete(c *aemeath.Ctx) (*Identity, error) {
 	s := session.From(c)
 	raw, _ := s.Get(sessionKey)
@@ -284,7 +285,16 @@ func (p *Provider) Complete(c *aemeath.Ctx) (*Identity, error) {
 	if err != nil {
 		return nil, fail("invalid id_token")
 	}
-	return p.identity(claims, nonce, tok)
+	id, err := p.identity(claims, nonce, tok)
+	if err != nil {
+		return nil, err
+	}
+	// A successful login gets a new session id, so an id planted in the
+	// browser before the login cannot share it (session fixation).
+	if err := s.Renew(c.Context()); err != nil {
+		return nil, err
+	}
+	return id, nil
 }
 
 // httpClient is the client Discover used: Config.HTTPClient, or one with a
