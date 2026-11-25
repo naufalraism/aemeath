@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -117,7 +116,7 @@ func (c *Ctx) Query(name string) string { return c.R.URL.Query().Get(name) }
 
 // JSON sends a JSON response with the given HTTP status code.
 func (c *Ctx) JSON(code int, v any) error {
-	writeJSON(c.W, code, v)
+	writeJSON(c, c.W, code, v)
 	return nil
 }
 
@@ -129,7 +128,7 @@ func bodyAllowed(code int) bool {
 // writeJSON is an internal helper that writes a JSON response. The value is
 // encoded before anything is sent, so a value that cannot be encoded (NaN, a
 // channel, a cycle) becomes a 500 instead of a 200 with an empty body.
-func writeJSON(w http.ResponseWriter, code int, v any) {
+func writeJSON(c *Ctx, w http.ResponseWriter, code int, v any) {
 	if !bodyAllowed(code) {
 		w.WriteHeader(code)
 		return
@@ -147,7 +146,7 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 		}
 	}()
 	if err := json.NewEncoder(buf).Encode(v); err != nil {
-		log.Printf("aemeath: failed to encode JSON: %v", err)
+		c.Logger().Error("aemeath: encoding the JSON response failed", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = io.WriteString(w, `{"error":"internal server error"}`+"\n")

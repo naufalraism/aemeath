@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -35,7 +34,7 @@ func (a *App) TypeScriptClient() string {
 			name = base + strconv.Itoa(i)
 		}
 		if name != base {
-			log.Printf("aemeath: warning: operation name %q is already taken, using %q", base, name)
+			a.Logger().Warn("aemeath: TypeScript operation name already taken", "name", base, "using", name)
 		}
 		usedOps[name] = true
 		ops = append(ops, g.operation(s, name))

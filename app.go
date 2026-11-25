@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,6 +23,7 @@ type Middleware func(HandlerFunc) HandlerFunc
 
 // App is the main Aemeath application.
 type App struct {
+	logger     *slog.Logger
 	mux        *http.ServeMux
 	mws        []Middleware
 	specs      []routeSpec
@@ -120,7 +121,7 @@ func (a *App) runShutdownHooks() {
 		err := hooks[i](ctx)
 		cancel()
 		if err != nil {
-			log.Printf("aemeath: shutdown hook failed: %v", err)
+			a.Logger().Error("aemeath: shutdown hook failed", "error", err)
 		}
 	}
 }
@@ -142,15 +143,20 @@ func (a *App) writeError(c *Ctx, err error) {
 	if c.rw.started {
 		// The handler already sent (part of) a response; anything written now
 		// would be glued onto it. Log the error instead.
-		log.Printf("aemeath: %s %s: error after the response was sent: %v", c.R.Method, c.R.URL.EscapedPath(), err)
+		c.Logger().Error("aemeath: error after the response was sent", "error", err)
 		return
+	}
+	// The cause of a 500 is logged here, once, with the request; the client
+	// only gets "internal server error".
+	if unexpected(err) {
+		c.Logger().Error("aemeath: internal error", "error", err)
 	}
 	if a.errHandler != nil {
 		a.errHandler(c, err)
 		return
 	}
 	he := toHTTPError(err)
-	writeJSON(c.W, he.Code, he)
+	writeJSON(c, c.W, he.Code, he)
 }
 
 // Provide makes a service available to every handler through Get[T] and
@@ -367,14 +373,14 @@ func (a *App) run(srv *http.Server, start func() error) error {
 		if err := a.WriteTypeScript(dir); err != nil {
 			return fmt.Errorf("aemeath: writing TypeScript to %s: %w", dir, err)
 		}
-		log.Printf("aemeath: %s is set: wrote the TypeScript files to %q and exited without starting the server", EnvTypeScriptOut, dir)
+		a.Logger().Info("aemeath: "+EnvTypeScriptOut+" is set: wrote the TypeScript files and exited without starting the server", "dir", dir)
 		return nil
 	}
 	defer a.runShutdownHooks()
 	// Capture errors from the server goroutine.
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("aemeath: server listening on %s", srv.Addr)
+		a.Logger().Info("aemeath: server listening", "addr", srv.Addr)
 		serverErrors <- start()
 	}()
 
@@ -393,7 +399,7 @@ func (a *App) run(srv *http.Server, start func() error) error {
 	case sig := <-shutdown:
 		a.shuttingDown.Store(true) // /readyz answers 503 from now on
 		if a.shutdownDelay > 0 {
-			log.Printf("aemeath: %v received: not ready any more, still serving for %v so load balancers can drain (send it again to stop now)", sig, a.shutdownDelay)
+			a.Logger().Info("aemeath: stop signal received: not ready any more, still serving so load balancers can drain (send it again to stop now)", "signal", sig.String(), "delay", a.shutdownDelay.String())
 			t := time.NewTimer(a.shutdownDelay)
 			select {
 			case <-t.C:
@@ -407,7 +413,7 @@ func (a *App) run(srv *http.Server, start func() error) error {
 				return nil
 			}
 		}
-		log.Printf("aemeath: shutting down gracefully (signal: %v)", sig)
+		a.Logger().Info("aemeath: shutting down gracefully", "signal", sig.String())
 		a.Stop() // streams and WebSockets end now, so they do not hold up the shutdown
 
 		// Give in-flight requests time to finish.
@@ -419,15 +425,15 @@ func (a *App) run(srv *http.Server, start func() error) error {
 		defer cancel()
 
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Printf("aemeath: graceful shutdown failed: %v", err)
+			a.Logger().Error("aemeath: graceful shutdown failed", "error", err)
 			// Force close once the deadline has passed.
 			if err := srv.Close(); err != nil {
 				return fmt.Errorf("aemeath: failed to close server: %w", err)
 			}
-			log.Println("aemeath: server closed forcefully")
+			a.Logger().Warn("aemeath: server closed forcefully")
 			return nil
 		}
-		log.Println("aemeath: server stopped gracefully")
+		a.Logger().Info("aemeath: server stopped gracefully")
 	}
 
 	return nil

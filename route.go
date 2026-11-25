@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"math"
 	"mime"
 	"net/http"
@@ -125,7 +125,7 @@ func (i *inputInfo) needsSent() bool {
 //
 // A json-tagged field on a bodyless method (GET/DELETE) is never bound, so a
 // warning is logged.
-func prepareInput(t reflect.Type, method, path string) *inputInfo {
+func prepareInput(t reflect.Type, method, path string, logger *slog.Logger) *inputInfo {
 	checkJSONNames(t, map[reflect.Type]bool{})
 	info := &inputInfo{typ: t, plan: planFor(t)}
 	for t.Kind() == reflect.Pointer {
@@ -144,8 +144,8 @@ func prepareInput(t reflect.Type, method, path string) *inputInfo {
 			}
 			info.forms = append(info.forms, ff)
 		} else if !bodyMethod(method) && hasJSONName(ff.StructField) {
-			log.Printf("aemeath: warning: %s %s: field %s.%s has a json tag but %s requests have no body, so it is never bound; use `query:\"...\"` or `path:\"...\"`",
-				method, path, t.Name(), ff.Name, method)
+			logger.Warn(fmt.Sprintf("aemeath: %s %s: field %s.%s has a json tag but %s requests have no body, so it is never bound; use `query:\"...\"` or `path:\"...\"`",
+				method, path, t.Name(), ff.Name, method))
 		}
 	}
 	return info
@@ -207,7 +207,7 @@ func (g *Group) target(path string, opts []RouteOption) (*App, string, []RouteOp
 func Route[In, Out any](r Router, method, path string, fn func(*Ctx, In) (Out, error), opts ...RouteOption) Endpoint[In, Out] {
 	a, full, merged := r.target(path, opts)
 	cfg := newRouteConfig(merged)
-	info := prepareInput(reflect.TypeFor[In](), method, full)
+	info := prepareInput(reflect.TypeFor[In](), method, full, a.Logger())
 	checkJSONNames(reflect.TypeFor[Out](), map[reflect.Type]bool{})
 	a.specs = append(a.specs, routeSpec{
 		method: method, path: full,

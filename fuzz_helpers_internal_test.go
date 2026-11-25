@@ -2,6 +2,7 @@ package aemeath
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -19,7 +20,7 @@ import (
 // and answers with the zero value of the output (or the bound input, when
 // echo is set and the types are the same).
 func registerRuntimeRoute(a *App, method, path string, in, out reflect.Type) {
-	info := prepareInput(in, method, path)
+	info := prepareInput(in, method, path, slog.Default())
 	checkJSONNames(out, map[reflect.Type]bool{}) // as Route does
 	cfg := newRouteConfig(nil)
 	a.specs = append(a.specs, routeSpec{method: method, path: path, in: in, out: out, cfg: cfg})
