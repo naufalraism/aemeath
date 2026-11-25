@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A project that imports `db/postgres` no longer downloads the MySQL driver, and one that imports `cache` no longer downloads miniredis.** `go mod tidy` also records the modules that the tests of imported packages need, and a test of `db` used every driver, a test of `cache` an in-memory Redis. Those tests moved under `internal/`; a test checks that the tests of every public package need no module the package does not.
+
 ## [0.10.0] - 2026-11-25
 
 ### Added
