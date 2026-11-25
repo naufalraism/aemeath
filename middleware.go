@@ -3,11 +3,10 @@ package aemeath
 import (
 	"bufio"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"runtime/debug"
-	"time"
 )
 
 type statusWriter struct {
@@ -54,36 +53,11 @@ func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return http.NewResponseController(w.ResponseWriter).Hijack()
 }
 
-// Logger logs the method, path, status, and duration of every request.
+// Logger logs every request as one record of the app's logger (see
+// App.SetLogger): method, path, status, duration_ms, remote and request_id.
+// 5xx are logged at Error level, 4xx at Warn, everything else at Info.
 func Logger() Middleware {
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c *Ctx) (err error) {
-			start := time.Now()
-			sw := &statusWriter{ResponseWriter: c.W, status: http.StatusOK}
-			c.W = sw
-			defer func() {
-				// EscapedPath keeps control characters (e.g. %0A) from forging log lines.
-				path := c.R.URL.EscapedPath()
-				if r := recover(); r != nil {
-					log.Printf("%s %s %d %v panic: %v",
-						c.R.Method, path, http.StatusInternalServerError,
-						time.Since(start), r)
-					panic(r)
-				}
-				status := sw.status
-				if err != nil {
-					status = statusOf(err)
-				}
-				if id := c.RequestID(); id != "" {
-					log.Printf("%s %s %d %v id=%s", c.R.Method, path, status, time.Since(start), id)
-					return
-				}
-				log.Printf("%s %s %d %v", c.R.Method, path, status, time.Since(start))
-			}()
-			err = next(c)
-			return err
-		}
-	}
+	return accessLog(func(c *Ctx) *slog.Logger { return c.app.Logger() })
 }
 
 // Recover turns panics into a 500 response and logs the stack trace.

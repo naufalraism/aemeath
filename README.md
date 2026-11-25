@@ -274,7 +274,7 @@ app.Use(
 
 | Middleware | What it does |
 | :--- | :--- |
-| `Logger()` / `SlogLogger(l)` | access log (plain text / structured `slog`: method, path, status, duration_ms, request_id); keeps `http.Flusher`/`Hijacker` working |
+| `Logger()` / `SlogLogger(l)` | access log, one structured record per request (method, path, status, duration_ms, request_id), to the app's logger (`app.SetLogger`) / to `l`, for example a file of its own; keeps `http.Flusher`/`Hijacker` working |
 | `Recover()` | recovers panics, logs the stack, answers `500` |
 | `RequestID()` | reads a safe `X-Request-Id` or makes one; echoed in the response and the logs |
 | `CORS(cfg...)` | CORS headers and preflight. Credentials cannot be combined with the `*` origin (panics at startup) |

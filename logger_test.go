@@ -195,3 +195,46 @@ func TestCtxLoggerCarriesTheRequest(t *testing.T) {
 }
 
 var _ = http.StatusOK
+
+// The access log of Logger() is a framework message like any other: it goes
+// to the app's logger, so SetLogger(JSON) also makes the access log JSON. It
+// used to go to the standard log package as plain text, whatever SetLogger
+// chose.
+func TestLoggerMiddlewareWritesToTheAppLogger(t *testing.T) {
+	std := captureStdLog(t)
+	app, logs := jsonLoggerApp(t)
+	app.Use(aemeath.RequestID(), aemeath.Logger())
+	app.Handle("GET", "/ok", func(c *aemeath.Ctx) error { return c.Text(200, "ok") })
+	app.Handle("GET", "/missing", func(c *aemeath.Ctx) error { return aemeath.NotFound("no") })
+	app.Handle("GET", "/fail", func(c *aemeath.Ctx) error { return errors.New("boom") })
+
+	for _, p := range []string{"/ok", "/missing", "/fail"} {
+		r := httptest.NewRequest("GET", p, nil)
+		r.Header.Set("X-Request-ID", "id"+strings.ReplaceAll(p, "/", "-"))
+		app.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	want := map[string]struct {
+		status float64
+		level  string
+	}{"/ok": {200, "INFO"}, "/missing": {404, "WARN"}, "/fail": {500, "ERROR"}}
+	seen := 0
+	for _, l := range logs.lines(t) {
+		if l["msg"] != "request" {
+			continue
+		}
+		w, ok := want[l["path"].(string)]
+		if !ok {
+			continue
+		}
+		seen++
+		if l["status"] != w.status || l["level"] != w.level || l["method"] != "GET" || l["request_id"] != "id"+strings.ReplaceAll(l["path"].(string), "/", "-") || l["duration_ms"] == nil {
+			t.Errorf("access log line = %v, want status %v at %s with method, request_id and duration_ms", l, w.status, w.level)
+		}
+	}
+	if seen != 3 {
+		t.Errorf("%d access log lines in the app's logger, want 3:\n%s", seen, logs.String())
+	}
+	if s := std.String(); s != "" {
+		t.Errorf("the standard log still got:\n%s", s)
+	}
+}

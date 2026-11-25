@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **`aemeath.Logger()` writes the access log to the app's logger** (`app.SetLogger`), as one structured record per request (method, path, status, duration_ms, remote, request_id; 5xx at Error, 4xx at Warn), like `SlogLogger`. It used to print a plain-text line through the standard `log` package whatever `SetLogger` chose, so a JSON app logger still got a text access log. `SlogLogger(l)` keeps writing to another logger, for example a file of its own.
+
 ## [0.12.0] - 2026-11-25
 
 ### Breaking changes
