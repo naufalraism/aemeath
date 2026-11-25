@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-25
+
 ### Breaking changes
 
 - **`storage.Storage` takes a context: `Save(ctx, filename, src)` and `Delete(ctx, filename)`.** A backend over the network (S3, a CDN) needs the request's context to stop when the client leaves or a deadline passes, and adding it to the interface after v1.0 would break every backend. `storage.Local` returns `ctx.Err()` before it writes or deletes. Pass `c.Context()`.
