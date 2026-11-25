@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Docs: the "Two databases" example opened PostgreSQL URLs with `db.Open`**, the SQLite opener, which would have created a file named after the URL instead of connecting. It uses `postgres.Open` now, and a test checks that no example passes a URL from the environment to the SQLite opener.
+
 ## [0.11.0] - 2026-11-25
 
 ### Security

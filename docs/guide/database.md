@@ -58,14 +58,14 @@ aemeath.POST(app, "/users", func(c *aemeath.Ctx, in CreateUser) (User, error) {
 ```go
 type AnalyticsDB struct{ *gorm.DB }
 
-primary, err := db.Open(os.Getenv("DATABASE_URL"), &User{})
+primary, err := postgres.Open(os.Getenv("DATABASE_URL"), db.WithModels(&User{}))
 if err != nil {
 	log.Fatal(err)
 }
 if err := app.RegisterPlugin(primary); err != nil { // db.From(c), and /readyz "database"
 	log.Fatal(err)
 }
-analytics, err := db.Open(os.Getenv("ANALYTICS_URL"))
+analytics, err := postgres.Open(os.Getenv("ANALYTICS_URL"))
 if err != nil {
 	log.Fatal(err)
 }
