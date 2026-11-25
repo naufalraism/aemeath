@@ -13,7 +13,7 @@ type CORSConfig struct {
 	AllowHeaders     []string
 	ExposeHeaders    []string
 	AllowCredentials bool
-	MaxAge           int
+	MaxAge           int // seconds browsers may cache a preflight; 0 = a day, negative = no header
 }
 
 // DefaultCORSConfig returns a permissive configuration suitable for public
@@ -30,19 +30,32 @@ func DefaultCORSConfig() CORSConfig {
 
 // CORS allows browser frontends (React, Vue, ...) to call the API.
 //
-// Empty AllowMethods and AllowHeaders fall back to the defaults. Combining
-// AllowCredentials with the "*" origin is rejected by browsers and unsafe to
-// emulate, so it panics at startup: list the allowed origins explicitly.
+// CORS() allows any origin without credentials (DefaultCORSConfig). Pass
+// one CORSConfig to choose: empty AllowMethods and AllowHeaders, and a zero
+// MaxAge, take the defaults; a negative MaxAge sends no Access-Control-Max-Age.
+//
+// A configuration that cannot work panics at startup: more than one config,
+// an empty AllowOrigins (no origin would be allowed), and AllowCredentials
+// with the "*" origin, which browsers reject and which is unsafe to emulate.
 func CORS(configs ...CORSConfig) Middleware {
 	cfg := DefaultCORSConfig()
-	if len(configs) > 0 {
+	if len(configs) > 1 {
+		panic("aemeath: CORS takes one CORSConfig, not several: put every origin in AllowOrigins")
+	}
+	if len(configs) == 1 {
 		def := DefaultCORSConfig()
 		cfg = configs[0]
+		if len(cfg.AllowOrigins) == 0 {
+			panic(`aemeath: CORSConfig.AllowOrigins is empty, so no origin would be allowed: list the origins (for example "https://app.example.com"), or call CORS() to allow any origin`)
+		}
 		if len(cfg.AllowMethods) == 0 {
 			cfg.AllowMethods = def.AllowMethods
 		}
 		if len(cfg.AllowHeaders) == 0 {
 			cfg.AllowHeaders = def.AllowHeaders
+		}
+		if cfg.MaxAge == 0 {
+			cfg.MaxAge = def.MaxAge
 		}
 	}
 	if cfg.AllowCredentials {

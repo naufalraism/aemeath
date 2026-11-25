@@ -277,7 +277,7 @@ app.Use(
 | `Logger()` / `SlogLogger(l)` | access log, one structured record per request (method, path, status, duration_ms, request_id), to the app's logger (`app.SetLogger`) / to `l`, for example a file of its own; keeps `http.Flusher`/`Hijacker` working |
 | `Recover()` | recovers panics, logs the stack, answers `500` |
 | `RequestID()` | reads a safe `X-Request-Id` or makes one; echoed in the response and the logs |
-| `CORS(cfg...)` | CORS headers and preflight. Credentials cannot be combined with the `*` origin (panics at startup) |
+| `CORS(cfg...)` | CORS headers and preflight; `CORS()` allows any origin without credentials. One `CORSConfig` at most; an empty `AllowOrigins`, or credentials with the `*` origin, panics at startup |
 | `SecurityHeaders()` | `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, HSTS (only over TLS) |
 | `Gzip(min...)` | compresses JSON/text for clients that accept it; leaves streams, tiny bodies and WebSockets alone. Keep it off pages that hold a secret next to what a visitor typed ([BREACH](docs/guide/auth.md#compression-and-secrets-breach)) |
 | `Timeout(d)` | deadline on `c.Context()`; `504` when a handler that honors the context runs out |
