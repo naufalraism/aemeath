@@ -10,6 +10,10 @@ All notable changes to this project are documented here.
 - **`CORS` refuses configurations that would allow nobody**, at startup: more than one `CORSConfig` (the second was ignored) and an empty `AllowOrigins` (no origin was allowed, without a word) now panic with a message saying what to write. A zero `MaxAge` takes the default (a day) like `AllowMethods` and `AllowHeaders` already did, instead of sending no header; a negative `MaxAge` sends none.
 - **`Gzip` takes one minimum size**: `Gzip(512, 2048)` panics at startup instead of ignoring the second value.
 
+### Fixed
+
+- **`app.Stop()` also marks the app as shutting down**: `ShuttingDown()` reports true and `/readyz` answers 503, as when `Listen` receives a stop signal. A program running its own `http.Server` got a closed `Stopping` channel next to `ShuttingDown() == false` and a healthy `/readyz`. The documentation of `ShuttingDown` now says which signal to use: `Stopping` for ending long work.
+
 ## [0.12.0] - 2026-11-25
 
 ### Breaking changes

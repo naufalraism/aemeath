@@ -63,10 +63,14 @@ type App struct {
 // example inside httptest); call Stop yourself then.
 func (a *App) Stopping() <-chan struct{} { return a.stopping }
 
-// Stop closes the Stopping channel. Listen and Serve call it when a stop
-// signal arrives; call it yourself only when you run the http.Server on your
-// own. It is safe to call more than once.
-func (a *App) Stop() { a.stoppingOnce.Do(func() { close(a.stopping) }) }
+// Stop marks the app as shutting down (ShuttingDown reports true, /readyz
+// answers 503) and closes the Stopping channel. Listen and Serve call it when
+// a stop signal arrives; call it yourself only when you run the http.Server
+// on your own. It is safe to call more than once.
+func (a *App) Stop() {
+	a.shuttingDown.Store(true)
+	a.stoppingOnce.Do(func() { close(a.stopping) })
+}
 
 // SetShutdownDelay makes the server keep serving for d after SIGINT/SIGTERM
 // while GET /readyz already answers 503, before it stops accepting
@@ -95,8 +99,10 @@ const DefaultShutdownTimeout = 10 * time.Second
 // some PaaS), or the process is killed first. d <= 0 restores the default.
 func (a *App) SetShutdownTimeout(d time.Duration) { a.shutdownTimeout = d }
 
-// ShuttingDown reports whether the server has received a stop signal. Long
-// handlers (streams, polling loops) can use it to finish early.
+// ShuttingDown reports whether a stop signal has arrived: from then on
+// /readyz answers 503, while the server may keep serving for the delay of
+// SetShutdownDelay. Handlers that should end their long work (streams,
+// polling loops) wait for Stopping instead, which closes after that delay.
 func (a *App) ShuttingDown() bool { return a.shuttingDown.Load() }
 
 // OnShutdown registers a function that runs when the server stops (after
