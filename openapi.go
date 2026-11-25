@@ -106,7 +106,11 @@ func (a *App) EnableDocs(info Info) {
 	})
 }
 
-// docsHTML loads Scalar from a CDN at a pinned version, with a Subresource
+// docsHTML loads the OpenAPI document by a relative URL ("openapi.json"), so
+// the page finds it next to itself behind a reverse proxy that adds a path
+// prefix, and inside a Group.
+//
+// It loads Scalar from a CDN at a pinned version, with a Subresource
 // Integrity hash: the browser refuses to run the file if the CDN serves
 // anything else, so neither a new upstream release nor a compromised CDN can
 // change what runs on your origin. To bump the version, update both the URL
@@ -119,7 +123,7 @@ const docsHTML = `<!doctype html>
 <html><head><meta charset="utf-8"><title>%s</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body>
-<script id="api-reference" data-url="/openapi.json"></script>
+<script id="api-reference" data-url="openapi.json"></script>
 <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4/dist/browser/standalone.js" integrity="sha384-hwB9WroDTpZaI38gr+u9CXA6ksz5gUYgD2GxXazKl/agT1L2GWUiRFWGJYNiFu4Q" crossorigin="anonymous"></script>
 </body></html>`
 

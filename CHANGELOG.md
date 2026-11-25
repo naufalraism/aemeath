@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`/docs` loads its OpenAPI document by a relative URL** (`openapi.json`). Behind a reverse proxy that mounts the app under a prefix (`/api/docs` outside, `/docs` inside), the page asked for `/openapi.json` at the root of the host, outside the app, and showed nothing.
+
 ## [0.9.0] - 2026-11-25
 
 ### Breaking changes
