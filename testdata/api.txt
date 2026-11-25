@@ -433,7 +433,10 @@ tracing: method (*Tracer) Start(ctx context.Context, name string) (context.Conte
 tracing: type Config struct
 tracing: type Span struct
 tracing: type Tracer struct
-ws: func Upgrade(c *aemeath.Ctx) (*websocket.Conn, error)
-ws: var DefaultIdleTimeout
-ws: var DefaultReadLimit int64
-ws: var Upgrader
+ws: const DefaultIdleTimeout
+ws: const DefaultReadLimit
+ws: field Config.IdleTimeout time.Duration
+ws: field Config.ReadLimit int64
+ws: field Config.TrustedOrigins []string
+ws: func Upgrade(c *aemeath.Ctx, config ...Config) (*websocket.Conn, error)
+ws: type Config struct

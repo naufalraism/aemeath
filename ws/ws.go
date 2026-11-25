@@ -5,6 +5,8 @@ import (
 	"bufio"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -12,37 +14,61 @@ import (
 	"github.com/naufalraism/aemeath"
 )
 
-// Upgrader is used by Upgrade.
-//
-// By default only same-origin browser connections are accepted, which
-// protects against cross-site WebSocket hijacking. To allow other origins,
-// set CheckOrigin explicitly, for example:
-//
-//	ws.Upgrader.CheckOrigin = func(r *http.Request) bool {
-//		return r.Header.Get("Origin") == "https://app.example.com"
-//	}
-var Upgrader = websocket.Upgrader{}
+// DefaultReadLimit is the largest message (in bytes) a connection accepts
+// when Config.ReadLimit is 0: 1 MiB. ReadMessage keeps a whole message in
+// memory, so without a limit one client could make the server allocate any
+// amount. A larger message closes the connection (close code 1009, "message
+// too big").
+const DefaultReadLimit = 1 << 20
 
-// DefaultReadLimit is the largest message (in bytes) a connection returned by
-// Upgrade accepts: 1 MiB. ReadMessage keeps a whole message in memory, so
-// without a limit one client could make the server allocate any amount. A
-// larger message closes the connection (close code 1009, "message too big").
-// Change it before the server starts, or call conn.SetReadLimit per
-// connection; 0 or less disables the limit.
-var DefaultReadLimit int64 = 1 << 20
-
-// DefaultIdleTimeout closes a connection returned by Upgrade when the client
-// has not answered a ping for this long: 60 seconds. The server pings every
-// half of it, and browsers and WebSocket libraries answer pings by
+// DefaultIdleTimeout closes a connection whose client has not answered a ping
+// for this long, when Config.IdleTimeout is 0: 60 seconds. The server pings
+// every half of it, and browsers and WebSocket libraries answer pings by
 // themselves, so a client that only listens stays connected; one that has
 // gone away, or never answers, is closed instead of holding a connection and
 // a goroutine forever (net/http's timeouts end when the connection is taken
 // over). ReadMessage then returns an error, as for any closed connection.
 //
 // If you set your own PongHandler, extend the read deadline in it, as this
-// one does. Change it before the server starts; 0 or less turns it off and
-// leaves timeouts to you.
-var DefaultIdleTimeout = 60 * time.Second
+// one does.
+const DefaultIdleTimeout = 60 * time.Second
+
+// Config adjusts one Upgrade. The zero value is the safe default.
+type Config struct {
+	// TrustedOrigins lists the origins, besides the server's own, whose pages
+	// may connect: "https://app.example.com" (scheme and host, exactly). By
+	// default only same-origin browser connections are accepted, which
+	// protects against cross-site WebSocket hijacking; clients that send no
+	// Origin header (not browsers) are accepted.
+	TrustedOrigins []string
+	// ReadLimit is the largest message in bytes: 0 means DefaultReadLimit,
+	// a negative value no limit.
+	ReadLimit int64
+	// IdleTimeout: 0 means DefaultIdleTimeout, a negative value turns the
+	// pings off and leaves timeouts to you.
+	IdleTimeout time.Duration
+}
+
+// allowed reports whether the page that opened r may connect.
+func (cfg Config) allowed(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+	for _, o := range cfg.TrustedOrigins {
+		if strings.EqualFold(o, origin) {
+			return true
+		}
+	}
+	return false
+}
 
 // Upgrade turns the HTTP connection of c into a WebSocket connection. When it
 // fails, the upgrader has already written the error response: return nil.
@@ -50,19 +76,34 @@ var DefaultIdleTimeout = 60 * time.Second
 // Middlewares often wrap the ResponseWriter (sessions, metrics, tracing, ...).
 // The connection is taken over through http.ResponseController, which follows
 // their Unwrap methods, so the upgrade works no matter how many wrappers there are.
-func Upgrade(c *aemeath.Ctx) (*websocket.Conn, error) {
-	conn, err := Upgrader.Upgrade(hijackable{c.W}, c.R, nil)
+func Upgrade(c *aemeath.Ctx, config ...Config) (*websocket.Conn, error) {
+	if len(config) > 1 {
+		panic("aemeath/ws: Upgrade takes one Config, not several")
+	}
+	var cfg Config
+	if len(config) == 1 {
+		cfg = config[0]
+	}
+	up := websocket.Upgrader{CheckOrigin: cfg.allowed}
+	conn, err := up.Upgrade(hijackable{c.W}, c.R, nil)
 	if err != nil {
 		return nil, err
 	}
-	if DefaultReadLimit > 0 {
+	switch limit := cfg.ReadLimit; {
+	case limit == 0:
 		conn.SetReadLimit(DefaultReadLimit)
+	case limit > 0:
+		conn.SetReadLimit(limit)
 	}
 	// net/http's timeouts end at the takeover: without a deadline, a client
 	// that goes silent holds the connection and the handler forever.
 	var pinger *time.Ticker
 	var ping <-chan time.Time
-	if idle := DefaultIdleTimeout; idle > 0 {
+	idle := cfg.IdleTimeout
+	if idle == 0 {
+		idle = DefaultIdleTimeout
+	}
+	if idle > 0 {
 		_ = conn.SetReadDeadline(time.Now().Add(idle))
 		conn.SetPongHandler(func(string) error { return conn.SetReadDeadline(time.Now().Add(idle)) })
 		pinger = time.NewTicker(idle / 2)

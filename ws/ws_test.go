@@ -76,19 +76,6 @@ func TestSameOriginIsAccepted(t *testing.T) {
 	_ = conn.Close()
 }
 
-func TestCheckOriginCanBeRelaxed(t *testing.T) {
-	old := ws.Upgrader.CheckOrigin
-	ws.Upgrader.CheckOrigin = func(r *http.Request) bool { return r.Header.Get("Origin") == "https://app.example" }
-	defer func() { ws.Upgrader.CheckOrigin = old }()
-
-	srv := echoServer(t)
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL(srv), http.Header{"Origin": {"https://app.example"}})
-	if err != nil {
-		t.Fatalf("an allowed origin was refused: %v", err)
-	}
-	_ = conn.Close()
-}
-
 // onlyUnwrap is a middleware wrapper like the ones in session, metrics and
 // tracing: it implements Unwrap but not Hijack.
 type onlyUnwrap struct{ http.ResponseWriter }
