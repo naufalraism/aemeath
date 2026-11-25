@@ -143,14 +143,28 @@ func writeFileIfChanged(path string, content []byte) error {
 //	GET /client.ts    typed fetch client
 //	GET /schemas.ts   Zod schemas (needs the "zod" package)
 //	GET /hooks.ts     React Query hooks (needs "@tanstack/react-query")
+//
+// They are public. To serve them only to some users, use Group.EnableClient
+// on a group whose middleware checks them.
 func (a *App) EnableClient() {
+	a.enableClient(a.Handle)
+}
+
+// EnableClient registers <prefix>/client.ts, <prefix>/schemas.ts and
+// <prefix>/hooks.ts inside the group, behind the group's middlewares. The
+// files still cover every route of the app.
+func (g *Group) EnableClient() {
+	g.app.enableClient(g.Handle)
+}
+
+func (a *App) enableClient(handle func(method, path string, h HandlerFunc)) {
 	serve := func(path string, gen func() string) {
 		var (
 			mu          sync.Mutex
 			cached      string
 			cachedCount = -1
 		)
-		a.Handle("GET", path, func(c *Ctx) error {
+		handle("GET", path, func(c *Ctx) error {
 			mu.Lock()
 			if cachedCount != len(a.specs) {
 				cached = gen()

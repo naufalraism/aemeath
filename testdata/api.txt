@@ -142,6 +142,8 @@ aemeath: method (*Ctx) Stopping() <-chan struct{}
 aemeath: method (*Ctx) Text(code int, s string) error
 aemeath: method (*FileLoggerPlugin) Apply(app *App) error
 aemeath: method (*FileLoggerPlugin) Close() error
+aemeath: method (*Group) EnableClient()
+aemeath: method (*Group) EnableDocs(info Info)
 aemeath: method (*Group) Group(prefix string, mws ...Middleware) *Group
 aemeath: method (*Group) Handle(method, path string, h HandlerFunc)
 aemeath: method (*Group) Options(opts ...RouteOption)

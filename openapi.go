@@ -95,11 +95,25 @@ func (a *App) OpenAPI(info Info) map[string]any {
 }
 
 // EnableDocs registers GET /openapi.json and GET /docs.
+//
+// They are public. To serve them only to some users, use Group.EnableDocs on
+// a group whose middleware checks them.
 func (a *App) EnableDocs(info Info) {
-	a.Handle("GET", "/openapi.json", func(c *Ctx) error {
+	a.enableDocs(a.Handle, info)
+}
+
+// EnableDocs registers GET <prefix>/openapi.json and GET <prefix>/docs inside
+// the group, behind the group's middlewares: for example docs that only
+// signed-in admins can open. The document still describes the whole app.
+func (g *Group) EnableDocs(info Info) {
+	g.app.enableDocs(g.Handle, info)
+}
+
+func (a *App) enableDocs(handle func(method, path string, h HandlerFunc), info Info) {
+	handle("GET", "/openapi.json", func(c *Ctx) error {
 		return c.JSON(200, a.OpenAPI(info))
 	})
-	a.Handle("GET", "/docs", func(c *Ctx) error {
+	handle("GET", "/docs", func(c *Ctx) error {
 		c.W.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, err := io.WriteString(c.W, fmt.Sprintf(docsHTML, html.EscapeString(info.Title)))
 		return err
