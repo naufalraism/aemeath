@@ -17,7 +17,7 @@ aemeath.POST(app, "/profile", func(c *aemeath.Ctx, in ProfileIn) (Profile, error
 		return Profile{}, err
 	}
 	defer f.Close()
-	// copy f to storage, e.g. storage.NewLocal("uploads").Save(name, f)
+	// copy f to storage, e.g. storage.NewLocal("uploads").Save(c.Context(), name, f)
 	return Profile{Name: in.Name}, nil
 })
 ```

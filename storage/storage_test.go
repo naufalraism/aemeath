@@ -1,6 +1,8 @@
 package storage_test
 
 import (
+	"context"
+	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -18,11 +20,11 @@ import (
 func TestNeverOverwrites(t *testing.T) {
 	dir := t.TempDir()
 	s := storage.NewLocal(dir)
-	a, err := s.Save("avatar.png", strings.NewReader("USER-A"))
+	a, err := s.Save(t.Context(), "avatar.png", strings.NewReader("USER-A"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := s.Save("avatar.png", strings.NewReader("USER-B"))
+	b, err := s.Save(t.Context(), "avatar.png", strings.NewReader("USER-B"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +40,7 @@ func TestStaysInsideUploadDir(t *testing.T) {
 	dir := t.TempDir()
 	s := storage.NewLocal(filepath.Join(dir, "uploads"))
 	for _, name := range []string{"../../evil.txt", `..\..\evil.txt`, "/etc/passwd", "..", ""} {
-		stored, err := s.Save(name, strings.NewReader("x"))
+		stored, err := s.Save(t.Context(), name, strings.NewReader("x"))
 		if err != nil {
 			t.Fatalf("Save(%q): %v", name, err)
 		}
@@ -57,7 +59,7 @@ func TestStaysInsideUploadDir(t *testing.T) {
 	if err := os.WriteFile(outside, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Delete("../keep.txt"); err != nil {
+	if err := s.Delete(t.Context(), "../keep.txt"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(outside); err != nil {
@@ -71,7 +73,7 @@ func TestFilesArePrivateByDefault(t *testing.T) {
 	}
 	dir := filepath.Join(t.TempDir(), "uploads")
 	s := storage.NewLocal(dir)
-	name, err := s.Save("a.txt", strings.NewReader("x"))
+	name, err := s.Save(t.Context(), "a.txt", strings.NewReader("x"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,7 @@ func TestFilesArePrivateByDefault(t *testing.T) {
 		t.Fatalf("directory mode = %o, want 750", info.Mode().Perm())
 	}
 	open := &storage.Local{UploadDir: filepath.Join(t.TempDir(), "pub"), FileMode: 0o644, DirMode: 0o755}
-	name, err = open.Save("b.txt", strings.NewReader("y"))
+	name, err = open.Save(t.Context(), "b.txt", strings.NewReader("y"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +108,7 @@ func TestNeutralizesActiveExtensions(t *testing.T) {
 		"notes":        "_notes",
 		"../evil.html": "_evil.html.txt",
 	} {
-		stored, err := s.Save(name, strings.NewReader("\x89PNG\r\n\x1a\n<script>alert(1)</script>"))
+		stored, err := s.Save(t.Context(), name, strings.NewReader("\x89PNG\r\n\x1a\n<script>alert(1)</script>"))
 		if err != nil {
 			t.Fatalf("Save(%q): %v", name, err)
 		}
@@ -132,7 +134,7 @@ func TestReplacesWindowsReservedCharacters(t *testing.T) {
 		{"evil\u202egnp.exe", "_evil_gnp.exe"},
 		{"line\nbreak.txt", "_line_break.txt"},
 	} {
-		name, err := st.Save(tc.in, strings.NewReader("x"))
+		name, err := st.Save(t.Context(), tc.in, strings.NewReader("x"))
 		if err != nil {
 			t.Fatalf("Save(%q): %v", tc.in, err)
 		}
@@ -143,7 +145,34 @@ func TestReplacesWindowsReservedCharacters(t *testing.T) {
 }
 
 func TestDeleteOfAMissingFileIsNotAnError(t *testing.T) {
-	if err := storage.NewLocal(t.TempDir()).Delete("never-saved.txt"); err != nil {
+	if err := storage.NewLocal(t.TempDir()).Delete(t.Context(), "never-saved.txt"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A backend over the network (S3, a CDN) needs the request's context to
+// stop when the client leaves or a deadline passes. Local checks it before
+// it writes or deletes anything.
+func TestSaveAndDeleteStopWhenTheContextIsDone(t *testing.T) {
+	dir := t.TempDir()
+	s := storage.NewLocal(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := s.Save(ctx, "a.txt", strings.NewReader("x")); !errors.Is(err, context.Canceled) {
+		t.Errorf("Save with a cancelled context: err = %v, want context.Canceled", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("Save with a cancelled context wrote %d file(s)", len(entries))
+	}
+	name, err := s.Save(context.Background(), "b.txt", strings.NewReader("y"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete(ctx, name); !errors.Is(err, context.Canceled) {
+		t.Errorf("Delete with a cancelled context: err = %v, want context.Canceled", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+		t.Errorf("Delete with a cancelled context removed the file: %v", err)
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -331,48 +330,6 @@ func TestCORSPartialConfigKeepsDefaultMethodsAndHeaders(t *testing.T) {
 	}
 }
 
-func TestLocalStorageNeverOverwrites(t *testing.T) {
-	dir := t.TempDir()
-	s := aemeath.NewLocalStorage(dir)
-	a, err := s.Save("avatar.png", strings.NewReader("USER-A"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := s.Save("avatar.png", strings.NewReader("USER-B"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a == b {
-		t.Fatal("two uploads got the same stored name")
-	}
-	if data, _ := os.ReadFile(filepath.Join(dir, a)); string(data) != "USER-A" {
-		t.Fatalf("first upload was overwritten: %q", data)
-	}
-}
-
-func TestLocalStorageStaysInsideUploadDir(t *testing.T) {
-	dir := t.TempDir()
-	s := aemeath.NewLocalStorage(filepath.Join(dir, "uploads"))
-	for _, name := range []string{"../../evil.txt", `..\..\evil.txt`, "/etc/passwd", "..", ""} {
-		stored, err := s.Save(name, strings.NewReader("x"))
-		if err != nil {
-			t.Fatalf("Save(%q): %v", name, err)
-		}
-		if strings.ContainsAny(stored, `/\`) {
-			t.Fatalf("Save(%q) returned a path: %q", name, stored)
-		}
-		if _, err := os.Stat(filepath.Join(dir, "uploads", stored)); err != nil {
-			t.Fatalf("Save(%q): file not inside upload dir: %v", name, err)
-		}
-	}
-	if _, err := os.Stat(filepath.Join(dir, "evil.txt")); err == nil {
-		t.Fatal("file escaped the upload directory")
-	}
-	if !s.IsAllowedFile("PHOTO.PNG", []string{".png"}) { //nolint:staticcheck // deprecated, still tested until v1.0 removes it
-		t.Fatal("extension check should be case-insensitive")
-	}
-}
-
 func TestLoggerKeepsFlusher(t *testing.T) {
 	app := aemeath.New()
 	app.Use(aemeath.Logger())
@@ -517,34 +474,6 @@ func TestDocsAndExamplesDoNotWrapListenInLogFatal(t *testing.T) {
 	}
 	if checked < 5 {
 		t.Fatalf("only %d files were checked; the test is not looking at the docs and examples", checked)
-	}
-}
-
-func TestLocalStorageFilesArePrivateByDefault(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX file modes")
-	}
-	dir := filepath.Join(t.TempDir(), "uploads")
-	s := aemeath.NewLocalStorage(dir)
-	name, err := s.Save("a.txt", strings.NewReader("x"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info, _ := os.Stat(filepath.Join(dir, name)); info.Mode().Perm() != 0o600 {
-		t.Fatalf("file mode = %o, want 600", info.Mode().Perm())
-	}
-	if info, _ := os.Stat(dir); info.Mode().Perm() != 0o750 {
-		t.Fatalf("directory mode = %o, want 750", info.Mode().Perm())
-	}
-
-	// A reverse proxy that must read the files can opt in.
-	open := &aemeath.LocalStorage{UploadDir: filepath.Join(t.TempDir(), "pub"), FileMode: 0o644, DirMode: 0o755}
-	name, err = open.Save("b.txt", strings.NewReader("y"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info, _ := os.Stat(filepath.Join(open.UploadDir, name)); info.Mode().Perm() != 0o644 {
-		t.Fatalf("configured file mode = %o, want 644", info.Mode().Perm())
 	}
 }
 

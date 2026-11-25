@@ -29,7 +29,7 @@ func multipartBody(t *testing.T, field, filename string, content []byte) (*bytes
 	return &buf, w.FormDataContentType()
 }
 
-// Upload with `accept:"image/png"`, stored with LocalStorage, served with
+// Upload with `accept:"image/png"`, stored with storage.Local, served with
 // app.Static: the documented way to build an avatar upload.
 func TestUpload_PolyglotServedAsHTML(t *testing.T) {
 	dir := t.TempDir()
@@ -48,7 +48,7 @@ func TestUpload_PolyglotServedAsHTML(t *testing.T) {
 			return nil, err
 		}
 		defer func() { _ = f.Close() }()
-		stored, err = store.Save(in.File.Filename, f)
+		stored, err = store.Save(c.Context(), in.File.Filename, f)
 		return map[string]string{"url": "/uploads/" + stored}, err
 	})
 
@@ -96,7 +96,7 @@ func TestUpload_FilenameTraversal(t *testing.T) {
 	dir := t.TempDir()
 	store := storage.NewLocal(dir)
 	for _, name := range []string{"../../etc/passwd", `..\..\win.ini`, "/abs/path.txt", "..", ".", "", "a/../../b.txt"} {
-		stored, err := store.Save(name, strings.NewReader("x"))
+		stored, err := store.Save(t.Context(), name, strings.NewReader("x"))
 		if err != nil {
 			t.Errorf("Save(%q): %v", name, err)
 			continue

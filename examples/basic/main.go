@@ -219,7 +219,7 @@ func main() {
 		}
 		defer func() { _ = file.Close() }()
 
-		savedName, err := aemeath.MustGet[storage.Storage](c).Save(in.File.Filename, file)
+		savedName, err := aemeath.MustGet[storage.Storage](c).Save(c.Context(), in.File.Filename, file)
 		if err != nil {
 			return nil, aemeath.InternalError("failed to save the file")
 		}
