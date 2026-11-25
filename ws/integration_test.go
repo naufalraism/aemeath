@@ -4,7 +4,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/metrics"
@@ -28,13 +28,13 @@ func TestUpgradeWithSessionMetricsAndTracing(t *testing.T) {
 		if err != nil {
 			return nil
 		}
-		defer func() { _ = conn.Close() }()
-		return conn.WriteMessage(websocket.TextMessage, []byte("hi"))
+		defer func() { _ = conn.CloseNow() }()
+		return conn.Write(c.Context(), websocket.MessageText, []byte("hi"))
 	})
 	srv := httptest.NewServer(app)
 	defer srv.Close()
 
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+	conn, resp, err := dial(t, wsURL(srv), "")
 	if err != nil {
 		code := 0
 		if resp != nil {
@@ -42,8 +42,7 @@ func TestUpgradeWithSessionMetricsAndTracing(t *testing.T) {
 		}
 		t.Fatalf("dial failed (status %d): %v", code, err)
 	}
-	defer func() { _ = conn.Close() }()
-	if _, msg, err := conn.ReadMessage(); err != nil || string(msg) != "hi" {
+	if _, msg, err := conn.Read(t.Context()); err != nil || string(msg) != "hi" {
 		t.Fatalf("got %q, %v", msg, err)
 	}
 }

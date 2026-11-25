@@ -1,13 +1,15 @@
 package ws_test
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/ws"
@@ -22,13 +24,13 @@ func echoServer(t *testing.T) *httptest.Server {
 		if err != nil {
 			return nil
 		}
-		defer func() { _ = conn.Close() }()
+		defer func() { _ = conn.CloseNow() }()
 		for {
-			mt, msg, err := conn.ReadMessage()
+			mt, msg, err := conn.Read(c.Context())
 			if err != nil {
 				return nil
 			}
-			if err := conn.WriteMessage(mt, msg); err != nil {
+			if err := conn.Write(c.Context(), mt, msg); err != nil {
 				return nil
 			}
 		}
@@ -40,17 +42,33 @@ func echoServer(t *testing.T) *httptest.Server {
 
 func wsURL(srv *httptest.Server) string { return "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws" }
 
+// dial connects as a client; origin, when set, is sent as the Origin header.
+func dial(t *testing.T, url, origin string) (*websocket.Conn, *http.Response, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	opts := &websocket.DialOptions{}
+	if origin != "" {
+		opts.HTTPHeader = http.Header{"Origin": {origin}}
+	}
+	conn, resp, err := websocket.Dial(ctx, url, opts)
+	if conn != nil {
+		conn.SetReadLimit(-1)
+		t.Cleanup(func() { _ = conn.CloseNow() })
+	}
+	return conn, resp, err
+}
+
 func TestEchoThroughTheMiddlewareChain(t *testing.T) {
 	srv := echoServer(t)
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+	conn, _, err := dial(t, wsURL(srv), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = conn.Close() }()
-	if err := conn.WriteMessage(websocket.TextMessage, []byte("ping")); err != nil {
+	if err := conn.Write(t.Context(), websocket.MessageText, []byte("ping")); err != nil {
 		t.Fatal(err)
 	}
-	_, msg, err := conn.ReadMessage()
+	_, msg, err := conn.Read(t.Context())
 	if err != nil || string(msg) != "ping" {
 		t.Fatalf("echo = %q, err = %v", msg, err)
 	}
@@ -58,7 +76,7 @@ func TestEchoThroughTheMiddlewareChain(t *testing.T) {
 
 func TestCrossOriginIsRejectedByDefault(t *testing.T) {
 	srv := echoServer(t)
-	_, resp, err := websocket.DefaultDialer.Dial(wsURL(srv), http.Header{"Origin": {"https://evil.example"}})
+	_, resp, err := dial(t, wsURL(srv), "https://evil.example")
 	if err == nil {
 		t.Fatal("a cross-origin upgrade must be refused")
 	}
@@ -69,11 +87,9 @@ func TestCrossOriginIsRejectedByDefault(t *testing.T) {
 
 func TestSameOriginIsAccepted(t *testing.T) {
 	srv := echoServer(t)
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL(srv), http.Header{"Origin": {srv.URL}})
-	if err != nil {
+	if _, _, err := dial(t, wsURL(srv), srv.URL); err != nil {
 		t.Fatalf("same-origin upgrade failed: %v", err)
 	}
-	_ = conn.Close()
 }
 
 // onlyUnwrap is a middleware wrapper like the ones in session, metrics and
@@ -105,12 +121,12 @@ func TestUpgradeThroughWrappersWithoutHijack(t *testing.T) {
 				if err != nil {
 					return nil
 				}
-				defer func() { _ = conn.Close() }()
-				return conn.WriteMessage(websocket.TextMessage, []byte("hi"))
+				defer func() { _ = conn.CloseNow() }()
+				return conn.Write(c.Context(), websocket.MessageText, []byte("hi"))
 			})
 			srv := httptest.NewServer(app)
 			defer srv.Close()
-			conn, resp, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+			conn, resp, err := dial(t, wsURL(srv), "")
 			if err != nil {
 				code := 0
 				if resp != nil {
@@ -118,16 +134,15 @@ func TestUpgradeThroughWrappersWithoutHijack(t *testing.T) {
 				}
 				t.Fatalf("dial failed (status %d): %v", code, err)
 			}
-			defer func() { _ = conn.Close() }()
-			if _, msg, err := conn.ReadMessage(); err != nil || string(msg) != "hi" {
+			if _, msg, err := conn.Read(t.Context()); err != nil || string(msg) != "hi" {
 				t.Fatalf("got %q, %v", msg, err)
 			}
 		})
 	}
 }
 
-// ReadMessage buffers a whole message: without a limit one client could make
-// the server hold 64 MiB (or more) in memory.
+// Read buffers a whole message: without a limit one client could make the
+// server hold any amount in memory.
 func TestDefaultReadLimit(t *testing.T) {
 	got := make(chan error, 1)
 	app := aemeath.New()
@@ -136,8 +151,8 @@ func TestDefaultReadLimit(t *testing.T) {
 		if err != nil {
 			return nil
 		}
-		defer func() { _ = conn.Close() }()
-		_, _, err = conn.ReadMessage()
+		defer func() { _ = conn.CloseNow() }()
+		_, _, err = conn.Read(c.Context())
 		got <- err
 		return nil
 	})
@@ -148,18 +163,35 @@ func TestDefaultReadLimit(t *testing.T) {
 		size    int
 		wantErr bool
 	}{{1000, false}, {int(ws.DefaultReadLimit), false}, {int(ws.DefaultReadLimit) + 1, true}, {8 << 20, true}} {
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+		conn, _, err := dial(t, wsURL(srv), "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = conn.WriteMessage(websocket.BinaryMessage, make([]byte, tc.size))
+		_ = conn.Write(t.Context(), websocket.MessageBinary, make([]byte, tc.size))
 		err = <-got
-		_ = conn.Close()
+		_ = conn.CloseNow()
 		if (err != nil) != tc.wantErr {
 			t.Errorf("message of %d bytes: read error %v, want error=%v", tc.size, err, tc.wantErr)
 		}
-		if tc.wantErr && !errors.Is(err, websocket.ErrReadLimit) {
-			t.Errorf("message of %d bytes: %v, want ErrReadLimit", tc.size, err)
+		if tc.wantErr && !errors.Is(err, websocket.ErrMessageTooBig) {
+			t.Errorf("message of %d bytes: %v, want ErrMessageTooBig", tc.size, err)
 		}
+	}
+}
+
+// Compression stays off even when the client offers it: per-message deflate
+// keeps a window per connection (memory), and a compressed message that holds
+// a secret next to input from another party leaks through its size.
+func TestCompressionIsNotNegotiated(t *testing.T) {
+	srv := echoServer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, resp, err := websocket.Dial(ctx, wsURL(srv), &websocket.DialOptions{CompressionMode: websocket.CompressionContextTakeover})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+	if ext := resp.Header.Get("Sec-WebSocket-Extensions"); ext != "" {
+		t.Errorf("the server agreed to %q", ext)
 	}
 }

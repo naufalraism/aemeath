@@ -3,6 +3,7 @@ package streamtest
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/csrf"
@@ -222,19 +223,19 @@ func TestWebSocketEcho(t *testing.T) {
 					if err != nil {
 						return nil
 					}
-					defer func() { _ = conn.Close() }()
+					defer func() { _ = conn.CloseNow() }()
 					for {
-						kind, msg, err := conn.ReadMessage()
+						kind, msg, err := conn.Read(c.Context())
 						if err != nil {
 							return nil
 						}
-						if err := conn.WriteMessage(kind, msg); err != nil {
+						if err := conn.Write(c.Context(), kind, msg); err != nil {
 							return nil
 						}
 					}
 				})
 			})
-			conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/ws", nil)
+			conn, resp, err := websocket.Dial(t.Context(), "ws"+strings.TrimPrefix(srv.URL, "http")+"/ws", nil)
 			if err != nil {
 				code := 0
 				if resp != nil {
@@ -242,13 +243,16 @@ func TestWebSocketEcho(t *testing.T) {
 				}
 				t.Fatalf("upgrade failed (status %d): %v", code, err)
 			}
-			defer func() { _ = conn.Close() }()
+			defer func() { _ = conn.CloseNow() }()
+			conn.SetReadLimit(-1)
 			for _, msg := range []string{"hello", strings.Repeat("x", 100_000)} {
-				if err := conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
+				if err := conn.Write(t.Context(), websocket.MessageText, []byte(msg)); err != nil {
 					t.Fatal(err)
 				}
-				_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
-				if _, got, err := conn.ReadMessage(); err != nil || string(got) != msg {
+				ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+				_, got, err := conn.Read(ctx)
+				cancel()
+				if err != nil || string(got) != msg {
 					t.Fatalf("echo of %d bytes: %d bytes, %v", len(msg), len(got), err)
 				}
 			}

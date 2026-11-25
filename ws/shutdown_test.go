@@ -3,6 +3,7 @@
 package ws_test
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"os"
@@ -10,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/ws"
@@ -51,9 +52,9 @@ func TestShutdownEndsStreamsAndWebSockets(t *testing.T) {
 		if err != nil {
 			return nil
 		}
-		defer func() { _ = conn.Close() }()
+		defer func() { _ = conn.CloseNow() }()
 		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
+			if _, _, err := conn.Read(c.Context()); err != nil {
 				return nil
 			}
 		}
@@ -77,11 +78,11 @@ func TestShutdownEndsStreamsAndWebSockets(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	client, _, err := websocket.DefaultDialer.Dial("ws://"+addr+"/ws", nil)
+	client, _, err := websocket.Dial(t.Context(), "ws://"+addr+"/ws", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = client.Close() }()
+	defer func() { _ = client.CloseNow() }()
 	time.Sleep(200 * time.Millisecond)
 
 	start := time.Now()
@@ -108,9 +109,10 @@ func TestShutdownEndsStreamsAndWebSockets(t *testing.T) {
 		}
 	}
 	// The WebSocket client is told why: close code 1001 (going away).
-	_ = client.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, _, rerr := client.ReadMessage()
-	if !websocket.IsCloseError(rerr, websocket.CloseGoingAway) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _, rerr := client.Read(ctx)
+	if websocket.CloseStatus(rerr) != websocket.StatusGoingAway {
 		t.Errorf("WebSocket client: %v, want close 1001 (going away)", rerr)
 	}
 }

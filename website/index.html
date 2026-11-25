@@ -413,7 +413,7 @@ h2.sh .ac-grad{background-image:linear-gradient(95deg,#db2777,#22d3ee);-webkit-b
                 <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-teal-500/5 dark:hover:bg-white/[0.05] dark:hover:border-teal-500/30 transition-all duration-300 group" style="transition-delay: 100ms;">
                     <div class="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">📡</div>
                     <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white">Realtime</h3>
-                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Server-Sent Events are in the core. WebSockets come as an optional package that accepts same-origin browser connections only.</p>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Server-Sent Events are in the core. WebSockets come as an optional package that accepts same-origin browser connections unless you list other origins.</p>
                 </div>
                 <div class="reveal bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-8 rounded-2xl hover:shadow-xl hover:shadow-cyan-500/5 dark:hover:bg-white/[0.05] dark:hover:border-cyan-500/30 transition-all duration-300 group" style="transition-delay: 200ms;">
                     <div class="w-12 h-12 rounded-xl bg-cyan-100 dark:bg-cyan-500/10 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">📂</div>
@@ -600,7 +600,7 @@ h2.sh .ac-grad{background-image:linear-gradient(95deg,#db2777,#22d3ee);-webkit-b
         <ul class="checks">
           <li>JWT middleware rejects an empty secret, non-HMAC algorithms for secrets, and tokens without an expiry.</li>
           <li>Sessions use random 43-character ids, never adopt an unknown id, and rotate the id at login with <code>Renew</code>.</li>
-          <li>WebSockets accept same-origin browser connections only.</li>
+          <li>WebSockets accept same-origin browser connections unless you list other origins.</li>
           <li>CORS refuses to combine credentials with the <code>*</code> origin.</li>
           <li>Static files never list directories; the in-memory session store is capped.</li>
         </ul></div>

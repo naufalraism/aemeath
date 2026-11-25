@@ -146,23 +146,22 @@ func main() {
 		return users, nil
 	})
 
-	// 7. WebSocket (same-origin by default; see aemeath.WebSocketUpgrader).
+	// 7. WebSocket echo (same-origin by default; ws.Config{TrustedOrigins: ...} allows others).
 	app.Handle("GET", "/ws", func(c *aemeath.Ctx) error {
 		conn, err := ws.Upgrade(c)
 		if err != nil {
-			return nil // the upgrader has already written the error response
+			return nil // Upgrade has already written the error response
 		}
-		defer func() { _ = conn.Close() }()
+		defer func() { _ = conn.CloseNow() }()
 		for {
-			mt, message, err := conn.ReadMessage()
+			kind, message, err := conn.Read(c.Context())
 			if err != nil {
-				break
+				return nil // the client left, or the server is stopping
 			}
-			if err := conn.WriteMessage(mt, message); err != nil {
-				break
+			if err := conn.Write(c.Context(), kind, message); err != nil {
+				return nil
 			}
 		}
-		return nil
 	})
 
 	// 8. Mailer plugin (try it with a local SMTP catcher such as MailHog on :1025).
