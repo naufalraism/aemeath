@@ -15,6 +15,10 @@ All notable changes to this project are documented here.
 
 - **`app.Stop()` also marks the app as shutting down**: `ShuttingDown()` reports true and `/readyz` answers 503, as when `Listen` receives a stop signal. A program running its own `http.Server` got a closed `Stopping` channel next to `ShuttingDown() == false` and a healthy `/readyz`. The documentation of `ShuttingDown` now says which signal to use: `Stopping` for ending long work.
 
+### Changed
+
+- **Docs: "Two choices made on purpose"** in the comparison guide: why errors keep their own JSON shape rather than RFC 9457 (and that only errors you create show their message), and why the OpenAPI document is 3.0.3 rather than 3.1.
+
 ## [0.12.0] - 2026-11-25
 
 ### Breaking changes
