@@ -23,6 +23,7 @@ import (
 	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/cache"
 	"github.com/naufalraism/aemeath/db"
+	"github.com/naufalraism/aemeath/db/sqlite"
 	"github.com/naufalraism/aemeath/examples/api"
 	"github.com/naufalraism/aemeath/jwt"
 	"github.com/naufalraism/aemeath/mailer"
@@ -94,7 +95,7 @@ func main() {
 	})
 
 	// 5. Database (GORM + SQLite).
-	dbPlugin, err := db.Open("aemeath.db", &User{})
+	dbPlugin, err := sqlite.Open("aemeath.db", db.WithModels(&User{}))
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -212,10 +212,10 @@ csrf: func Token(c *aemeath.Ctx) string
 csrf: type Config struct
 db/mysql: func Open(dsn string, opts ...db.Option) (*db.Plugin, error)
 db/postgres: func Open(dsn string, opts ...db.Option) (*db.Plugin, error)
+db/sqlite: func Open(filename string, opts ...db.Option) (*db.Plugin, error)
 db: field Plugin.DB *gorm.DB
 db: func From(c *aemeath.Ctx) *gorm.DB
 db: func New(d gorm.Dialector, opts ...Option) (*Plugin, error)
-db: func Open(filename string, models ...any) (*Plugin, error)
 db: func Translate(err error, what string) error
 db: func WithConfig(cfg *gorm.Config) Option
 db: func WithModels(models ...any) Option

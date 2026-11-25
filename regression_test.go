@@ -547,3 +547,48 @@ func TestLocalStorageFilesArePrivateByDefault(t *testing.T) {
 		t.Fatalf("configured file mode = %o, want 644", info.Mode().Perm())
 	}
 }
+
+// The SQLite opener takes a file name. Given a server URL from the
+// environment ("postgres://..."), it creates a file of that name instead of
+// connecting: the "Two databases" example in the database guide did that.
+func TestDocsOpenServerDatabasesWithTheirPackage(t *testing.T) {
+	idiom := regexp.MustCompile(`\b(db|sqlite)\.Open\(\s*os\.Getenv\(`)
+	fence := regexp.MustCompile("(?s)```.*?```")
+	checked := 0
+	for _, root := range []string{"README.md", "docs", "examples"} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				if d.Name() == "node_modules" || d.Name() == "generated" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			ext := filepath.Ext(path)
+			if ext != ".go" && ext != ".md" {
+				return nil
+			}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			checked++
+			text := string(b)
+			if ext == ".md" {
+				text = strings.Join(fence.FindAllString(text, -1), "\n")
+			}
+			for _, m := range idiom.FindAllString(text, -1) {
+				t.Errorf("%s: %s... opens SQLite with a URL from the environment; use postgres.Open or mysql.Open", path, m)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if checked < 20 {
+		t.Fatalf("only %d files checked", checked)
+	}
+}

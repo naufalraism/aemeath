@@ -7,7 +7,7 @@ Plugins live in their own packages, so you only pay for what you import.
 | `aemeath/jwt` | Bearer tokens: shared secret, public key or JWKS (`jwt.Middleware`, `jwt.Issue`) |
 | `aemeath/session`, `aemeath/csrf` | Server-side sessions and CSRF protection |
 | `aemeath/oidc` | OpenID Connect login (PKCE, nonce, JWKS) |
-| `aemeath/db` | GORM + SQLite (`db.Open`, `db.From`); `db/postgres`, `db/mysql` for the others |
+| `aemeath/db` | GORM (`db.From`); open with `db/sqlite`, `db/postgres` or `db/mysql` |
 | `aemeath/cache` | Redis (`cache.New`, `cache.From`, `cache.NewSessionStore`) |
 | `aemeath/metrics`, `aemeath/tracing` | Prometheus metrics; W3C tracing exported over OTLP |
 | `aemeath/mailer` | SMTP (`mailer.New`, `mailer.From`) |
@@ -15,7 +15,7 @@ Plugins live in their own packages, so you only pay for what you import.
 | `aemeath/ws` | WebSockets (`ws.Upgrade`) |
 
 ```go
-plugin, err := db.Open("app.db", &User{})
+plugin, err := sqlite.Open("app.db", db.WithModels(&User{}))
 if err != nil { log.Fatal(err) }
 if err := app.RegisterPlugin(plugin); err != nil { // also registers a readiness check for /readyz
 	log.Fatal(err)

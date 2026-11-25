@@ -310,8 +310,8 @@ Import only what you use; each plugin's dependencies are only compiled into your
 | `aemeath/metrics` | Prometheus metrics and an HTTP middleware | none |
 | `aemeath/tracing` | W3C Trace Context and an OTLP/HTTP span exporter | none |
 | `aemeath/ws` | WebSocket upgrade (same-origin by default) | `gorilla/websocket` |
-| `aemeath/db` | GORM plugin; SQLite built in | `gorm`, `glebarez/sqlite` |
-| `aemeath/db/postgres`, `aemeath/db/mysql` | PostgreSQL and MySQL/MariaDB drivers for the same plugin | `gorm.io/driver/postgres` / `mysql` |
+| `aemeath/db` | GORM plugin: `db.From`, `db.Translate`, options | `gorm` |
+| `aemeath/db/sqlite`, `aemeath/db/postgres`, `aemeath/db/mysql` | SQLite (pure Go), PostgreSQL and MySQL/MariaDB drivers for the same plugin: a project compiles only the one it imports | `glebarez/sqlite` / `gorm.io/driver/postgres` / `mysql` |
 | `aemeath/cache` | Redis plugin and Redis session store | `go-redis` |
 | `aemeath/mailer` | SMTP mailer | `gomail` |
 | `aemeath/oauth2` | OAuth2 login for providers without OpenID Connect (GitHub, ...): state kept and checked in the session | `golang.org/x/oauth2` |
@@ -322,7 +322,7 @@ Import only what you use; each plugin's dependencies are only compiled into your
 A plugin provides a service once at startup; handlers read it with a type-safe getter:
 
 ```go
-plugin, err := db.Open("app.db", &User{}) // migrates your models
+plugin, err := sqlite.Open("app.db", db.WithModels(&User{})) // migrates your models
 if err != nil { log.Fatal(err) }
 if err := app.RegisterPlugin(plugin); err != nil { log.Fatal(err) } // also adds a "database" readiness check
 
@@ -485,7 +485,7 @@ Plugins moved to their own packages and now provide typed dependencies instead o
 | Before | Now |
 | :--- | :--- |
 | `aemeath.JWTMiddleware(aemeath.JWTConfig{...})` | `jwt.Middleware(jwt.Config{...})`; `jwt.UserID(c)` |
-| `aemeath.OpenDB(file, models...)`, `c.State["db"].(*gorm.DB)` | `db.Open(file, models...)`, `db.From(c)` |
+| `aemeath.OpenDB(file, models...)`, `c.State["db"].(*gorm.DB)` | `sqlite.Open(file, db.WithModels(models...))`, `db.From(c)` |
 | `aemeath.NewCache(...)`, `c.State["cache"]` | `cache.New(...)`, `cache.From(c)` |
 | `aemeath.NewMailer(...)`, `c.State["mailer"]` | `mailer.New(...)`, `mailer.From(c)` |
 | `aemeath.NewOAuth2(...)`, `aemeath.OAuthFrom(c, "google")` | `oauth2.New(...)`, `oauth2.From(c, "google")` |

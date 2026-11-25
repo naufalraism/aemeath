@@ -1,10 +1,10 @@
 # Databases
 
-`aemeath/db` wraps [GORM](https://gorm.io). SQLite works out of the box; PostgreSQL and MySQL/MariaDB are separate packages so you only download the driver you use.
+`aemeath/db` wraps [GORM](https://gorm.io). Each database has a package of its own, so a project downloads and compiles only the driver it uses: a PostgreSQL server binary carries no SQLite.
 
 | Database | Package | Connect with |
 | :--- | :--- | :--- |
-| SQLite | `aemeath/db` | `db.Open("app.db", &User{})` |
+| SQLite | `aemeath/db/sqlite` | `sqlite.Open("app.db", db.WithModels(&User{}))` |
 | PostgreSQL | `aemeath/db/postgres` | `postgres.Open(dsn, db.WithModels(&User{}))` |
 | MySQL / MariaDB | `aemeath/db/mysql` | `mysql.Open(dsn, db.WithModels(&User{}))` |
 
@@ -58,14 +58,14 @@ aemeath.POST(app, "/users", func(c *aemeath.Ctx, in CreateUser) (User, error) {
 ```go
 type AnalyticsDB struct{ *gorm.DB }
 
-primary, err := db.Open(os.Getenv("DATABASE_URL"), &User{})
+primary, err := postgres.Open(os.Getenv("DATABASE_URL"), db.WithModels(&User{}))
 if err != nil {
 	log.Fatal(err)
 }
 if err := app.RegisterPlugin(primary); err != nil { // db.From(c), and /readyz "database"
 	log.Fatal(err)
 }
-analytics, err := db.Open(os.Getenv("ANALYTICS_URL"))
+analytics, err := postgres.Open(os.Getenv("ANALYTICS_URL"))
 if err != nil {
 	log.Fatal(err)
 }

@@ -11,6 +11,7 @@ import (
 	driver "github.com/go-sql-driver/mysql"
 	gormmysql "gorm.io/driver/mysql"
 
+	"github.com/naufalraism/aemeath"
 	"github.com/naufalraism/aemeath/db"
 )
 
@@ -26,5 +27,10 @@ func Open(dsn string, opts ...db.Option) (*db.Plugin, error) {
 	}
 	cfg.ParseTime = true
 	all := append([]db.Option{db.WithPool(25, 5, 30*time.Minute)}, opts...)
-	return db.New(gormmysql.Open(cfg.FormatDSN()), all...)
+	// GORM asks the server for its version while it is initialized; while
+	// only TypeScript is written there is no server to ask.
+	return db.New(gormmysql.New(gormmysql.Config{
+		DSN:                       cfg.FormatDSN(),
+		SkipInitializeWithVersion: aemeath.GeneratingTypeScript(),
+	}), all...)
 }
