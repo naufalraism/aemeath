@@ -12,9 +12,9 @@ import (
 	"github.com/naufalraism/aemeath/jwt"
 )
 
-// The verified identity used to live in c.State under "user_id" and
+// The verified identity used to live in the per-request values (then Ctx.State) under "user_id" and
 // "jwt_claims", where any application code could overwrite it: a
-// middleware keeping c.State["user_id"] for an audit log, filled from the
+// middleware keeping "user_id" in the per-request values for an audit log, filled from the
 // query, made jwt.UserID report "admin" for alice's token. UserID and
 // Claims now report only what the token says.
 func TestUserIDCannotBeOverwrittenThroughState(t *testing.T) {
@@ -29,8 +29,8 @@ func TestUserIDCannotBeOverwrittenThroughState(t *testing.T) {
 	}
 	spoof := func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
 		return func(c *aemeath.Ctx) error {
-			c.State["user_id"] = c.Query("as")
-			c.State["jwt_claims"] = gojwt.MapClaims{"sub": c.Query("as"), "role": "admin"}
+			c.Set("user_id", c.Query("as"))
+			c.Set("jwt_claims", gojwt.MapClaims{"sub": c.Query("as"), "role": "admin"})
 			return next(c)
 		}
 	}

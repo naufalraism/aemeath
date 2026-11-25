@@ -9,6 +9,7 @@ All notable changes to this project are documented here.
 - **`aemeath.Logger()` writes the access log to the app's logger** (`app.SetLogger`), as one structured record per request (method, path, status, duration_ms, remote, request_id; 5xx at Error, 4xx at Warn), like `SlogLogger`. It used to print a plain-text line through the standard `log` package whatever `SetLogger` chose, so a JSON app logger still got a text access log. `SlogLogger(l)` keeps writing to another logger, for example a file of its own.
 - **`CORS` refuses configurations that would allow nobody**, at startup: more than one `CORSConfig` (the second was ignored) and an empty `AllowOrigins` (no origin was allowed, without a word) now panic with a message saying what to write. A zero `MaxAge` takes the default (a day) like `AllowMethods` and `AllowHeaders` already did, instead of sending no header; a negative `MaxAge` sends none.
 - **`Gzip` takes one minimum size**: `Gzip(512, 2048)` panics at startup instead of ignoring the second value.
+- **`Ctx.State` is replaced by `c.Set(key, v)` and `c.Value(key)`.** The exported map was made on every request, even when nothing used it; the map behind `Set` is made only by the first `Set`, which saves one allocation per request (plain `GET` 16 → 15, validated JSON `POST` 32 → 31). `session` uses them. `tracing` no longer writes an unread `trace_id` there: `tracing.FromContext(c.Context())` returns the span.
 
 ### Fixed
 

@@ -8,12 +8,12 @@ import (
 )
 
 // c.RequestID() reports the id the RequestID middleware chose (and sent in
-// X-Request-Id), whatever application code puts in c.State.
+// X-Request-Id), whatever application code stores with c.Set.
 func TestRequestIDCannotBeOverwrittenThroughState(t *testing.T) {
 	app := aemeath.New()
 	app.Use(aemeath.RequestID(), func(next aemeath.HandlerFunc) aemeath.HandlerFunc {
 		return func(c *aemeath.Ctx) error {
-			c.State["request_id"] = "spoofed"
+			c.Set("request_id", "spoofed")
 			return next(c)
 		}
 	})
