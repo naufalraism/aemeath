@@ -293,7 +293,9 @@ mailer: method (*Plugin) Send(to, subject, body string) error
 mailer: method (*Plugin) SendContext(ctx context.Context, to, subject, body string) error
 mailer: type Config struct
 mailer: type Plugin struct
-metrics: func New() *Registry
+metrics: field Config.DurationBuckets []float64
+metrics: func DefaultBuckets() []float64
+metrics: func New(config ...Config) *Registry
 metrics: method (*Counter) Add(v float64, labels ...string)
 metrics: method (*Counter) Inc(labels ...string)
 metrics: method (*Gauge) Add(v float64, labels ...string)
@@ -305,11 +307,11 @@ metrics: method (*Registry) Handler() aemeath.HandlerFunc
 metrics: method (*Registry) Histogram(name, help string, buckets []float64, labels ...string) *Histogram
 metrics: method (*Registry) Middleware() aemeath.Middleware
 metrics: method (*Registry) Render() string
+metrics: type Config struct
 metrics: type Counter struct
 metrics: type Gauge struct
 metrics: type Histogram struct
 metrics: type Registry struct
-metrics: var DefaultBuckets
 oauth2: field Config.HTTPClient *http.Client
 oauth2: field Config.MaxLoginAge time.Duration
 oauth2: field Config.Name string

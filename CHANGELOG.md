@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Breaking changes
 
 - **`aemeath.PrivateNetworks()` is a function that returns a new slice on every call; write `aemeath.RealIP(aemeath.PrivateNetworks()...)`.** It was an exported variable, so any package in the program could change it, for example to `0.0.0.0/0`, and make `RealIP` trust `X-Forwarded-For` from every client: addresses could be spoofed and `RateLimiter` bypassed.
+- **`metrics.New(metrics.Config{DurationBuckets: ...})` sets the request-duration buckets; `metrics.DefaultBuckets()` is a function.** The buckets used to come from the package variable `metrics.DefaultBuckets`, which applied to every registry in the process and could be changed by any package. `New()` with no Config keeps the same defaults; `New` takes one Config at most and panics on a second.
 
 ## [0.15.0] - 2026-11-26
 
