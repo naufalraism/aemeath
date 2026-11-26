@@ -8,6 +8,10 @@ All notable changes to this project are documented here.
 
 - **`mailer` refuses to send without TLS to a server that does not offer STARTTLS.** It used to fall back to plain TCP, so the message (a password-reset link, say) crossed the network unencrypted, and with a server offering only CRAM-MD5 so did the login exchange; a man in the middle could force that by deleting the STARTTLS offer. `Send` now returns an error before logging in or sending anything. A server on localhost or a loopback address is still reached without TLS. *Breaking:* a relay without TLS on another host (a MailHog container, say) needs the new `Config.AllowPlaintext`.
 
+### Breaking changes
+
+- **`tracing.Config.HTTPClient` replaces `tracing.Config.Client`**, the name the same setting has in `oidc.Config` and `oauth2.Config`. It sends the exports; the default is still a client with a 5-second timeout.
+
 ### Fixed
 
 - **`oauth2`: `Exchange` and `UserInfo` called directly use `Config.HTTPClient`**, as its documentation said, with its timeout (10 seconds by default). They used `http.DefaultClient`, which has no timeout, so a provider that stopped answering held the caller for ever. `Complete` already used the configured client.

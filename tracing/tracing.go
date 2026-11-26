@@ -42,7 +42,7 @@ type Config struct {
 	QueueSize     int               // max buffered spans (default 2048)
 	BatchSize     int               // spans per export request (default 256)
 	FlushInterval time.Duration     // default 5s
-	Client        *http.Client      // default: 5s timeout
+	HTTPClient    *http.Client      // sends the exports; default: a client with a 5s timeout
 	// IgnoreIncomingSampling makes the sampling decision here even when the
 	// request carries a traceparent: the trace still continues (same trace
 	// ID, the caller as parent), but its "sampled" flag is ignored. Set it on
@@ -133,8 +133,8 @@ func New(cfg Config) *Tracer {
 	if cfg.FlushInterval <= 0 {
 		cfg.FlushInterval = 5 * time.Second
 	}
-	if cfg.Client == nil {
-		cfg.Client = &http.Client{Timeout: 5 * time.Second}
+	if cfg.HTTPClient == nil {
+		cfg.HTTPClient = &http.Client{Timeout: 5 * time.Second}
 	}
 	// The exporter goroutine starts with the first span to export, so a
 	// Tracer that is created but never used, or has no Endpoint, costs nothing.
@@ -536,7 +536,7 @@ func (t *Tracer) export(spans []*Span) {
 	for k, v := range t.cfg.Headers {
 		req.Header.Set(k, v)
 	}
-	resp, err := t.cfg.Client.Do(req)
+	resp, err := t.cfg.HTTPClient.Do(req)
 	if err != nil {
 		t.log().Error("aemeath/tracing: export failed", "spans", len(spans), "error", err)
 		t.dropped.Add(uint64(len(spans)))

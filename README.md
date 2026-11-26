@@ -495,6 +495,7 @@ Plugins moved to their own packages and now provide typed dependencies instead o
 | `aemeath.RealIP(aemeath.PrivateNetworks...)` | `aemeath.RealIP(aemeath.PrivateNetworks()...)` |
 | `metrics.DefaultBuckets = []float64{...}`, then `metrics.New()` | `metrics.New(metrics.Config{DurationBuckets: []float64{...}})` |
 | `client.BaseURL` | `client.BaseURL()` (set once by `NewClient`) |
+| `tracing.Config{Client: ...}` | `tracing.Config{HTTPClient: ...}` |
 
 Validation failures are now `422` with a list of field errors (they were `400` with a single message).
 
