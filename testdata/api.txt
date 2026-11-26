@@ -10,7 +10,6 @@ aemeath: field CORSConfig.AllowMethods []string
 aemeath: field CORSConfig.AllowOrigins []string
 aemeath: field CORSConfig.ExposeHeaders []string
 aemeath: field CORSConfig.MaxAge int
-aemeath: field Client.BaseURL string
 aemeath: field Ctx.R *http.Request
 aemeath: field Ctx.W http.ResponseWriter
 aemeath: field Endpoint.Method string
@@ -62,6 +61,7 @@ aemeath: func PATCH[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, 
 aemeath: func POST[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
 aemeath: func PUT[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
 aemeath: func PayloadTooLarge(msg string) *HTTPError
+aemeath: func PrivateNetworks() []string
 aemeath: func Provide[T any](a *App, v T)
 aemeath: func RateLimiter(limit int, window time.Duration) Middleware
 aemeath: func RealIP(trusted ...string) Middleware
@@ -119,6 +119,7 @@ aemeath: method (*App) TypeScriptClient() string
 aemeath: method (*App) Use(m ...Middleware)
 aemeath: method (*App) WriteTypeScript(dir string) error
 aemeath: method (*App) ZodSchemas() string
+aemeath: method (*Client) BaseURL() string
 aemeath: method (*Ctx) Authenticated() bool
 aemeath: method (*Ctx) BodyLimits() (body, multipart int64)
 aemeath: method (*Ctx) Context() context.Context
@@ -172,7 +173,6 @@ aemeath: var DefaultMaxBodyBytes int64
 aemeath: var DefaultMaxMultipartBytes int64
 aemeath: var DefaultMaxRequestBytes int64
 aemeath: var MaxValidationErrors
-aemeath: var PrivateNetworks
 aetest: func NewClient(h http.Handler, opts ...aemeath.ClientOption) *aemeath.Client
 cache: field Config.Addr string
 cache: field Config.DB int
@@ -293,7 +293,9 @@ mailer: method (*Plugin) Send(to, subject, body string) error
 mailer: method (*Plugin) SendContext(ctx context.Context, to, subject, body string) error
 mailer: type Config struct
 mailer: type Plugin struct
-metrics: func New() *Registry
+metrics: field Config.DurationBuckets []float64
+metrics: func DefaultBuckets() []float64
+metrics: func New(config ...Config) *Registry
 metrics: method (*Counter) Add(v float64, labels ...string)
 metrics: method (*Counter) Inc(labels ...string)
 metrics: method (*Gauge) Add(v float64, labels ...string)
@@ -305,11 +307,11 @@ metrics: method (*Registry) Handler() aemeath.HandlerFunc
 metrics: method (*Registry) Histogram(name, help string, buckets []float64, labels ...string) *Histogram
 metrics: method (*Registry) Middleware() aemeath.Middleware
 metrics: method (*Registry) Render() string
+metrics: type Config struct
 metrics: type Counter struct
 metrics: type Gauge struct
 metrics: type Histogram struct
 metrics: type Registry struct
-metrics: var DefaultBuckets
 oauth2: field Config.HTTPClient *http.Client
 oauth2: field Config.MaxLoginAge time.Duration
 oauth2: field Config.Name string

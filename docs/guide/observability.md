@@ -40,6 +40,12 @@ app.Handle("GET", "/metrics", reg.Handler())
 
 You get `http_requests_total{method,route,status}`, `http_request_duration_seconds` (histogram) and `http_requests_in_flight`.
 
+The duration histogram uses `metrics.DefaultBuckets()` (5 ms to 10 s). To choose your own upper bounds, in seconds:
+
+```go
+reg := metrics.New(metrics.Config{DurationBuckets: []float64{.05, .25, 1, 5}})
+```
+
 - The `route` label is the route **pattern** (`/users/{id}`), never the raw path, so cardinality stays small. Requests that match no route share one `unmatched` series, so a scanner probing thousands of URLs cannot flood your metrics.
 - Every metric is also capped at 2000 label combinations; extras are folded into an `overflow` series.
 - `/metrics` lists your routes and traffic. **Do not expose it to the internet**: serve it on an internal port, or protect it with a middleware.

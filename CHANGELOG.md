@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-26
+
+### Security
+
+- **`golang.org/x/text` v0.44.0** (was v0.29.0), pulled in by GORM through `db`: fixes [GO-2026-6629](https://pkg.go.dev/vuln/GO-2026-6629) (a panic on crafted input in `secure/precis`) and [GO-2026-5970](https://pkg.go.dev/vuln/GO-2026-5970) (an infinite loop on invalid input), which `govulncheck` found reachable from `db.New`. Go picks the highest version any module asks for, so projects using `db` get the fixed version with this release. `golang.org/x/sync` moves to v0.25.0 with it.
+
+### Breaking changes
+
+- **`aemeath.PrivateNetworks()` is a function that returns a new slice on every call; write `aemeath.RealIP(aemeath.PrivateNetworks()...)`.** It was an exported variable, so any package in the program could change it, for example to `0.0.0.0/0`, and make `RealIP` trust `X-Forwarded-For` from every client: addresses could be spoofed and `RateLimiter` bypassed.
+- **`metrics.New(metrics.Config{DurationBuckets: ...})` sets the request-duration buckets; `metrics.DefaultBuckets()` is a function.** The buckets used to come from the package variable `metrics.DefaultBuckets`, which applied to every registry in the process and could be changed by any package. `New()` with no Config keeps the same defaults; `New` takes one Config at most and panics on a second.
+- **`Client.BaseURL` is a method: `c.BaseURL()`.** It was the only exported field of `Client`; changing it while requests were running was a data race, which the client's other settings already avoid by being set once by `NewClient`. To call another server, create another `Client`.
+
+### Fixed
+
+- **`metrics` histograms refuse bounds the Prometheus format cannot hold.** A bound listed twice or a NaN produced a duplicate or `le="NaN"` bucket line, and listing `+Inf` printed the `+Inf` bucket twice, so the page was invalid. `Histogram` and `Config.DurationBuckets` now panic at startup on a repeated bound or a NaN, naming the histogram, and accept `+Inf` without writing it twice.
+
+### Changed
+
+- **The `aemeath` package has a doc comment**, so its pkg.go.dev page opens with an overview and a small example instead of an empty page; `examples/client` has one too. A test now fails when a public package has none.
+- **CI builds with Go 1.27.4**, the version in the new `toolchain` line of `go.mod`, through `actions/setup-go@v6`, which reads that line. Go 1.27.0 has 13 known vulnerabilities in `net/http`, `crypto/tls`, `crypto/x509` and `os` that Aemeath's code reaches. The `go 1.27` line, the minimum for projects using Aemeath, is unchanged: the `toolchain` line applies only when building Aemeath itself, so it does not make your project download a newer Go. Build your own app with the latest patch release; SECURITY.md, the README and Getting Started now say so.
+- **CI runs `govulncheck`** on every push and pull request. It fails when Aemeath's code reaches a known vulnerability in a dependency or in the standard library of the Go version CI builds with, so a new Go security release shows up as a red build until the `toolchain` line is raised.
+
 ## [0.15.0] - 2026-11-26
 
 ### Breaking changes

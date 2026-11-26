@@ -43,7 +43,7 @@ var (
 	secHdr    = func() aemeath.Middleware { return aemeath.SecurityHeaders() }
 	corsMW    = func() aemeath.Middleware { return aemeath.CORS() }
 	timeout   = func() aemeath.Middleware { return aemeath.Timeout(30 * time.Second) }
-	realIP    = func() aemeath.Middleware { return aemeath.RealIP(aemeath.PrivateNetworks...) }
+	realIP    = func() aemeath.Middleware { return aemeath.RealIP(aemeath.PrivateNetworks()...) }
 	rateLimit = func() aemeath.Middleware { return aemeath.RateLimiter(1000, time.Minute) }
 	sessionMW = func() aemeath.Middleware {
 		return session.Middleware(session.Config{Store: session.NewMemoryStore(), Insecure: true})

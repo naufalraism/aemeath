@@ -2,7 +2,7 @@
 
 ## Installation
 
-Use the Go version declared in the project's [`go.mod`](https://github.com/naufalraism/aemeath/blob/main/go.mod) (currently **Go 1.27**).
+Use the Go version declared in the project's [`go.mod`](https://github.com/naufalraism/aemeath/blob/main/go.mod) (currently **Go 1.27**), in its latest patch release: security fixes to the standard library (`net/http`, `crypto/tls`, ...) ship only there.
 
 ```bash
 go get github.com/naufalraism/aemeath

@@ -8,6 +8,8 @@ Aemeath has **not been independently audited**. It is tested (race detector, fuz
 
 Aemeath is pre-1.0. Security fixes are made on the latest release only.
 
+Build and deploy with the latest patch release of your Go version (1.27.4 rather than 1.27.0, for example). Fixes to `net/http`, `crypto/tls` and the rest of the standard library ship in those releases, and no library can pull them into your build for you. Aemeath's own CI builds with the version in the `toolchain` line of `go.mod`.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue for a security problem.**
@@ -31,5 +33,5 @@ Out of scope: vulnerabilities in third-party dependencies (report those upstream
 - `jwt.Middleware` needs exactly one key source and rejects a missing secret, a secret under 32 bytes, any algorithm that does not match the configured key (so an RSA public key cannot be used as an HMAC secret, and `alg: none` is refused), RSA keys under 2048 bits, and tokens without `exp` unless `AllowNoExpiry` is set.
 - WebSockets accept same-origin browser connections only.
 - Static files never list directories. `storage.Local` strips directory parts from file names and creates files readable only by the server's user (mode 0600), but it does **not** validate file types: do that yourself.
-- `RateLimiter` keys on the connection address (IPv6 addresses are grouped by /64). Behind a reverse proxy every request carries the proxy's address, so put `aemeath.RealIP(aemeath.PrivateNetworks...)` in front of it, or limit at the proxy.
+- `RateLimiter` keys on the connection address (IPv6 addresses are grouped by /64). Behind a reverse proxy every request carries the proxy's address, so put `aemeath.RealIP(aemeath.PrivateNetworks()...)` in front of it, or limit at the proxy.
 - `CORS` refuses to combine credentials with the `*` origin.

@@ -2,6 +2,8 @@ module github.com/naufalraism/aemeath
 
 go 1.27
 
+toolchain go1.27.4
+
 require (
 	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/coder/websocket v1.8.15
@@ -33,9 +35,9 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/atomic v1.12.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect

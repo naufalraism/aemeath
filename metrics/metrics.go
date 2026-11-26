@@ -22,8 +22,20 @@ import (
 	"github.com/naufalraism/aemeath"
 )
 
-// DefaultBuckets are the histogram buckets (seconds) used for request durations.
-var DefaultBuckets = []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10}
+// DefaultBuckets returns the histogram buckets (seconds) New uses for request
+// durations when Config.DurationBuckets is empty. Each call returns a new
+// slice, so changing it affects only your copy.
+func DefaultBuckets() []float64 {
+	return []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10}
+}
+
+// Config changes the HTTP metrics New registers. Its zero value keeps the
+// defaults.
+type Config struct {
+	// DurationBuckets are the upper bounds, in seconds, of the
+	// http_request_duration_seconds histogram. Empty means DefaultBuckets().
+	DurationBuckets []float64
+}
 
 // maxSeries bounds the number of label combinations per metric. Extra
 // combinations are folded into one "overflow" series instead of growing forever.
@@ -66,11 +78,21 @@ type Gauge struct{ f *family }
 // Histogram observes values into buckets.
 type Histogram struct{ f *family }
 
-// New creates a Registry with the HTTP metrics already registered.
-func New() *Registry {
+// New creates a Registry with the HTTP metrics already registered. It takes
+// one Config at most:
+//
+//	reg := metrics.New(metrics.Config{DurationBuckets: []float64{.05, .25, 1, 5}})
+func New(config ...Config) *Registry {
+	if len(config) > 1 {
+		panic("metrics: New takes one Config, got " + strconv.Itoa(len(config)))
+	}
+	buckets := DefaultBuckets()
+	if len(config) == 1 && len(config[0].DurationBuckets) > 0 {
+		buckets = config[0].DurationBuckets
+	}
 	r := &Registry{byName: map[string]*family{}}
 	r.requests = r.Counter("http_requests_total", "Total HTTP requests.", "method", "route", "status")
-	r.duration = r.Histogram("http_request_duration_seconds", "HTTP request latency in seconds.", DefaultBuckets, "method", "route")
+	r.duration = r.Histogram("http_request_duration_seconds", "HTTP request latency in seconds.", buckets, "method", "route")
 	r.inflight = r.Gauge("http_requests_in_flight", "HTTP requests currently being served.")
 	return r
 }
@@ -97,10 +119,25 @@ func (r *Registry) Gauge(name, help string, labels ...string) *Gauge {
 	return &Gauge{r.register(name, help, "gauge", nil, labels)}
 }
 
-// Histogram registers a histogram with the given upper bounds (sorted ascending).
+// Histogram registers a histogram with the given upper bounds, in any order.
+// The +Inf bucket is always added, so listing it is optional. It panics on a
+// bound given twice or a NaN, which the Prometheus format cannot hold.
 func (r *Registry) Histogram(name, help string, buckets []float64, labels ...string) *Histogram {
-	b := append([]float64(nil), buckets...)
+	b := make([]float64, 0, len(buckets))
+	for _, ub := range buckets {
+		if math.IsNaN(ub) {
+			panic("metrics: histogram " + name + " has a NaN bucket")
+		}
+		if !math.IsInf(ub, 1) {
+			b = append(b, ub)
+		}
+	}
 	sort.Float64s(b)
+	for i := 1; i < len(b); i++ {
+		if b[i] == b[i-1] {
+			panic("metrics: histogram " + name + " has the bucket " + fmtFloat(b[i]) + " twice")
+		}
+	}
 	return &Histogram{r.register(name, help, "histogram", b, labels)}
 }
 

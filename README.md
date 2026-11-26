@@ -86,7 +86,7 @@ Fiber is intentionally not listed because its `app.Test` helper goes through an 
 
 ## 📦 Installation
 
-Requires the Go version declared in [`go.mod`](go.mod) (currently **Go 1.27**).
+Requires the Go version declared in [`go.mod`](go.mod) (currently **Go 1.27**). Use its latest patch release: security fixes to the standard library ship only there.
 
 ```bash
 go get github.com/naufalraism/aemeath
@@ -285,7 +285,7 @@ app.Use(
 | `RateLimiter(n, window)` | per-IP fixed window; sends `Retry-After` on `429` |
 | `RealIP(trusted...)` | behind trusted proxies, takes the client address from `X-Forwarded-For` / `X-Real-IP` |
 
-> **Behind a reverse proxy** (Railway, Fly.io, Render, a Kubernetes ingress), every request comes from the proxy's address. Put `aemeath.RealIP(aemeath.PrivateNetworks...)` before `RateLimiter` and the loggers so they see the real client. Headers from any other address are ignored, so clients cannot spoof them; only use `PrivateNetworks` when the app is not reachable directly from the internet.
+> **Behind a reverse proxy** (Railway, Fly.io, Render, a Kubernetes ingress), every request comes from the proxy's address. Put `aemeath.RealIP(aemeath.PrivateNetworks()...)` before `RateLimiter` and the loggers so they see the real client. Headers from any other address are ignored, so clients cannot spoof them; only use `PrivateNetworks` when the app is not reachable directly from the internet.
 
 ### Health checks
 
@@ -492,6 +492,9 @@ Plugins moved to their own packages and now provide typed dependencies instead o
 | `c.Upgrade()` | `ws.Upgrade(c)` |
 | `c.State["storage"].(aemeath.Storage)` | `aemeath.MustGet[storage.Storage](c)` (package `storage`) |
 | `c.State[key] = v`, `c.State[key]` (a value for one request) | `c.Set(key, v)`, `c.Value(key)` |
+| `aemeath.RealIP(aemeath.PrivateNetworks...)` | `aemeath.RealIP(aemeath.PrivateNetworks()...)` |
+| `metrics.DefaultBuckets = []float64{...}`, then `metrics.New()` | `metrics.New(metrics.Config{DurationBuckets: []float64{...}})` |
+| `client.BaseURL` | `client.BaseURL()` (set once by `NewClient`) |
 
 Validation failures are now `422` with a list of field errors (they were `400` with a single message).
 

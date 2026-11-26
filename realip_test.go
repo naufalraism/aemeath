@@ -24,7 +24,7 @@ func remoteSeen(t *testing.T, mw aemeath.Middleware, remote string, headers map[
 }
 
 func TestRealIP(t *testing.T) {
-	mw := aemeath.RealIP(aemeath.PrivateNetworks...)
+	mw := aemeath.RealIP(aemeath.PrivateNetworks()...)
 	cases := []struct {
 		name, remote string
 		headers      map[string]string
@@ -78,7 +78,7 @@ func TestRealIPSingleAddressAndBadInput(t *testing.T) {
 // client used up the rate limit of everyone.
 func TestRateLimiterBehindProxyWithRealIP(t *testing.T) {
 	app := aemeath.New()
-	app.Use(aemeath.RealIP(aemeath.PrivateNetworks...), aemeath.RateLimiter(1, time.Minute))
+	app.Use(aemeath.RealIP(aemeath.PrivateNetworks()...), aemeath.RateLimiter(1, time.Minute))
 	app.Handle("GET", "/", func(c *aemeath.Ctx) error { return c.Text(200, "ok") })
 	hit := func(client string) int {
 		r := httptest.NewRequest("GET", "/", nil)

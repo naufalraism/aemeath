@@ -34,10 +34,10 @@ var defaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // Client calls Aemeath endpoints from Go.
 type Client struct {
-	BaseURL string
-	// Set once by NewClient's options and only read afterwards, so a Client
-	// is safe for concurrent use. (Exported, they let code change the
-	// header map while requests read it, a data race.)
+	// Set once by NewClient and its options and only read afterwards, so a
+	// Client is safe for concurrent use. (Exported, they let code change the
+	// base URL or the header map while requests read them, a data race.)
+	baseURL    string
 	httpClient *http.Client
 	header     http.Header
 }
@@ -53,12 +53,15 @@ func WithHeader(k, v string) ClientOption { return func(c *Client) { c.header.Se
 
 // NewClient creates a Client for the given base URL.
 func NewClient(baseURL string, opts ...ClientOption) *Client {
-	c := &Client{BaseURL: baseURL, header: http.Header{}}
+	c := &Client{baseURL: baseURL, header: http.Header{}}
 	for _, o := range opts {
 		o(c)
 	}
 	return c
 }
+
+// BaseURL returns the base URL given to NewClient.
+func (c *Client) BaseURL() string { return c.baseURL }
 
 // Call sends the request described by the endpoint and decodes the response.
 // A non-2xx response is returned as *HTTPError (with Errors set for validation failures).
@@ -68,7 +71,7 @@ func (e Endpoint[In, Out]) Call(ctx context.Context, c *Client, in In) (Out, err
 	if err != nil {
 		return out, err
 	}
-	target := strings.TrimRight(c.BaseURL, "/") + enc.path
+	target := strings.TrimRight(c.baseURL, "/") + enc.path
 	if len(enc.query) > 0 {
 		target += "?" + enc.query.Encode()
 	}

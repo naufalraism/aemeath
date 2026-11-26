@@ -7,14 +7,18 @@ import (
 	"strings"
 )
 
-// PrivateNetworks lists loopback and private address ranges. Platforms such as
-// Railway, Fly.io, Render and a Kubernetes ingress reach your app from one of
-// them, so RealIP(PrivateNetworks...) fits most deployments. Only use it when
-// the app cannot be reached directly from the internet, or anyone could send
-// X-Forwarded-For.
-var PrivateNetworks = []string{
-	"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10",
-	"::1/128", "fc00::/7",
+// PrivateNetworks returns the loopback and private address ranges. Platforms
+// such as Railway, Fly.io, Render and a Kubernetes ingress reach your app from
+// one of them, so RealIP(PrivateNetworks()...) fits most deployments. Only use
+// it when the app cannot be reached directly from the internet, or anyone
+// could send X-Forwarded-For.
+//
+// Each call returns a new slice, so changing it affects only your copy.
+func PrivateNetworks() []string {
+	return []string{
+		"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10",
+		"::1/128", "fc00::/7",
+	}
 }
 
 // RealIP restores the client's address behind reverse proxies. When the
@@ -28,7 +32,7 @@ var PrivateNetworks = []string{
 // its address by sending the header itself. Put RealIP before RateLimiter and
 // the loggers.
 //
-//	app.Use(aemeath.RealIP(aemeath.PrivateNetworks...), aemeath.RateLimiter(100, time.Minute))
+//	app.Use(aemeath.RealIP(aemeath.PrivateNetworks()...), aemeath.RateLimiter(100, time.Minute))
 func RealIP(trusted ...string) Middleware {
 	var nets []netip.Prefix
 	for _, t := range trusted {
