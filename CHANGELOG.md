@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **`aemeath.PrivateNetworks()` is a function that returns a new slice on every call; write `aemeath.RealIP(aemeath.PrivateNetworks()...)`.** It was an exported variable, so any package in the program could change it, for example to `0.0.0.0/0`, and make `RealIP` trust `X-Forwarded-For` from every client: addresses could be spoofed and `RateLimiter` bypassed.
+
 ## [0.15.0] - 2026-11-26
 
 ### Breaking changes

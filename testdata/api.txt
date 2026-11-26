@@ -62,6 +62,7 @@ aemeath: func PATCH[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, 
 aemeath: func POST[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
 aemeath: func PUT[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
 aemeath: func PayloadTooLarge(msg string) *HTTPError
+aemeath: func PrivateNetworks() []string
 aemeath: func Provide[T any](a *App, v T)
 aemeath: func RateLimiter(limit int, window time.Duration) Middleware
 aemeath: func RealIP(trusted ...string) Middleware
@@ -172,7 +173,6 @@ aemeath: var DefaultMaxBodyBytes int64
 aemeath: var DefaultMaxMultipartBytes int64
 aemeath: var DefaultMaxRequestBytes int64
 aemeath: var MaxValidationErrors
-aemeath: var PrivateNetworks
 aetest: func NewClient(h http.Handler, opts ...aemeath.ClientOption) *aemeath.Client
 cache: field Config.Addr string
 cache: field Config.DB int
