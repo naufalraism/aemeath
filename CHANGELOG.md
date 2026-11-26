@@ -15,6 +15,11 @@ All notable changes to this project are documented here.
 ### Fixed
 
 - **`oauth2`: `Exchange` and `UserInfo` called directly use `Config.HTTPClient`**, as its documentation said, with its timeout (10 seconds by default). They used `http.DefaultClient`, which has no timeout, so a provider that stopped answering held the caller for ever. `Complete` already used the configured client.
+- **`mailer` sends from a `From` with a non-ASCII display name** (`"Café Team <noreply@example.com>"`). gomail encoded the whole header and then could not parse it back, so every `Send` failed. A long subject is folded so no line passes SMTP's 998-byte limit, and every message now has a `Message-ID`.
+
+### Changed
+
+- **`mailer` no longer depends on `gopkg.in/gomail.v2`**, whose last change is from April 2016 (it also brought `gopkg.in/alexcesaro/quotedprintable.v3`, from 2015, into `go.mod`). The message is built with the standard library (`net/mail`, `mime`, `mime/quotedprintable`): addresses are parsed, so a line break in them is an error; the subject and display names are encoded when they are not plain ASCII; the body is quoted-printable. A `From` or recipient that is not one email address is now refused before connecting. The API is unchanged.
 
 ## [0.16.0] - 2026-11-26
 

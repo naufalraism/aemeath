@@ -68,3 +68,15 @@ func TestServerDriversDoNotCompileSQLite(t *testing.T) {
 		}
 	}
 }
+
+// mailer used gopkg.in/gomail.v2, whose last change is from April 2016, and
+// it brought gopkg.in/alexcesaro/quotedprintable.v3 (2015) into go.mod. The
+// standard library has everything mailer needs.
+func TestMailerNeedsOnlyTheStandardLibrary(t *testing.T) {
+	const mod = "{{with .Module}}{{.Path}}{{end}}"
+	for _, m := range goList(t, "-deps", "-f", mod, "github.com/naufalraism/aemeath/mailer") {
+		if m != "github.com/naufalraism/aemeath" {
+			t.Errorf("mailer depends on %s", m)
+		}
+	}
+}
