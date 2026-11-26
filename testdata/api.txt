@@ -278,6 +278,7 @@ jwt: type JWKSOption func(*JWKS)
 jwt: type Verifier struct
 jwt: var ErrKeyNotFound
 mailer: const DefaultTimeout
+mailer: field Config.AllowPlaintext bool
 mailer: field Config.From string
 mailer: field Config.Host string
 mailer: field Config.Password string

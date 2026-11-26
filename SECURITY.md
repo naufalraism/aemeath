@@ -35,3 +35,4 @@ Out of scope: vulnerabilities in third-party dependencies (report those upstream
 - Static files never list directories. `storage.Local` strips directory parts from file names and creates files readable only by the server's user (mode 0600), but it does **not** validate file types: do that yourself.
 - `RateLimiter` keys on the connection address (IPv6 addresses are grouped by /64). Behind a reverse proxy every request carries the proxy's address, so put `aemeath.RealIP(aemeath.PrivateNetworks()...)` in front of it, or limit at the proxy.
 - `CORS` refuses to combine credentials with the `*` origin.
+- `mailer` sends over TLS: implicit TLS with `SSL` (port 465), otherwise STARTTLS, and it refuses a server that does not offer STARTTLS unless the server is on localhost or `AllowPlaintext` is set.

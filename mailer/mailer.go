@@ -27,8 +27,16 @@ type Config struct {
 	From     string // e.g. "Admin <admin@example.com>"
 
 	// SSL speaks TLS from the first byte (port 465 always does). Otherwise
-	// the connection switches to TLS with STARTTLS when the server offers it.
+	// the connection switches to TLS with STARTTLS, and Send refuses a server
+	// that does not offer it (see AllowPlaintext).
 	SSL bool
+	// AllowPlaintext lets Send go on without TLS when the server does not
+	// offer STARTTLS. Without TLS, anyone on the network path can read the
+	// messages and the login, and can force that by deleting the server's
+	// STARTTLS offer. Leave it off, except for a relay on a network you
+	// trust, such as a MailHog container. A server on localhost or a
+	// loopback address needs no opt-in.
+	AllowPlaintext bool
 	// TLSConfig overrides the TLS settings (server name, roots, minimum
 	// version). Nil: verify Host's certificate, TLS 1.2 or later.
 	TLSConfig *tls.Config
@@ -128,6 +136,8 @@ func (p *Plugin) deliver(ctx context.Context, msg *gomail.Message) error {
 			if err := c.StartTLS(tlsConfig); err != nil {
 				return err
 			}
+		} else if !d.AllowPlaintext && !isLoopback(d.Host) {
+			return fmt.Errorf("%s does not offer STARTTLS, so the login and the message would cross the network unencrypted; use SSL on port 465 if the server supports it, or set AllowPlaintext for a relay you trust", d.Host)
 		}
 	}
 	var auth smtp.Auth
@@ -152,6 +162,16 @@ func (p *Plugin) deliver(ctx context.Context, msg *gomail.Message) error {
 		return err
 	}
 	return c.Quit()
+}
+
+// isLoopback reports whether host is this machine, where plain TCP crosses no
+// network.
+func isLoopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // smtpSender adapts an smtp.Client to gomail.Sender.
