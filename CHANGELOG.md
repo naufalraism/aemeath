@@ -22,6 +22,7 @@ All notable changes to this project are documented here.
 
 - **The `aemeath` package has a doc comment**, so its pkg.go.dev page opens with an overview and a small example instead of an empty page; `examples/client` has one too. A test now fails when a public package has none.
 - **CI builds with Go 1.27.4**, the version in the new `toolchain` line of `go.mod`, through `actions/setup-go@v6`, which reads that line. Go 1.27.0 has 13 known vulnerabilities in `net/http`, `crypto/tls`, `crypto/x509` and `os` that Aemeath's code reaches. The `go 1.27` line, the minimum for projects using Aemeath, is unchanged: the `toolchain` line applies only when building Aemeath itself, so it does not make your project download a newer Go. Build your own app with the latest patch release; SECURITY.md, the README and Getting Started now say so.
+- **CI runs `govulncheck`** on every push and pull request. It fails when Aemeath's code reaches a known vulnerability in a dependency or in the standard library of the Go version CI builds with, so a new Go security release shows up as a red build until the `toolchain` line is raised.
 
 ## [0.15.0] - 2026-11-26
 

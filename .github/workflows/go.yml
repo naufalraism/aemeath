@@ -56,6 +56,23 @@ jobs:
       if: runner.os == 'Linux'
       run: go test -run '^$' -bench . -benchtime 1000x .
 
+  vulncheck:
+    name: Known vulnerabilities (govulncheck)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+
+    # Fails when code in this module reaches a known vulnerability, in a
+    # dependency or in the standard library of the Go version above. A new
+    # Go security release turns this red until the toolchain line in go.mod
+    # is raised: that is the point.
+    - name: govulncheck
+      run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+
   integration:
     name: Integration (PostgreSQL, MySQL)
     runs-on: ubuntu-latest
