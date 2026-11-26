@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-26
+
 ### Security
 
 - **`mailer` refuses to send without TLS to a server that does not offer STARTTLS.** It used to fall back to plain TCP, so the message (a password-reset link, say) crossed the network unencrypted, and with a server offering only CRAM-MD5 so did the login exchange; a man in the middle could force that by deleting the STARTTLS offer. `Send` now returns an error before logging in or sending anything. A server on localhost or a loopback address is still reached without TLS. *Breaking:* a relay without TLS on another host (a MailHog container, say) needs the new `Config.AllowPlaintext`.
