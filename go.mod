@@ -2,6 +2,8 @@ module github.com/naufalraism/aemeath
 
 go 1.27
 
+toolchain go1.27.4
+
 require (
 	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/coder/websocket v1.8.15

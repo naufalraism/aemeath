@@ -86,7 +86,7 @@ Fiber is intentionally not listed because its `app.Test` helper goes through an 
 
 ## 📦 Installation
 
-Requires the Go version declared in [`go.mod`](go.mod) (currently **Go 1.27**).
+Requires the Go version declared in [`go.mod`](go.mod) (currently **Go 1.27**). Use its latest patch release: security fixes to the standard library ship only there.
 
 ```bash
 go get github.com/naufalraism/aemeath

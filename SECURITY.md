@@ -8,6 +8,8 @@ Aemeath has **not been independently audited**. It is tested (race detector, fuz
 
 Aemeath is pre-1.0. Security fixes are made on the latest release only.
 
+Build and deploy with the latest patch release of your Go version (1.27.4 rather than 1.27.0, for example). Fixes to `net/http`, `crypto/tls` and the rest of the standard library ship in those releases, and no library can pull them into your build for you. Aemeath's own CI builds with the version in the `toolchain` line of `go.mod`.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue for a security problem.**
