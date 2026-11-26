@@ -119,10 +119,25 @@ func (r *Registry) Gauge(name, help string, labels ...string) *Gauge {
 	return &Gauge{r.register(name, help, "gauge", nil, labels)}
 }
 
-// Histogram registers a histogram with the given upper bounds (sorted ascending).
+// Histogram registers a histogram with the given upper bounds, in any order.
+// The +Inf bucket is always added, so listing it is optional. It panics on a
+// bound given twice or a NaN, which the Prometheus format cannot hold.
 func (r *Registry) Histogram(name, help string, buckets []float64, labels ...string) *Histogram {
-	b := append([]float64(nil), buckets...)
+	b := make([]float64, 0, len(buckets))
+	for _, ub := range buckets {
+		if math.IsNaN(ub) {
+			panic("metrics: histogram " + name + " has a NaN bucket")
+		}
+		if !math.IsInf(ub, 1) {
+			b = append(b, ub)
+		}
+	}
 	sort.Float64s(b)
+	for i := 1; i < len(b); i++ {
+		if b[i] == b[i-1] {
+			panic("metrics: histogram " + name + " has the bucket " + fmtFloat(b[i]) + " twice")
+		}
+	}
 	return &Histogram{r.register(name, help, "histogram", b, labels)}
 }
 
