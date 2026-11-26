@@ -10,7 +10,6 @@ aemeath: field CORSConfig.AllowMethods []string
 aemeath: field CORSConfig.AllowOrigins []string
 aemeath: field CORSConfig.ExposeHeaders []string
 aemeath: field CORSConfig.MaxAge int
-aemeath: field Client.BaseURL string
 aemeath: field Ctx.R *http.Request
 aemeath: field Ctx.W http.ResponseWriter
 aemeath: field Endpoint.Method string
@@ -120,6 +119,7 @@ aemeath: method (*App) TypeScriptClient() string
 aemeath: method (*App) Use(m ...Middleware)
 aemeath: method (*App) WriteTypeScript(dir string) error
 aemeath: method (*App) ZodSchemas() string
+aemeath: method (*Client) BaseURL() string
 aemeath: method (*Ctx) Authenticated() bool
 aemeath: method (*Ctx) BodyLimits() (body, multipart int64)
 aemeath: method (*Ctx) Context() context.Context

@@ -494,6 +494,7 @@ Plugins moved to their own packages and now provide typed dependencies instead o
 | `c.State[key] = v`, `c.State[key]` (a value for one request) | `c.Set(key, v)`, `c.Value(key)` |
 | `aemeath.RealIP(aemeath.PrivateNetworks...)` | `aemeath.RealIP(aemeath.PrivateNetworks()...)` |
 | `metrics.DefaultBuckets = []float64{...}`, then `metrics.New()` | `metrics.New(metrics.Config{DurationBuckets: []float64{...}})` |
+| `client.BaseURL` | `client.BaseURL()` (set once by `NewClient`) |
 
 Validation failures are now `422` with a list of field errors (they were `400` with a single message).
 
