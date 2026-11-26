@@ -1,3 +1,6 @@
+// Command client calls the basic example's API from Go through the typed
+// endpoints in examples/api, the same values the server registers. Start the
+// server first: go run ./examples/basic
 package main
 
 import (

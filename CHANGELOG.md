@@ -14,6 +14,10 @@ All notable changes to this project are documented here.
 
 - **`metrics` histograms refuse bounds the Prometheus format cannot hold.** A bound listed twice or a NaN produced a duplicate or `le="NaN"` bucket line, and listing `+Inf` printed the `+Inf` bucket twice, so the page was invalid. `Histogram` and `Config.DurationBuckets` now panic at startup on a repeated bound or a NaN, naming the histogram, and accept `+Inf` without writing it twice.
 
+### Changed
+
+- **The `aemeath` package has a doc comment**, so its pkg.go.dev page opens with an overview and a small example instead of an empty page; `examples/client` has one too. A test now fails when a public package has none.
+
 ## [0.15.0] - 2026-11-26
 
 ### Breaking changes
