@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-26
+
 ### Security
 
 - **`golang.org/x/text` v0.44.0** (was v0.29.0), pulled in by GORM through `db`: fixes [GO-2026-6629](https://pkg.go.dev/vuln/GO-2026-6629) (a panic on crafted input in `secure/precis`) and [GO-2026-5970](https://pkg.go.dev/vuln/GO-2026-5970) (an infinite loop on invalid input), which `govulncheck` found reachable from `db.New`. Go picks the highest version any module asks for, so projects using `db` get the fixed version with this release. `golang.org/x/sync` moves to v0.25.0 with it.
