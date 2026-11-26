@@ -23,14 +23,17 @@ import (
 )
 
 type fakeOpts struct {
-	silent      bool // accept the connection and never answer
-	implicitTLS bool // TLS from the first byte (port 465 style)
-	startTLS    bool // offer STARTTLS
-	loginOnly   bool // offer AUTH LOGIN only
+	silent      bool   // accept the connection and never answer
+	implicitTLS bool   // TLS from the first byte (port 465 style)
+	startTLS    bool   // offer STARTTLS
+	loginOnly   bool   // offer AUTH LOGIN only
+	cramOnly    bool   // offer AUTH CRAM-MD5 only
+	listen      string // address to listen on (default 127.0.0.1)
 }
 
 type fakeServer struct {
 	mu        sync.Mutex
+	authTried bool
 	delivered int
 	sawTLS    bool
 	user      string
@@ -54,7 +57,11 @@ func selfSigned(t *testing.T) tls.Certificate {
 func startFake(t *testing.T, o fakeOpts) (*fakeServer, mailer.Config) {
 	t.Helper()
 	cert := selfSigned(t)
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	ip := o.listen
+	if ip == "" {
+		ip = "127.0.0.1"
+	}
+	l, err := net.Listen("tcp", net.JoinHostPort(ip, "0"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +111,9 @@ func (f *fakeServer) serve(conn net.Conn, o fakeOpts, cert tls.Certificate) {
 			if o.startTLS && !onTLS {
 				say("250-STARTTLS")
 			}
-			if o.loginOnly {
+			if o.cramOnly {
+				say("250 AUTH CRAM-MD5")
+			} else if o.loginOnly {
 				say("250 AUTH LOGIN")
 			} else {
 				say("250 OK")
@@ -113,7 +122,17 @@ func (f *fakeServer) serve(conn net.Conn, o fakeOpts, cert tls.Certificate) {
 			say("220 go ahead")
 			conn, onTLS = tls.Server(conn, &tls.Config{Certificates: []tls.Certificate{cert}}), true
 			r = bufio.NewReader(conn)
+		case upper == "AUTH CRAM-MD5":
+			f.mu.Lock()
+			f.authTried = true
+			f.mu.Unlock()
+			say("334 " + base64.StdEncoding.EncodeToString([]byte("<1@fake>")))
+			_, _ = r.ReadString('\n')
+			say("235 ok")
 		case upper == "AUTH LOGIN":
+			f.mu.Lock()
+			f.authTried = true
+			f.mu.Unlock()
 			say("334 " + base64.StdEncoding.EncodeToString([]byte("Username:")))
 			u, _ := r.ReadString('\n')
 			say("334 " + base64.StdEncoding.EncodeToString([]byte("Password:")))

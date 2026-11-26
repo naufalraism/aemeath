@@ -130,13 +130,16 @@ func newState() (string, error) {
 func (p *Plugin) AuthURL(state string) string { return p.cfg.OAuth2.AuthCodeURL(state) }
 
 // Exchange trades the authorization code (from the callback) for an access token.
+// It uses Config.HTTPClient and stops at its timeout (10 seconds by default).
 func (p *Plugin) Exchange(ctx context.Context, code string) (*xoauth2.Token, error) {
-	return p.cfg.OAuth2.Exchange(ctx, code)
+	return p.cfg.OAuth2.Exchange(p.withClient(ctx), code)
 }
 
-// UserInfo fetches the user's profile from the provider using the access token.
+// UserInfo fetches the user's profile from the provider using the access
+// token. It uses Config.HTTPClient and stops at its timeout (10 seconds by
+// default).
 func (p *Plugin) UserInfo(ctx context.Context, token *xoauth2.Token) (map[string]any, error) {
-	resp, err := p.cfg.OAuth2.Client(ctx, token).Get(p.cfg.UserInfoURL)
+	resp, err := p.cfg.OAuth2.Client(p.withClient(ctx), token).Get(p.cfg.UserInfoURL)
 	if err != nil {
 		return nil, fmt.Errorf("aemeath/oauth2: failed to request user info: %w", err)
 	}
@@ -168,6 +171,12 @@ func (p *Plugin) httpClient() *http.Client {
 		return p.cfg.HTTPClient
 	}
 	return &http.Client{Timeout: 10 * time.Second}
+}
+
+// withClient makes x/oauth2 send through the configured client, timeout
+// included. Without it, x/oauth2 uses http.DefaultClient, which has none.
+func (p *Plugin) withClient(ctx context.Context) context.Context {
+	return context.WithValue(ctx, xoauth2.HTTPClient, p.httpClient())
 }
 
 // errNoSession explains a missing session.Middleware instead of the panic

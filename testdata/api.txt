@@ -278,6 +278,7 @@ jwt: type JWKSOption func(*JWKS)
 jwt: type Verifier struct
 jwt: var ErrKeyNotFound
 mailer: const DefaultTimeout
+mailer: field Config.AllowPlaintext bool
 mailer: field Config.From string
 mailer: field Config.Host string
 mailer: field Config.Password string
@@ -405,9 +406,9 @@ storage: method (*Local) Save(ctx context.Context, filename string, src io.Reade
 storage: type Local struct
 storage: type Storage interface
 tracing: field Config.BatchSize int
-tracing: field Config.Client *http.Client
 tracing: field Config.Endpoint string
 tracing: field Config.FlushInterval time.Duration
+tracing: field Config.HTTPClient *http.Client
 tracing: field Config.Headers map[string]string
 tracing: field Config.IgnoreIncomingSampling bool
 tracing: field Config.Logger *slog.Logger

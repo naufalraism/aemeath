@@ -2,18 +2,21 @@
 package mailer
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
+	"mime"
+	"mime/quotedprintable"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
 	"time"
-
-	"gopkg.in/gomail.v2"
 
 	"github.com/naufalraism/aemeath"
 )
@@ -27,8 +30,16 @@ type Config struct {
 	From     string // e.g. "Admin <admin@example.com>"
 
 	// SSL speaks TLS from the first byte (port 465 always does). Otherwise
-	// the connection switches to TLS with STARTTLS when the server offers it.
+	// the connection switches to TLS with STARTTLS, and Send refuses a server
+	// that does not offer it (see AllowPlaintext).
 	SSL bool
+	// AllowPlaintext lets Send go on without TLS when the server does not
+	// offer STARTTLS. Without TLS, anyone on the network path can read the
+	// messages and the login, and can force that by deleting the server's
+	// STARTTLS offer. Leave it off, except for a relay on a network you
+	// trust, such as a MailHog container. A server on localhost or a
+	// loopback address needs no opt-in.
+	AllowPlaintext bool
 	// TLSConfig overrides the TLS settings (server name, roots, minimum
 	// version). Nil: verify Host's certificate, TLS 1.2 or later.
 	TLSConfig *tls.Config
@@ -77,11 +88,10 @@ func (p *Plugin) Send(to, subject, body string) error {
 // whichever comes first. A server that accepts the connection and then stays
 // silent can therefore no longer block the caller for ever.
 func (p *Plugin) SendContext(ctx context.Context, to, subject, body string) error {
-	msg := gomail.NewMessage()
-	msg.SetHeader("From", p.cfg.From)
-	msg.SetHeader("To", to)
-	msg.SetHeader("Subject", subject)
-	msg.SetBody("text/html", body)
+	msg, err := newMessage(p.cfg.From, to, subject, body, time.Now())
+	if err != nil {
+		return fmt.Errorf("aemeath/mailer: %w", err)
+	}
 
 	timeout := p.cfg.Timeout
 	if timeout <= 0 {
@@ -101,7 +111,7 @@ func (p *Plugin) SendContext(ctx context.Context, to, subject, body string) erro
 // deliver runs the SMTP exchange on a connection that is closed when ctx
 // ends: implicit TLS when Config.SSL is set, STARTTLS when offered, then
 // CRAM-MD5, LOGIN or PLAIN.
-func (p *Plugin) deliver(ctx context.Context, msg *gomail.Message) error {
+func (p *Plugin) deliver(ctx context.Context, msg *message) error {
 	d := p.cfg
 	var nd net.Dialer
 	conn, err := nd.DialContext(ctx, "tcp", net.JoinHostPort(d.Host, strconv.Itoa(d.Port)))
@@ -128,6 +138,8 @@ func (p *Plugin) deliver(ctx context.Context, msg *gomail.Message) error {
 			if err := c.StartTLS(tlsConfig); err != nil {
 				return err
 			}
+		} else if !d.AllowPlaintext && !isLoopback(d.Host) {
+			return fmt.Errorf("%s does not offer STARTTLS, so the login and the message would cross the network unencrypted; use SSL on port 465 if the server supports it, or set AllowPlaintext for a relay you trust", d.Host)
 		}
 	}
 	var auth smtp.Auth
@@ -148,33 +160,92 @@ func (p *Plugin) deliver(ctx context.Context, msg *gomail.Message) error {
 			return err
 		}
 	}
-	if err := gomail.Send(smtpSender{c}, msg); err != nil {
+	if err := c.Mail(msg.from); err != nil {
+		return err
+	}
+	if err := c.Rcpt(msg.to); err != nil {
+		return err
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg.data); err != nil {
+		_ = w.Close()
+		return err
+	}
+	if err := w.Close(); err != nil {
 		return err
 	}
 	return c.Quit()
 }
 
-// smtpSender adapts an smtp.Client to gomail.Sender.
-type smtpSender struct{ c *smtp.Client }
+// isLoopback reports whether host is this machine, where plain TCP crosses no
+// network.
+func isLoopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
 
-func (s smtpSender) Send(from string, to []string, msg io.WriterTo) error {
-	if err := s.c.Mail(from); err != nil {
-		return err
-	}
-	for _, addr := range to {
-		if err := s.c.Rcpt(addr); err != nil {
-			return err
-		}
-	}
-	w, err := s.c.Data()
+// message is one email ready for SMTP: the envelope addresses and the bytes
+// sent after DATA.
+type message struct {
+	from, to string
+	data     []byte
+}
+
+// newMessage builds an HTML email for one recipient. from and to are parsed
+// as RFC 5322 addresses ("Name <user@example.com>" or a bare address), so a
+// line break in them is an error rather than a new header. The subject and
+// display names are encoded (RFC 2047) when they hold anything but printable
+// ASCII, which also keeps a line break in the subject from starting a
+// header. The body is quoted-printable, so no line exceeds SMTP's limit.
+func newMessage(from, to, subject, html string, now time.Time) (*message, error) {
+	f, err := mail.ParseAddress(from)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("From %q is not an email address: %w", from, err)
 	}
-	if _, err := msg.WriteTo(w); err != nil {
-		_ = w.Close()
-		return err
+	r, err := mail.ParseAddress(to)
+	if err != nil {
+		return nil, fmt.Errorf("recipient %q is not one email address: %w", to, err)
 	}
-	return w.Close()
+	id := make([]byte, 16)
+	if _, err := rand.Read(id); err != nil {
+		return nil, err
+	}
+	domain := f.Address[strings.LastIndexByte(f.Address, '@')+1:]
+
+	var b bytes.Buffer
+	for _, h := range [][2]string{
+		{"From", f.String()},
+		{"To", r.String()},
+		{"Subject", foldEncoded(mime.QEncoding.Encode("UTF-8", subject))},
+		{"Date", now.Format(time.RFC1123Z)},
+		{"Message-ID", "<" + hex.EncodeToString(id) + "@" + domain + ">"},
+		{"MIME-Version", "1.0"},
+		{"Content-Type", "text/html; charset=UTF-8"},
+		{"Content-Transfer-Encoding", "quoted-printable"},
+	} {
+		b.WriteString(h[0] + ": " + h[1] + "\r\n")
+	}
+	b.WriteString("\r\n")
+	qp := quotedprintable.NewWriter(&b)
+	if _, err := qp.Write([]byte(html)); err != nil {
+		return nil, err
+	}
+	if err := qp.Close(); err != nil {
+		return nil, err
+	}
+	return &message{from: f.Address, to: r.Address, data: b.Bytes()}, nil
+}
+
+// foldEncoded puts each encoded word of a long encoded header on a line of
+// its own, so the header stays under SMTP's line limit.
+func foldEncoded(v string) string {
+	return strings.ReplaceAll(v, "?= =?", "?=\r\n =?")
 }
 
 // loginAuth is the LOGIN mechanism, for servers that do not offer PLAIN. Like

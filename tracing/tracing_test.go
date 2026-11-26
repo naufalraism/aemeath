@@ -152,7 +152,7 @@ func TestSlowCollectorNeverBreaksRequestsAndQueueIsBounded(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 	tr := tracing.New(tracing.Config{ServiceName: "svc", Endpoint: srv.URL, QueueSize: 4, BatchSize: 1, FlushInterval: time.Hour,
-		Client: &http.Client{Timeout: 50 * time.Millisecond}})
+		HTTPClient: &http.Client{Timeout: 50 * time.Millisecond}})
 	app := newApp(tr)
 	start := time.Now()
 	for i := 0; i < 200; i++ {

@@ -313,7 +313,7 @@ Import only what you use; each plugin's dependencies are only compiled into your
 | `aemeath/db` | GORM plugin: `db.From`, `db.Translate`, options | `gorm` |
 | `aemeath/db/sqlite`, `aemeath/db/postgres`, `aemeath/db/mysql` | SQLite (pure Go), PostgreSQL and MySQL/MariaDB drivers for the same plugin: a project compiles only the one it imports | `glebarez/sqlite` / `gorm.io/driver/postgres` / `mysql` |
 | `aemeath/cache` | Redis plugin and Redis session store | `go-redis` |
-| `aemeath/mailer` | SMTP mailer | `gomail` |
+| `aemeath/mailer` | SMTP mailer (TLS required for remote servers) | none |
 | `aemeath/oauth2` | OAuth2 login for providers without OpenID Connect (GitHub, ...): state kept and checked in the session | `golang.org/x/oauth2` |
 | `aemeath/jobs` | background jobs: queue, workers, retries, periodic jobs | none |
 
@@ -495,6 +495,7 @@ Plugins moved to their own packages and now provide typed dependencies instead o
 | `aemeath.RealIP(aemeath.PrivateNetworks...)` | `aemeath.RealIP(aemeath.PrivateNetworks()...)` |
 | `metrics.DefaultBuckets = []float64{...}`, then `metrics.New()` | `metrics.New(metrics.Config{DurationBuckets: []float64{...}})` |
 | `client.BaseURL` | `client.BaseURL()` (set once by `NewClient`) |
+| `tracing.Config{Client: ...}` | `tracing.Config{HTTPClient: ...}` |
 
 Validation failures are now `422` with a list of field errors (they were `400` with a single message).
 
