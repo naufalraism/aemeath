@@ -309,7 +309,7 @@ Import only what you use; each plugin's dependencies are only compiled into your
 | `aemeath/oidc` | OpenID Connect login: discovery, PKCE, nonce, ID-token verification | `golang-jwt/jwt`, `golang.org/x/oauth2` |
 | `aemeath/metrics` | Prometheus metrics and an HTTP middleware | none |
 | `aemeath/tracing` | W3C Trace Context and an OTLP/HTTP span exporter | none |
-| `aemeath/ws` | WebSocket upgrade (same-origin by default) | `gorilla/websocket` |
+| `aemeath/ws` | WebSocket upgrade (same-origin by default) | `coder/websocket` |
 | `aemeath/db` | GORM plugin: `db.From`, `db.Translate`, options | `gorm` |
 | `aemeath/db/sqlite`, `aemeath/db/postgres`, `aemeath/db/mysql` | SQLite (pure Go), PostgreSQL and MySQL/MariaDB drivers for the same plugin: a project compiles only the one it imports | `glebarez/sqlite` / `gorm.io/driver/postgres` / `mysql` |
 | `aemeath/cache` | Redis plugin and Redis session store | `go-redis` |
@@ -365,7 +365,7 @@ Other notes:
 - `db` and `cache` close their connection when the server shuts down; register your own cleanup with `app.OnShutdown(func(ctx context.Context) error { ... })` (hooks run in reverse order, each with 10 seconds of its own).
 - `storage.Local` (`storage.NewLocal(dir)`, registered with `aemeath.Provide[storage.Storage](app, ...)`) stores uploads on disk. `Save(c.Context(), name, file)` returns a unique stored name (`<unix>_<random>_<original>`) and strips any directory part, replaces control and invisible formatting characters with `_`, and appends `.txt` to names a browser would render or run (`.html`, `.svg`, `.js`, ...). `Static` sends every file with `X-Content-Type-Options: nosniff` and a file of unknown type as `application/octet-stream`, so a served upload folder cannot become stored XSS. It does **not** reject file types: use the `accept` tag, which checks the file's bytes. Files are private to the server's user (mode `0600` on Linux and macOS; on Windows, access follows the folder's permissions); if a reverse proxy must read them, set `FileMode` and `DirMode` (for example `0o644` and `0o755`).
 - For login, `oidc` (Google, Microsoft, ...) and `oauth2` (GitHub, ...) both keep the `state` in the server-side session and check it: call `Begin` on the login route and `Complete` on the callback, behind `session.Middleware`. See `examples/basic`.
-- WebSockets only accept **same-origin** browser connections by default. To allow others, list them: `ws.Upgrade(c, ws.Config{TrustedOrigins: []string{"https://app.example.com"}})`. Messages are limited to 1 MiB (`ReadLimit`), and a connection whose client stops answering pings is closed after 60 seconds (`IdleTimeout`; the server pings every 30 seconds, and browsers answer by themselves).
+- WebSockets only accept **same-origin** browser connections by default. To allow others, list them: `ws.Upgrade(c, ws.Config{TrustedOrigins: []string{"https://app.example.com"}})`. Messages are limited to 1 MiB (`ReadLimit`), and a connection whose client stops answering pings is closed after 60 seconds (`IdleTimeout`; the server pings every 30 seconds, and browsers answer by themselves). The connection is a [`coder/websocket`](https://github.com/coder/websocket) `*websocket.Conn`: `conn.Read(c.Context())` and `conn.Write(c.Context(), kind, data)`. A handler that only writes calls `ctx := conn.CloseRead(c.Context())` once, so pings and the close handshake are still answered.
 
 ---
 

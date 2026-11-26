@@ -440,3 +440,4 @@ ws: field Config.ReadLimit int64
 ws: field Config.TrustedOrigins []string
 ws: func Upgrade(c *aemeath.Ctx, config ...Config) (*websocket.Conn, error)
 ws: type Config struct
+ws: var ErrOriginNotAllowed
