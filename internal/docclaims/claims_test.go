@@ -588,7 +588,7 @@ func TestFormClaims(t *testing.T) {
 
 func TestStorageClaims(t *testing.T) {
 	dir := t.TempDir()
-	name, err := storage.NewLocal(dir).Save("../../etc/My File.png", strings.NewReader("x"))
+	name, err := storage.NewLocal(dir).Save(t.Context(), "../../etc/My File.png", strings.NewReader("x"))
 	if err != nil {
 		t.Fatal(err)
 	}

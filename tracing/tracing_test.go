@@ -279,7 +279,7 @@ func TestIgnoreIncomingSampling(t *testing.T) {
 	var got *tracing.Span
 	app.Handle("GET", "/x", func(c *aemeath.Ctx) error { got = tracing.FromContext(c.Context()); return nil })
 	get(app, "/x", forced)
-	if got == nil || got.TraceID != parentTrace || got.ParentID != "00f067aa0ba902b7" || got.Sampled() {
+	if got == nil || got.TraceID() != parentTrace || got.ParentID() != "00f067aa0ba902b7" || got.Sampled() {
 		t.Errorf("span: %+v", got)
 	}
 }

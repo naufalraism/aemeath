@@ -11,6 +11,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -25,10 +26,11 @@ import (
 // Storage is the contract implemented by every file storage backend.
 type Storage interface {
 	// Save stores src under a new name derived from filename and returns
-	// that name.
-	Save(filename string, src io.Reader) (string, error)
+	// that name. It stops with ctx.Err() when ctx is done: pass the
+	// request's context, c.Context().
+	Save(ctx context.Context, filename string, src io.Reader) (string, error)
 	// Delete removes a stored file. A missing file is not an error.
-	Delete(filename string) error
+	Delete(ctx context.Context, filename string) error
 }
 
 // Local stores files on the local disk.
@@ -124,7 +126,10 @@ func neutralize(name string) string {
 // stored as "..._x.html.txt"), so serving the upload folder cannot become
 // stored XSS. Check the type with the accept tag to refuse
 // such files instead.
-func (s *Local) Save(filename string, src io.Reader) (string, error) {
+func (s *Local) Save(ctx context.Context, filename string, src io.Reader) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if err := os.MkdirAll(s.UploadDir, s.dirMode()); err != nil {
 		return "", fmt.Errorf("storage: failed to create upload directory: %w", err)
 	}
@@ -154,7 +159,10 @@ func (s *Local) Save(filename string, src io.Reader) (string, error) {
 }
 
 // Delete removes a stored file. A missing file is not an error.
-func (s *Local) Delete(filename string) error {
+func (s *Local) Delete(ctx context.Context, filename string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	err := os.Remove(filepath.Join(s.UploadDir, safeBase(filename)))
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("storage: failed to delete file: %w", err)

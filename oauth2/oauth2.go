@@ -3,12 +3,16 @@
 // Auth0, Keycloak, Okta, ...) use package oidc, which also verifies an ID
 // token.
 //
-//	gh := oauth2.New("github", &xoauth2.Config{
-//		ClientID: "...", ClientSecret: "...",
-//		RedirectURL: "https://app.example.com/auth/github/callback",
-//		Scopes: []string{"read:user", "user:email"},
-//		Endpoint: github.Endpoint, // golang.org/x/oauth2/github
-//	}, "https://api.github.com/user")
+//	gh := oauth2.New(oauth2.Config{
+//		Name: "github",
+//		OAuth2: &xoauth2.Config{
+//			ClientID: "...", ClientSecret: "...",
+//			RedirectURL: "https://app.example.com/auth/github/callback",
+//			Scopes: []string{"read:user", "user:email"},
+//			Endpoint: github.Endpoint, // golang.org/x/oauth2/github
+//		},
+//		UserInfoURL: "https://api.github.com/user",
+//	})
 //	app.Handle("GET", "/auth/github", func(c *aemeath.Ctx) error { return gh.Begin(c) })
 //	app.Handle("GET", "/auth/github/callback", func(c *aemeath.Ctx) error {
 //		login, err := gh.Complete(c)
@@ -43,9 +47,20 @@ import (
 
 // Plugin is one OAuth2 provider.
 type Plugin struct {
-	ProviderName string
-	Config       *xoauth2.Config
-	UserInfoURL  string
+	cfg Config
+}
+
+// Config describes one OAuth2 provider.
+type Config struct {
+	// Name identifies the provider ("github"): From(c, Name) finds the
+	// plugin, and it keys the login state in the session.
+	Name string
+	// OAuth2 holds the client id and secret, the redirect URL, the scopes
+	// and the provider's endpoints.
+	OAuth2 *xoauth2.Config
+	// UserInfoURL returns the signed-in user as JSON
+	// ("https://api.github.com/user").
+	UserInfoURL string
 
 	// PKCE sends a code challenge in Begin and the verifier in Complete
 	// (RFC 7636). Turn it on when the provider supports PKCE; it is off by
@@ -59,10 +74,20 @@ type Plugin struct {
 	HTTPClient *http.Client
 }
 
-// New creates a Plugin for a provider.
-func New(providerName string, config *xoauth2.Config, userInfoURL string) *Plugin {
-	return &Plugin{ProviderName: providerName, Config: config, UserInfoURL: userInfoURL}
+// New creates a Plugin for a provider. It panics when Name, OAuth2 or
+// UserInfoURL is missing, so a provider nobody can log in with stops the
+// server at startup.
+func New(cfg Config) *Plugin {
+	for field, missing := range map[string]bool{"Name": cfg.Name == "", "OAuth2": cfg.OAuth2 == nil, "UserInfoURL": cfg.UserInfoURL == ""} {
+		if missing {
+			panic("aemeath/oauth2: Config." + field + " is required")
+		}
+	}
+	return &Plugin{cfg: cfg}
 }
+
+// Name returns the provider's name (Config.Name), the one From looks up.
+func (p *Plugin) Name() string { return p.cfg.Name }
 
 // registry holds every provider registered on one application.
 type registry struct{ providers map[string]*Plugin }
@@ -74,10 +99,10 @@ func (p *Plugin) Apply(app *aemeath.App) error {
 		reg = &registry{providers: map[string]*Plugin{}}
 		aemeath.Provide(app, reg)
 	}
-	if _, dup := reg.providers[p.ProviderName]; dup {
-		return fmt.Errorf("aemeath/oauth2: provider %q is already registered", p.ProviderName)
+	if _, dup := reg.providers[p.cfg.Name]; dup {
+		return fmt.Errorf("aemeath/oauth2: provider %q is already registered", p.cfg.Name)
 	}
-	reg.providers[p.ProviderName] = p
+	reg.providers[p.cfg.Name] = p
 	return nil
 }
 
@@ -91,14 +116,6 @@ func From(c *aemeath.Ctx, name string) (*Plugin, bool) {
 	return p, ok
 }
 
-// GenerateState returns a random, URL-safe value for the OAuth2 "state"
-// parameter. Store it (for example in a short-lived cookie) before redirecting
-// and compare it in the callback to prevent CSRF.
-//
-// Deprecated: Begin and Complete create, store and check the state for you.
-// GenerateState will be removed before v1.0.
-func GenerateState() (string, error) { return newState() }
-
 func newState() (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
@@ -110,16 +127,16 @@ func newState() (string, error) {
 // AuthURL returns the URL that sends the user to the provider's login page.
 // Begin uses it and also stores and later checks the state; call AuthURL
 // directly only if you keep the state yourself.
-func (p *Plugin) AuthURL(state string) string { return p.Config.AuthCodeURL(state) }
+func (p *Plugin) AuthURL(state string) string { return p.cfg.OAuth2.AuthCodeURL(state) }
 
 // Exchange trades the authorization code (from the callback) for an access token.
 func (p *Plugin) Exchange(ctx context.Context, code string) (*xoauth2.Token, error) {
-	return p.Config.Exchange(ctx, code)
+	return p.cfg.OAuth2.Exchange(ctx, code)
 }
 
 // UserInfo fetches the user's profile from the provider using the access token.
 func (p *Plugin) UserInfo(ctx context.Context, token *xoauth2.Token) (map[string]any, error) {
-	resp, err := p.Config.Client(ctx, token).Get(p.UserInfoURL)
+	resp, err := p.cfg.OAuth2.Client(ctx, token).Get(p.cfg.UserInfoURL)
 	if err != nil {
 		return nil, fmt.Errorf("aemeath/oauth2: failed to request user info: %w", err)
 	}
@@ -137,18 +154,18 @@ func (p *Plugin) UserInfo(ctx context.Context, token *xoauth2.Token) (map[string
 
 const defaultMaxLoginAge = 10 * time.Minute
 
-func (p *Plugin) sessionKey() string { return "aemeath.oauth2." + p.ProviderName }
+func (p *Plugin) sessionKey() string { return "aemeath.oauth2." + p.cfg.Name }
 
 func (p *Plugin) maxLoginAge() time.Duration {
-	if p.MaxLoginAge > 0 {
-		return p.MaxLoginAge
+	if p.cfg.MaxLoginAge > 0 {
+		return p.cfg.MaxLoginAge
 	}
 	return defaultMaxLoginAge
 }
 
 func (p *Plugin) httpClient() *http.Client {
-	if p.HTTPClient != nil {
-		return p.HTTPClient
+	if p.cfg.HTTPClient != nil {
+		return p.cfg.HTTPClient
 	}
 	return &http.Client{Timeout: 10 * time.Second}
 }
@@ -179,7 +196,7 @@ func (p *Plugin) Begin(c *aemeath.Ctx) error {
 	}
 	pending := map[string]any{"s": state, "t": time.Now().Unix()}
 	var opts []xoauth2.AuthCodeOption
-	if p.PKCE {
+	if p.cfg.PKCE {
 		v := xoauth2.GenerateVerifier()
 		pending["v"] = v
 		opts = append(opts, xoauth2.S256ChallengeOption(v))
@@ -191,7 +208,7 @@ func (p *Plugin) Begin(c *aemeath.Ctx) error {
 		s.ExpireIn(p.maxLoginAge())
 	}
 	s.Set(p.sessionKey(), pending)
-	return c.Redirect(http.StatusFound, p.Config.AuthCodeURL(state, opts...))
+	return c.Redirect(http.StatusFound, p.cfg.OAuth2.AuthCodeURL(state, opts...))
 }
 
 // Login is the result of a completed login.
@@ -259,12 +276,12 @@ func (p *Plugin) Complete(c *aemeath.Ctx) (*Login, error) {
 	if verifier != "" {
 		opts = append(opts, xoauth2.VerifierOption(verifier))
 	}
-	tok, err := p.Config.Exchange(ctx, code, opts...)
+	tok, err := p.cfg.OAuth2.Exchange(ctx, code, opts...)
 	if err != nil {
 		return nil, fail("code exchange failed")
 	}
 	login := &Login{Token: tok}
-	if p.UserInfoURL != "" {
+	if p.cfg.UserInfoURL != "" {
 		if login.User, err = p.UserInfo(ctx, tok); err != nil {
 			return nil, err
 		}

@@ -26,10 +26,6 @@ aemeath: field HTTPError.Message string
 aemeath: field Info.Description string
 aemeath: field Info.Title string
 aemeath: field Info.Version string
-aemeath: field LocalStorage.DirMode os.FileMode
-aemeath: field LocalStorage.FileMode os.FileMode
-aemeath: field LocalStorage.UploadDir string
-aemeath: field StoragePlugin.Storage Storage
 aemeath: func AsHTTPError(err error) *HTTPError
 aemeath: func BadRequest(msg string) *HTTPError
 aemeath: func CORS(configs ...CORSConfig) Middleware
@@ -60,7 +56,6 @@ aemeath: func NewClient(baseURL string, opts ...ClientOption) *Client
 aemeath: func NewEndpoint[In, Out any](method, path string) Endpoint[In, Out]
 aemeath: func NewError(code int, msg string) *HTTPError
 aemeath: func NewFileLogger(path string) (*FileLoggerPlugin, error)
-aemeath: func NewLocalStorage(uploadDir string) *LocalStorage
 aemeath: func NotFound(msg string) *HTTPError
 aemeath: func OperationID(id string) RouteOption
 aemeath: func PATCH[In, Out any](r Router, path string, fn func(*Ctx, In) (Out, error), o ...RouteOption) Endpoint[In, Out]
@@ -150,13 +145,9 @@ aemeath: method (*Group) Handle(method, path string, h HandlerFunc)
 aemeath: method (*Group) Options(opts ...RouteOption)
 aemeath: method (*Group) Use(m ...Middleware)
 aemeath: method (*HTTPError) Error() string
-aemeath: method (*LocalStorage) Delete(filename string) error
-aemeath: method (*LocalStorage) IsAllowedFile(filename string, allowedExts []string) bool
-aemeath: method (*LocalStorage) Save(filename string, src io.Reader) (string, error)
 aemeath: method (*SSE) Comment(text string) error
 aemeath: method (*SSE) Send(event string, data any) error
 aemeath: method (*SSE) SetWriteTimeout(d time.Duration)
-aemeath: method (*StoragePlugin) Apply(app *App) error
 aemeath: method (Endpoint[In, Out]) Call(ctx context.Context, c *Client, in In) (Out, error)
 aemeath: type App struct
 aemeath: type CORSConfig struct
@@ -172,14 +163,11 @@ aemeath: type Handled struct
 aemeath: type HandlerFunc func(*Ctx) error
 aemeath: type HealthCheck func(ctx context.Context) error
 aemeath: type Info struct
-aemeath: type LocalStorage struct
 aemeath: type Middleware func(HandlerFunc) HandlerFunc
 aemeath: type Plugin interface
 aemeath: type RouteOption func(*routeConfig)
 aemeath: type Router interface
 aemeath: type SSE struct
-aemeath: type Storage = storage.Storage
-aemeath: type StoragePlugin struct
 aemeath: var DefaultMaxBodyBytes int64
 aemeath: var DefaultMaxMultipartBytes int64
 aemeath: var DefaultMaxRequestBytes int64
@@ -322,23 +310,24 @@ metrics: type Gauge struct
 metrics: type Histogram struct
 metrics: type Registry struct
 metrics: var DefaultBuckets
+oauth2: field Config.HTTPClient *http.Client
+oauth2: field Config.MaxLoginAge time.Duration
+oauth2: field Config.Name string
+oauth2: field Config.OAuth2 *xoauth2.Config
+oauth2: field Config.PKCE bool
+oauth2: field Config.UserInfoURL string
 oauth2: field Login.Token *xoauth2.Token
 oauth2: field Login.User map[string]any
-oauth2: field Plugin.Config *xoauth2.Config
-oauth2: field Plugin.HTTPClient *http.Client
-oauth2: field Plugin.MaxLoginAge time.Duration
-oauth2: field Plugin.PKCE bool
-oauth2: field Plugin.ProviderName string
-oauth2: field Plugin.UserInfoURL string
 oauth2: func From(c *aemeath.Ctx, name string) (*Plugin, bool)
-oauth2: func GenerateState() (string, error)
-oauth2: func New(providerName string, config *xoauth2.Config, userInfoURL string) *Plugin
+oauth2: func New(cfg Config) *Plugin
 oauth2: method (*Plugin) Apply(app *aemeath.App) error
 oauth2: method (*Plugin) AuthURL(state string) string
 oauth2: method (*Plugin) Begin(c *aemeath.Ctx) error
 oauth2: method (*Plugin) Complete(c *aemeath.Ctx) (*Login, error)
 oauth2: method (*Plugin) Exchange(ctx context.Context, code string) (*xoauth2.Token, error)
+oauth2: method (*Plugin) Name() string
 oauth2: method (*Plugin) UserInfo(ctx context.Context, token *xoauth2.Token) (map[string]any, error)
+oauth2: type Config struct
 oauth2: type Login struct
 oauth2: type Plugin struct
 oauth2: var ErrLogin
@@ -407,10 +396,10 @@ storage: field Local.DirMode os.FileMode
 storage: field Local.FileMode os.FileMode
 storage: field Local.UploadDir string
 storage: func NewLocal(uploadDir string) *Local
-storage: imethod Storage.Delete(filename string) error
-storage: imethod Storage.Save(filename string, src io.Reader) (string, error)
-storage: method (*Local) Delete(filename string) error
-storage: method (*Local) Save(filename string, src io.Reader) (string, error)
+storage: imethod Storage.Delete(ctx context.Context, filename string) error
+storage: imethod Storage.Save(ctx context.Context, filename string, src io.Reader) (string, error)
+storage: method (*Local) Delete(ctx context.Context, filename string) error
+storage: method (*Local) Save(ctx context.Context, filename string, src io.Reader) (string, error)
 storage: type Local struct
 storage: type Storage interface
 tracing: field Config.BatchSize int
@@ -423,17 +412,17 @@ tracing: field Config.Logger *slog.Logger
 tracing: field Config.QueueSize int
 tracing: field Config.SampleRatio float64
 tracing: field Config.ServiceName string
-tracing: field Span.Name string
-tracing: field Span.ParentID string
-tracing: field Span.SpanID string
-tracing: field Span.Start time.Time
-tracing: field Span.TraceID string
 tracing: func FromContext(ctx context.Context) *Span
 tracing: func New(cfg Config) *Tracer
 tracing: method (*Span) End()
+tracing: method (*Span) Name() string
+tracing: method (*Span) ParentID() string
 tracing: method (*Span) Sampled() bool
 tracing: method (*Span) SetAttr(k, v string)
 tracing: method (*Span) SetError()
+tracing: method (*Span) SpanID() string
+tracing: method (*Span) Start() time.Time
+tracing: method (*Span) TraceID() string
 tracing: method (*Span) Traceparent() string
 tracing: method (*Tracer) Apply(app *aemeath.App) error
 tracing: method (*Tracer) Dropped() uint64
@@ -444,7 +433,10 @@ tracing: method (*Tracer) Start(ctx context.Context, name string) (context.Conte
 tracing: type Config struct
 tracing: type Span struct
 tracing: type Tracer struct
-ws: func Upgrade(c *aemeath.Ctx) (*websocket.Conn, error)
-ws: var DefaultIdleTimeout
-ws: var DefaultReadLimit int64
-ws: var Upgrader
+ws: const DefaultIdleTimeout
+ws: const DefaultReadLimit
+ws: field Config.IdleTimeout time.Duration
+ws: field Config.ReadLimit int64
+ws: field Config.TrustedOrigins []string
+ws: func Upgrade(c *aemeath.Ctx, config ...Config) (*websocket.Conn, error)
+ws: type Config struct

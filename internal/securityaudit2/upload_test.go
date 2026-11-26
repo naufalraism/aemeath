@@ -18,7 +18,7 @@ func TestUpload_FilenameControlCharactersAreReplaced(t *testing.T) {
 		"café 日本.png":                     "_café 日本.png", // ordinary letters are kept
 		"\u200bzero\u2066width\u2069.png": "__zero_width_.png",
 	} {
-		stored, err := store.Save(name, strings.NewReader("x"))
+		stored, err := store.Save(t.Context(), name, strings.NewReader("x"))
 		t.Logf("Save(%q) -> %q, err %v", name, stored, err)
 		if err != nil {
 			t.Fatal(err)

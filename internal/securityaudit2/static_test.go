@@ -11,7 +11,7 @@ import (
 	"github.com/naufalraism/aemeath/storage"
 )
 
-// LocalStorage neutralizes .html, .svg, .js ... but a name with no extension
+// storage.Local neutralizes .html, .svg, .js ... but a name with no extension
 // or an unknown one kept it, and the static file server guessed the type from
 // the content: an uploaded page ran as HTML on the site's own origin.
 func TestStatic_UploadWithoutKnownExtensionIsNotServedAsHTML(t *testing.T) {
@@ -21,7 +21,7 @@ func TestStatic_UploadWithoutKnownExtensionIsNotServedAsHTML(t *testing.T) {
 	app.Static("/uploads", dir)
 	page := "<!doctype html><script>alert(document.cookie)</script>"
 	for _, name := range []string{"note", "report.dat", "x.unknownext"} {
-		stored, err := store.Save(name, strings.NewReader(page))
+		stored, err := store.Save(t.Context(), name, strings.NewReader(page))
 		if err != nil {
 			t.Fatal(err)
 		}

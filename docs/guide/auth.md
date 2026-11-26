@@ -178,13 +178,17 @@ Identify users by **issuer + subject**. An e-mail address can be reassigned and 
 For providers without OpenID Connect (GitHub, for example), use `aemeath/oauth2`. Prefer OpenID Connect whenever the provider offers it: it also verifies an ID token.
 
 ```go
-github := oauth2.New("github", &xoauth2.Config{
-	ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-	ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-	RedirectURL:  "https://app.example.com/auth/github/callback",
-	Scopes:       []string{"read:user"},
-	Endpoint:     githuboauth.Endpoint, // golang.org/x/oauth2/github
-}, "https://api.github.com/user")
+github := oauth2.New(oauth2.Config{
+	Name: "github",
+	OAuth2: &xoauth2.Config{
+		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		RedirectURL:  "https://app.example.com/auth/github/callback",
+		Scopes:       []string{"read:user"},
+		Endpoint:     githuboauth.Endpoint, // golang.org/x/oauth2/github
+	},
+	UserInfoURL: "https://api.github.com/user",
+})
 
 app.Handle("GET", "/auth/github/login", func(c *aemeath.Ctx) error { return github.Begin(c) })
 app.Handle("GET", "/auth/github/callback", func(c *aemeath.Ctx) error {
@@ -197,7 +201,7 @@ app.Handle("GET", "/auth/github/callback", func(c *aemeath.Ctx) error {
 })
 ```
 
-Like `oidc`, it needs `session.Middleware`: `Begin` keeps the state in the server-side session and `Complete` checks it once, within `MaxLoginAge` (10 minutes). Set `PKCE: true` on the plugin when the provider supports PKCE. Identify users by the provider's stable id (`id` on GitHub), not by login name or e-mail, which can change hands. `AuthURL`, `Exchange` and `UserInfo` remain for apps that keep the state themselves.
+Like `oidc`, it needs `session.Middleware`: `Begin` keeps the state in the server-side session and `Complete` checks it once, within `MaxLoginAge` (10 minutes). Set `PKCE: true` in the config when the provider supports PKCE. Identify users by the provider's stable id (`id` on GitHub), not by login name or e-mail, which can change hands. `AuthURL`, `Exchange` and `UserInfo` remain for apps that keep the state themselves.
 
 ## API docs in production
 

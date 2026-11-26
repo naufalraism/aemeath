@@ -219,7 +219,7 @@ func main() {
 		}
 		defer func() { _ = file.Close() }()
 
-		savedName, err := aemeath.MustGet[storage.Storage](c).Save(in.File.Filename, file)
+		savedName, err := aemeath.MustGet[storage.Storage](c).Save(c.Context(), in.File.Filename, file)
 		if err != nil {
 			return nil, aemeath.InternalError("failed to save the file")
 		}
@@ -270,13 +270,17 @@ func main() {
 	}
 
 	// GitHub login is plain OAuth2 (no OpenID Connect): package oauth2.
-	github := aeoauth.New("github", &oauth2.Config{
-		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-		RedirectURL:  os.Getenv("GITHUB_REDIRECT_URL"), // e.g. http://localhost:3000/auth/github/callback
-		Scopes:       []string{"read:user"},
-		Endpoint:     githuboauth.Endpoint,
-	}, "https://api.github.com/user")
+	github := aeoauth.New(aeoauth.Config{
+		Name: "github",
+		OAuth2: &oauth2.Config{
+			ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+			ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+			RedirectURL:  os.Getenv("GITHUB_REDIRECT_URL"), // e.g. http://localhost:3000/auth/github/callback
+			Scopes:       []string{"read:user"},
+			Endpoint:     githuboauth.Endpoint,
+		},
+		UserInfoURL: "https://api.github.com/user",
+	})
 	auth.Handle("GET", "/github/login", func(c *aemeath.Ctx) error { return github.Begin(c) })
 	auth.Handle("GET", "/github/callback", func(c *aemeath.Ctx) error {
 		login, err := github.Complete(c)
